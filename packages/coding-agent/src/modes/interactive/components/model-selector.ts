@@ -69,6 +69,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private scope: ModelScope = "all";
 	private scopeText?: Text;
 	private scopeHintText?: Text;
+	private freeOnly = false;
+	private freeFilterText: Text;
 	private readonly refreshAbortController = new AbortController();
 	private refreshTimeout?: ReturnType<typeof setTimeout>;
 	private closed = false;
@@ -110,6 +112,9 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const hintText = "Only showing models from configured providers. Use /login to add providers.";
 			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
 		}
+		// Free-only filter state; renders nothing until free models are known.
+		this.freeFilterText = new Text("", 0, 0);
+		this.addChild(this.freeFilterText);
 		this.addChild(new Spacer(1));
 
 		// Create search input
@@ -175,7 +180,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			model: scoped.model,
 		}));
 		this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
-		this.filteredModels = this.activeModels;
+		this.freeFilterText.setText(this.getFreeFilterText());
+		this.filteredModels = this.baseModels();
 		const currentIndex = this.filteredModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
 		this.selectedIndex =
 			currentIndex >= 0 ? currentIndex : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
@@ -255,6 +261,18 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		return keyHint("tui.input.tab", "scope") + theme.fg("muted", " (all/scoped)");
 	}
 
+	/** Models in scope, narrowed to free ones while the free-only filter is on. */
+	private baseModels(): ModelItem[] {
+		return this.freeOnly ? this.activeModels.filter((item) => item.model.free === true) : this.activeModels;
+	}
+
+	private getFreeFilterText(): string {
+		if (!this.freeOnly && !this.activeModels.some((item) => item.model.free === true)) return "";
+		const all = this.freeOnly ? theme.fg("muted", "all") : theme.fg("accent", "all");
+		const freeOnly = this.freeOnly ? theme.fg("accent", "free-only") : theme.fg("muted", "free-only");
+		return `${theme.fg("muted", "Free: ")}${all}${theme.fg("muted", " | ")}${freeOnly}${theme.fg("muted", "  ")}${keyHint("app.models.freeOnly", "toggle")}`;
+	}
+
 	private isDefaultModel(model: Model<any>): boolean {
 		return this.defaultModel?.provider === model.provider && this.defaultModel.id === model.id;
 	}
@@ -268,22 +286,24 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		if (this.scope === scope) return;
 		this.scope = scope;
 		this.activeModels = this.scope === "scoped" ? this.scopedModelItems : this.allModels;
-		const currentIndex = this.activeModels.findIndex((item) => modelsAreEqual(this.currentModel, item.model));
+		const currentIndex = this.baseModels().findIndex((item) => modelsAreEqual(this.currentModel, item.model));
 		this.selectedIndex = currentIndex >= 0 ? currentIndex : 0;
 		this.filterModels(this.searchInput.getValue());
 		if (this.scopeText) {
 			this.scopeText.setText(this.getScopeText());
 		}
+		this.freeFilterText.setText(this.getFreeFilterText());
 	}
 
 	private filterModels(query: string): void {
+		const base = this.baseModels();
 		if (query) {
-			const filtered = fuzzyFilter(this.activeModels, query, (item) => {
+			const filtered = fuzzyFilter(base, query, (item) => {
 				const defaultText = this.isDefaultModel(item.model) ? " default" : "";
 				return `${getModelSelectorSearchText({ id: item.id, provider: item.provider, name: item.model.name })}${defaultText}`;
 			});
 			if (this.isDefaultSearch(query)) {
-				const defaultItems = this.activeModels.filter((item) => this.isDefaultModel(item.model));
+				const defaultItems = base.filter((item) => this.isDefaultModel(item.model));
 				const defaultKeys = new Set(defaultItems.map((item) => `${item.provider}\0${item.id}`));
 				this.filteredModels = [
 					...defaultItems,
@@ -293,7 +313,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.filteredModels = filtered;
 			}
 		} else {
-			this.filteredModels = this.activeModels;
+			this.filteredModels = base;
 		}
 		// When filtering by a query, move the selector to the top row so the best
 		// match is highlighted. When the query is cleared, keep the current position
@@ -321,12 +341,13 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const isCurrent = modelsAreEqual(this.currentModel, item.model);
 			const isDefault = this.isDefaultModel(item.model);
 			const defaultBadge = isDefault ? theme.fg("muted", " · default") : "";
+			const freeBadge = item.model.free ? theme.fg("success", " · free") : "";
 
 			const cursor = isSelected ? theme.fg("accent", "→ ") : "  ";
 			const currentMarker = isCurrent ? theme.fg("accent", "✓ ") : "  ";
 			const modelText = isSelected ? theme.fg("accent", item.id) : item.id;
 			const providerBadge = theme.fg("muted", `[${item.provider}]`);
-			const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${defaultBadge}`;
+			const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${freeBadge}${defaultBadge}`;
 
 			this.listContainer.addChild(new Text(line, 0, 0));
 		}
@@ -402,6 +423,12 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.dispose();
 				this.onSelectAsDefaultCallback(selectedModel.model);
 			}
+		}
+		// Toggle free-only filter
+		else if (kb.matches(keyData, "app.models.freeOnly")) {
+			this.freeOnly = !this.freeOnly;
+			this.freeFilterText.setText(this.getFreeFilterText());
+			this.filterModels(this.searchInput.getValue());
 		}
 		// Pass everything else to search input
 		else {

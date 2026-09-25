@@ -12,6 +12,7 @@ on:
       - '.gitignore'
       - 'package.json'
       - 'packages/ai/**'
+      - 'scripts/audit-model-coverage.mjs'
       - 'scripts/model-catalog-protocol.ts'
       - 'scripts/publish-model-catalog.mjs'
   # GitHub schedules use UTC. Run hourly candidates across the CET/CEST
@@ -62,6 +63,9 @@ jobs:
 
       - name: Validate model catalog JSON
         run: npm run check:model-catalog
+
+      - name: Audit model coverage against live upstream catalogs
+        run: npm run audit:model-catalog
 
       - name: Upload model catalog JSON
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

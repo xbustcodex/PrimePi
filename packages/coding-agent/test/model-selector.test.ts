@@ -79,6 +79,36 @@ describe("model selector", () => {
 		expect(saveDefault).toHaveBeenCalledWith(currentModel);
 	});
 
+	it("toggles a free-only filter with the configured binding", async () => {
+		setKeybindings(new KeybindingsManager({ "app.models.freeOnly": "ctrl+f" }));
+		harness = await createHarness({
+			models: [
+				{ id: "free-model", name: "Free Model", free: true },
+				{ id: "paid-model", name: "Paid Model" },
+			],
+		});
+		const freeModel = harness.getModel("free-model")!;
+		const selector = new ModelSelectorComponent(
+			createFakeTui(),
+			harness.getModel("paid-model"),
+			harness.session.modelRuntime,
+			[],
+			() => {},
+			() => {},
+		);
+		const render = () => stripAnsi(selector.render(120).join("\n"));
+
+		expect(render()).toContain("Free: all | free-only");
+		expect(render()).toContain(`free-model [${freeModel.provider}] · free`);
+		// Ctrl+F narrows to free models, Ctrl+F again restores the full list.
+		selector.handleInput("\x06");
+		expect(render()).toContain("free-model");
+		expect(render()).not.toContain("paid-model");
+		selector.handleInput("\x06");
+		expect(render()).toContain("paid-model");
+		selector.dispose();
+	});
+
 	it("lists every catalog that failed to refresh", async () => {
 		harness = await createHarness();
 		vi.spyOn(harness.session.modelRuntime, "refresh").mockResolvedValue({

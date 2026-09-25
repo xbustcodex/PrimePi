@@ -38,5 +38,7 @@ describe("Windows keybinding defaults", () => {
 			windowsKeybindings ? "ctrl+down" : ["ctrl+shift+down", "ctrl+down"],
 		);
 		expect(KEYBINDINGS["app.message.dequeue"].defaultKeys).toBe(windowsKeybindings ? "alt+q" : "alt+up");
+		// Windows steals ctrl+f for scrollback search before overlays see it.
+		expect(KEYBINDINGS["app.models.freeOnly"].defaultKeys).toBe(windowsKeybindings ? "alt+f" : "ctrl+f");
 	});
 });

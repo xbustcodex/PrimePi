@@ -1070,6 +1070,8 @@ export interface BaseModel<TApi extends string> {
 	inputLimits?: ModelInputLimits;
 	cost: ModelCost;
 	headers?: Record<string, string>;
+	/** Free-tier model: upstream marks it explicitly (OpenRouter `:free` or the `openrouter/free` router, OpenCode `-free`). Never derived from cost, which is also 0 for paid routers and promos. */
+	free?: boolean;
 }
 
 /** Chat model: usable with `stream()` and friends. */

@@ -46,6 +46,7 @@ export interface AppKeybindings {
 	"app.models.enableAll": true;
 	"app.models.clearAll": true;
 	"app.models.toggleProvider": true;
+	"app.models.freeOnly": true;
 	"app.models.reorderUp": true;
 	"app.models.reorderDown": true;
 	"app.tree.filter.default": true;
@@ -198,6 +199,11 @@ export const KEYBINDINGS = {
 	"app.models.toggleProvider": {
 		defaultKeys: "ctrl+p",
 		description: "Toggle all models for provider",
+	},
+	"app.models.freeOnly": {
+		// Windows steals ctrl+f for tui.altScreen.search before overlays see it.
+		defaultKeys: windowsKeybindings ? "alt+f" : "ctrl+f",
+		description: "Free-only model filter",
 	},
 	"app.models.reorderUp": {
 		defaultKeys: "alt+up",

@@ -41,6 +41,7 @@ import {
 	getRadiusModelsFromConfig,
 	loadRadiusGatewayConfig,
 } from "../src/providers/radius-config.ts";
+import { withFreeFlag } from "../src/utils/free-model.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -170,6 +171,7 @@ const COPILOT_STATIC_HEADERS = {
 } as const;
 
 const TOGETHER_BASE_URL = "https://api.together.ai/v1";
+const BASETEN_BASE_URL = "https://inference.baseten.co/v1";
 const TOGETHER_BASE_COMPAT: OpenAICompletionsCompat = {
 	supportsStore: false,
 	supportsDeveloperRole: false,
@@ -1275,6 +1277,35 @@ async function fetchNvidiaNimModelIds(): Promise<Map<string, string>> {
 	}
 }
 
+// models.dev's `deprecated` status lags the live catalog: it marks served
+// models deprecated and keeps delisted ones active. When a provider's own
+// listing is reachable it is authoritative; callers gate probes on the
+// provider's models.dev `env` credential, and the flag stays the fallback.
+async function fetchLiveModelIds({
+	label,
+	url,
+	headers,
+}: {
+	label: string;
+	url: string;
+	headers?: Record<string, string>;
+}): Promise<Set<string> | undefined> {
+	try {
+		console.log(`Fetching live models from ${label}...`);
+		const response = await fetch(url, headers ? { headers } : undefined);
+		if (!response.ok) throw new Error(`${label} API returned ${response.status}`);
+		const data = (await response.json()) as { data?: { id?: string }[] };
+		const modelIds = new Set((data.data ?? []).map((model) => model.id));
+		if (modelIds.size === 0) throw new Error(`${label} API returned no models`);
+		console.log(`Fetched ${modelIds.size} live model IDs from ${label}`);
+		return modelIds;
+	} catch (error) {
+		console.error(`Failed to fetch live models from ${label}:`, error);
+		if (generatorOptions.strict) throw error;
+		return undefined;
+	}
+}
+
 async function fetchOpenRouterList(query: string): Promise<OpenRouterModelListItem[]> {
 	const response = await fetch(`https://openrouter.ai/api/v1/models${query}`);
 	if (!response.ok) throw new Error(`OpenRouter API returned ${response.status}`);
@@ -1441,10 +1472,10 @@ function processZaiModels(data: ModelsDevCatalog): Model<Api>[] {
 	return models;
 }
 
-function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Api>[] {
+function processBasetenModels(provider: ModelsDevProvider | undefined, liveModelIds?: Set<string>): Model<Api>[] {
 	if (!provider?.models) return [];
 
-	const baseUrl = "https://inference.baseten.co/v1";
+	const baseUrl = BASETEN_BASE_URL;
 	const baseCompat: OpenAICompletionsCompat = {
 		supportsStore: false,
 		supportsDeveloperRole: false,
@@ -1494,7 +1525,7 @@ function processBasetenModels(provider: ModelsDevProvider | undefined): Model<Ap
 	const models: Model<Api>[] = [];
 
 	for (const [modelId, model] of Object.entries(provider.models)) {
-		if (model.status === "deprecated") continue;
+		if (liveModelIds ? !liveModelIds.has(modelId) : model.status === "deprecated") continue;
 
 		const reasoning = model.reasoning === true;
 		const reasoningOptions = model.reasoning_options ?? [];
@@ -2138,11 +2169,19 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
 		// Process Together AI models
 		const togetherProvider = data.together ?? data.togetherai ?? data["together-ai"];
+		const togetherLiveIds =
+			togetherProvider?.models && process.env.TOGETHER_API_KEY
+				? await fetchLiveModelIds({
+						label: "Together",
+						url: `${TOGETHER_BASE_URL}/models`,
+						headers: { Authorization: `Bearer ${process.env.TOGETHER_API_KEY}` },
+					})
+				: undefined;
 		if (togetherProvider?.models) {
 			for (const [modelId, model] of Object.entries(togetherProvider.models)) {
 				const m = model as ModelsDevModel;
 				if (m.tool_call !== true) continue;
-				if (m.status === "deprecated") continue;
+				if (togetherLiveIds ? !togetherLiveIds.has(modelId) : m.status === "deprecated") continue;
 
 				const reasoning = m.reasoning === true;
 				const thinkingLevelMap = getTogetherThinkingLevelMap(modelId, reasoning);
@@ -2169,7 +2208,15 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
-		models.push(...processBasetenModels(data.baseten));
+		const basetenLiveIds =
+			data.baseten?.models && process.env.BASETEN_API_KEY
+				? await fetchLiveModelIds({
+						label: "Baseten",
+						url: `${BASETEN_BASE_URL}/models`,
+						headers: { Authorization: `Bearer ${process.env.BASETEN_API_KEY}` },
+					})
+				: undefined;
+		models.push(...processBasetenModels(data.baseten, basetenLiveIds));
 
 		// Process OpenCode models (Zen and Go)
 		// API mapping based on provider.npm field:
@@ -2185,10 +2232,15 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		for (const variant of opencodeVariants) {
 			if (!data[variant.key]?.models) continue;
 
+			const liveModelIds = await fetchLiveModelIds({
+				label: variant.basePath,
+				url: `${variant.basePath}/v1/models`,
+			});
+
 			for (const [modelId, model] of Object.entries(data[variant.key].models)) {
 				const m = model as ModelsDevModel;
 				if (m.tool_call !== true) continue;
-				if (m.status === "deprecated") continue;
+				if (liveModelIds ? !liveModelIds.has(modelId) : m.status === "deprecated") continue;
 
 				const npm = m.provider?.npm;
 				let api: Api;
@@ -2287,6 +2339,9 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		}
 
 		// Process GitHub Copilot models
+		// No live probe: api.githubcopilot.com/models returns an
+		// entitlement-scoped list (the probing account's plan filters it), so
+		// models.dev — synced from GitHub's public docs tables — stays authoritative.
 		if (data["github-copilot"]?.models) {
 			for (const [modelId, model] of Object.entries(data["github-copilot"].models)) {
 				const m = model as ModelsDevModel;
@@ -2507,10 +2562,18 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			const providerModels = data[source]?.models;
 			if (!providerModels) continue;
 
+			const liveModelIds = process.env.XIAOMI_API_KEY
+				? await fetchLiveModelIds({
+						label: provider,
+						url: `${baseUrl}/models`,
+						headers: { Authorization: `Bearer ${process.env.XIAOMI_API_KEY}` },
+					})
+				: undefined;
+
 			for (const [modelId, model] of Object.entries(providerModels)) {
 				const m = model as ModelsDevModel;
 				if (m.tool_call !== true) continue;
-				if (m.status === "deprecated") continue;
+				if (liveModelIds ? !liveModelIds.has(modelId) : m.status === "deprecated") continue;
 
 				models.push({
 					id: modelId,
@@ -2683,6 +2746,7 @@ async function generateModels() {
 	const allModels = [...modelsDevModels, ...openRouterCatalog.chat, ...aiGatewayModels, ...radiusModels].filter(
 		(model) =>
 			!(model.provider === "xai" && XAI_BUILTIN_EXCLUDED_MODEL_IDS.has(model.id)) &&
+			// Mirrored by the runtime OpenCode refresh (src/providers/opencode-refresh.ts).
 			!((model.provider === "opencode" || model.provider === "opencode-go") && model.id === "gpt-5.3-codex-spark"),
 	);
 
@@ -3307,12 +3371,12 @@ async function generateModels() {
 	for (const model of allModels) {
 		providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
 		// Only add if not already present (models.dev takes priority over OpenRouter).
-		providers[model.provider].chat[model.id] ??= { ...model, type: "chat" };
+		providers[model.provider].chat[model.id] ??= { ...withFreeFlag(model), type: "chat" };
 	}
 	for (const model of openRouterCatalog.images) {
 		applyImageInputMetadata(model);
 		providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
-		providers[model.provider].image[model.id] ??= model;
+		providers[model.provider].image[model.id] ??= withFreeFlag(model);
 	}
 	const classifierModels: ClassifierModel<ClassifierApi>[] = [
 		...modelsDevClassifierModels,

@@ -19,9 +19,13 @@
 - Added a runtime chat-model check to the `Models` stream entry points so non-chat models fail with a clear `ModelsError` instead of a missing-api stream error.
 - Added array-based `models.all.json` and `providers/{id}.all.json` variants to the generated and published JSON catalog, allowing the same upstream ID once per model type; the existing keyed `models.json` and `providers/{id}.json` stay chat-only for released clients.
 - Added `onProviderStreamEvent` to observe parsed provider stream events before normalization, including provider-specific fields not retained in assistant messages ([#9784](https://github.com/earendil-works/pi/issues/9784)).
+- Added an optional `free` flag to generated model entries for models with an explicit free-tier id marker (OpenRouter `:free` and the `openrouter/free` router, OpenCode Zen/Go `-free`). Cost never implies `free`: paid routers and promos also report 0. Run `npm run hydrate:model-data` to refresh local data.
+- Added a `fetchModels` refresh to the OpenCode Zen and Go providers so their catalogs self-heal at runtime: `Models.refresh()` now surfaces models that launched upstream since the last release (free-tier models included) from the live `/v1/models` listing plus models.dev metadata, and drops stored overlay entries once upstream delists them.
+- Generalized the generator's live-catalog probe to the key-gated providers: with `TOGETHER_API_KEY`, `BASETEN_API_KEY`, or `XIAOMI_API_KEY` set, the provider's `/v1/models` listing overrides models.dev's `deprecated` flag (delisted models drop, flagged-but-served models stay); without the key the flag stays authoritative. GitHub Copilot is intentionally unprobed because `api.githubcopilot.com/models` returns an entitlement-scoped list. Run `npm run hydrate:model-data` to refresh local data.
 
 ### Fixed
 
+- Fixed OpenCode Zen and OpenCode Go model generation trusting models.dev's stale `deprecated` status over the live endpoint. The generator now includes models the endpoint still serves (including free Zen models like `mimo-v2.5-free`, `deepseek-v4-flash-free`, and `muse-spark-1.2-contributor-free`) and drops models that are no longer served, falling back to the models.dev status when the live catalog is unreachable.
 - Fixed 1-hour Anthropic cache writes reported by Vercel AI Gateway in streaming deltas being priced at the 5-minute rate ([#9210](https://github.com/earendil-works/pi/issues/9210)).
 
 ## [0.87.1] - 2026-09-22

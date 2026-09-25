@@ -26,6 +26,7 @@
 - Do not preserve backward compatibility unless the user asks for it.
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
 - Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
+- models.dev's `deprecated` flag for OpenCode Zen/Go models is stale (it wrongly marked live free models dead); the generator probes the live OpenCode catalog endpoint as source of truth. Don't reintroduce models.dev-only filtering, and don't re-add OpenRouter `*:free` models that lack tool support (e.g. `z-ai/glm-5.2:free`, Lyria music) — their exclusion is intentional.
 
 ## Commands
 
@@ -38,6 +39,8 @@
 - For `packages/coding-agent/test/suite/`, use `test/suite/harness.ts` + the faux provider. No real provider APIs, keys, or paid tokens.
 - When regressions tests for fixing a github issue, add a comment with the github issue number next to the test.
 - For ad-hoc scripts, `write` them to a temp file (e.g. `/tmp`), run, edit if needed, remove when done. Don't embed multi-line scripts in `bash` commands.
+- Model catalog: `cd packages/ai && npm run hydrate-model-data` (= `generate-models.ts --strict --data-only`) refreshes `packages/ai/src/providers/data/`, which is gitignored — regenerating it yields no git diff, so catalog coverage fixes commit as script/test/changelog changes only.
+- The full `packages/ai` vitest suite exceeds 600s (network tests); run targeted tests (e.g. `test/*model*.test.ts`) instead.
 - Never commit unless the user asks.
 
 ## Dependency and Install Security

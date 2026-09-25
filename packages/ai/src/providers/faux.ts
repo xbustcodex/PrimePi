@@ -42,6 +42,7 @@ export interface FauxModelDefinition {
 	id: string;
 	name?: string;
 	reasoning?: boolean;
+	free?: boolean;
 	input?: ("text" | "image")[];
 	inputLimits?: Model<string>["inputLimits"];
 	cost?: { input: number; output: number; cacheRead: number; cacheWrite: number };
@@ -480,6 +481,7 @@ export function createFauxCore(options: RegisterFauxProviderOptions) {
 		provider,
 		baseUrl: DEFAULT_BASE_URL,
 		reasoning: definition.reasoning ?? false,
+		free: definition.free,
 		input: definition.input ?? ["text", "image"],
 		inputLimits: definition.inputLimits,
 		cost: definition.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
