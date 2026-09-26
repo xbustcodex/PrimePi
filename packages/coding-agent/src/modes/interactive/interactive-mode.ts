@@ -503,6 +503,8 @@ export class InteractiveMode {
 
 	// Auto-retry state
 	private retryEscapeHandler?: () => void;
+	/** Failover transitions already announced, so a flapping route cannot spam. */
+	private seenFailoverNotices = new Set<string>();
 
 	// Messages queued while compaction is running
 	private compactionQueuedMessages: CompactionQueuedMessage[] = [];
@@ -3604,6 +3606,26 @@ export class InteractiveMode {
 				}
 				void this.flushCompactionQueue({ willRetry: event.willRetry });
 				this.ui.requestRender();
+				break;
+			}
+
+			case "auto_failover": {
+				// Automatic failover must be visible: the user is being moved to another
+				// provider and possibly another account. De-duplicated per transition so
+				// a flapping route cannot spam the transcript.
+				if (!this.seenFailoverNotices.has(event.noticeKey)) {
+					this.seenFailoverNotices.add(event.noticeKey);
+					this.showStatus(event.text);
+				}
+				break;
+			}
+
+			case "auto_failover_failed": {
+				const blocked =
+					event.blocked.length === 0 ? "" : `\n${event.blocked.map((line) => `  - ${line}`).join("\n")}`;
+				this.showError(
+					`Model failover stopped: ${event.reason}. ${event.considered} candidate(s) considered.${blocked}`,
+				);
 				break;
 			}
 

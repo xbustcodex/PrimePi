@@ -36,8 +36,17 @@ export * from "./providers/faux.ts";
 export * from "./session-resources.ts";
 export * from "./types.ts";
 export * from "./utils/assistant-message-frame.ts";
+export { type AvailabilityFailure, classifyAvailabilityFailure, type FailureScope } from "./utils/availability.ts";
+export { AvailabilityCooldowns, type UnavailabilityEntry } from "./utils/availability-cooldowns.ts";
 export * from "./utils/diagnostics.ts";
 export * from "./utils/event-stream.ts";
+export {
+	type FailoverPolicy,
+	failoverNotice,
+	policyAllowsPaid,
+	selectFailoverCandidate,
+	type TurnRequirements,
+} from "./utils/failover.ts";
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
 export * from "./utils/json-parse.ts";
 export * from "./utils/overflow.ts";

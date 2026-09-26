@@ -1,5 +1,10 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS, type Model, type Transport } from "@earendil-works/pi-ai";
+import {
+	DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+	type FailoverPolicy,
+	type Model,
+	type Transport,
+} from "@earendil-works/pi-ai";
 import type { TuiMode as RendererTuiMode, ScrollViewScrollbar, TerminalCapabilities } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -120,6 +125,12 @@ export interface Settings {
 	compaction?: CompactionSettings;
 	branchSummary?: BranchSummarySettings;
 	retry?: RetrySettings;
+	/**
+	 * Automatic model failover policy. Defaults to "free-only", which recovers a free
+	 * route but can never select a paid model. "compatible" may spend money and must
+	 * be set explicitly.
+	 */
+	failover?: FailoverPolicy;
 	hideThinkingBlock?: boolean;
 	showCacheMissNotices?: boolean; // default: false - show cache cost and provider recovery notices
 	externalEditor?: string; // Command for Ctrl+G external editor; takes precedence over VISUAL/EDITOR
@@ -936,6 +947,20 @@ export class SettingsManager {
 			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
 			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
 		};
+	}
+
+	/**
+	 * Failover policy, defaulting to the safe `free-only`.
+	 *
+	 * The default matters: recovering a free route must never silently start spending
+	 * money, so `compatible` is reachable only by explicit configuration. An
+	 * unrecognized value also degrades to `free-only` rather than to a paid-capable one.
+	 */
+	getFailoverPolicy(): FailoverPolicy {
+		const configured = this.settings.failover;
+		return configured === "off" || configured === "same-provider" || configured === "compatible"
+			? configured
+			: "free-only";
 	}
 
 	getHttpIdleTimeoutMs(): number {

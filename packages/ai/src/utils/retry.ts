@@ -1,4 +1,4 @@
-import type { AssistantMessage } from "../types.ts";
+import type { AssistantMessage, StopReason } from "../types.ts";
 
 function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
 	return new RegExp(patterns.join("|"), "i");
@@ -235,8 +235,18 @@ export async function retryAssistantCall(
  * before restarting the assistant turn.
  */
 export function isRetryableAssistantError(message: AssistantMessage): boolean {
-	if (message.stopReason !== "error" || !message.errorMessage) return false;
-	const errorMessage = message.errorMessage;
+	return isRetryableProviderErrorText(message.stopReason, message.errorMessage);
+}
+
+/**
+ * The text-matching core of {@link isRetryableAssistantError}, for callers that
+ * only have a stop reason and message rather than a full `AssistantMessage`.
+ *
+ * Shared so availability classification and retry decisions can never disagree
+ * about what counts as transient.
+ */
+export function isRetryableProviderErrorText(stopReason: StopReason, errorMessage: string | undefined): boolean {
+	if (stopReason !== "error" || !errorMessage) return false;
 	if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
 	return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);
 }

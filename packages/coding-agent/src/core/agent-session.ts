@@ -25,7 +25,18 @@ import type {
 	PrepareNextTurnContext,
 	ThinkingLevel,
 } from "@earendil-works/pi-agent-core";
-import { contentText, getCurrentSystemMessage, retryDelayMs } from "@earendil-works/pi-ai";
+import {
+	type Api,
+	AvailabilityCooldowns,
+	type AvailabilityFailure,
+	classifyAvailabilityFailure,
+	contentText,
+	failoverNotice,
+	getCurrentSystemMessage,
+	retryDelayMs,
+	selectFailoverCandidate,
+	type TurnRequirements,
+} from "@earendil-works/pi-ai";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -187,6 +198,14 @@ export type AgentSessionEvent =
 			errorMessage?: string;
 	  }
 	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+	| { type: "auto_failover"; text: string; noticeKey: string; from: string; to: string }
+	| {
+			type: "auto_failover_failed";
+			reason: string;
+			considered: number;
+			freeRequired: boolean;
+			blocked: string[];
+	  }
 	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
 	| {
 			type: "summarization_retry_scheduled";
@@ -360,6 +379,16 @@ export class AgentSession {
 	// Retry state
 	private _retryAbortController: AbortController | undefined = undefined;
 	private _retryAttempt = 0;
+	/**
+	 * Replacement model for exactly the next request, spent by `prepareRequest`.
+	 * Held separately from `agent.state.model` so a failover never rewrites the
+	 * user's configured model or the session transcript.
+	 */
+	private _pendingFailoverModel: Model<Api> | undefined = undefined;
+	/** Temporary unavailability, keyed by the scope each provider failure reported. */
+	private _availability = new AvailabilityCooldowns();
+	/** `provider:id` keys already tried in the current failover cycle. */
+	private _failoverAttempted = new Set<string>();
 
 	// Bash execution state
 	private readonly _bashAbortControllers = new Set<AbortController>();
@@ -623,10 +652,16 @@ export class AgentSession {
 				},
 				signal,
 			);
+			// A pending failover override applies to exactly one request. It is consumed
+			// here rather than written to agent.state.model so the switch is a
+			// per-attempt substitution: session history is untouched, and the user's
+			// configured model is restored the moment the override is spent.
+			const failoverModel = this._pendingFailoverModel;
+			this._pendingFailoverModel = undefined;
 			return {
 				...previous,
 				context: previous?.context ?? canonicalContext,
-				model: previous?.model ?? this.agent.state.model,
+				model: failoverModel ?? previous?.model ?? this.agent.state.model,
 				thinkingLevel: previous?.thinkingLevel ?? this.agent.state.thinkingLevel,
 			};
 		};
@@ -958,6 +993,10 @@ export class AgentSession {
 						attempt: this._retryAttempt,
 					});
 					this._retryAttempt = 0;
+					// A turn completed, so the failover cycle is over. Clearing the
+					// attempted set here is what bounds the cycle and lets a future
+					// failure legitimately retry a model that failed earlier.
+					this._failoverAttempted.clear();
 				}
 			}
 		}
@@ -3382,6 +3421,33 @@ export class AgentSession {
 			return false;
 		}
 
+		// A recoverable availability failure gets its own recovery path: classify the
+		// scope, exclude what is genuinely unavailable, and switch models instead of
+		// hammering the same exhausted route. A funding/account pool that is spent
+		// until a known reset short-circuits the backoff entirely, because repeating
+		// the identical request cannot succeed before then.
+		const failure = this._classifyAvailabilityFailure(message);
+		if (failure) {
+			this._availability.record({ ...failure, now: Date.now() });
+			const failover = this._selectFailoverModel(failure);
+			if (failover.model && failover.notice) {
+				this._pendingFailoverModel = failover.model;
+				this._emit({ type: "auto_failover", ...failover.notice });
+				this._retryAttempt = 0;
+				this._omitRecoveryAttempt(message);
+				return true;
+			}
+			if (!failure.exhausted) {
+				// Not a conclusive exhaustion; fall through to ordinary retry/backoff.
+			} else {
+				// Conclusively unavailable until a known reset and nothing eligible is
+				// left. Stop cleanly and explain, rather than retrying or spending money.
+				this._retryAttempt = 0;
+				this._emit({ type: "auto_failover_failed", ...failover.explanation });
+				return false;
+			}
+		}
+
 		this._retryAttempt++;
 
 		if (this._retryAttempt > settings.maxRetries) {
@@ -3416,6 +3482,106 @@ export class AgentSession {
 		}
 
 		return true;
+	}
+
+	/**
+	 * Classifies an assistant failure as a provider availability problem, or
+	 * undefined when it is not one. Programming errors, malformed requests, and
+	 * authentication failures deliberately return undefined so they never trigger
+	 * model failover.
+	 */
+	private _classifyAvailabilityFailure(message: AssistantMessage): AvailabilityFailure | undefined {
+		const model = this.agent.state.model;
+		if (!model) return undefined;
+		return classifyAvailabilityFailure({
+			provider: model.provider,
+			modelId: model.id,
+			stopReason: message.stopReason,
+			errorMessage: message.errorMessage ?? "",
+		});
+	}
+
+	/**
+	 * Chooses a replacement model for a classified failure.
+	 *
+	 * `free-only` is the default policy: recovering a free route must never start
+	 * spending money, so a paid candidate is only reachable under an explicitly
+	 * configured `compatible` policy.
+	 */
+	private _selectFailoverModel(failure: AvailabilityFailure): {
+		model?: Model<Api>;
+		notice?: { text: string; noticeKey: string; from: string; to: string };
+		explanation: { reason: string; considered: number; freeRequired: boolean; blocked: string[] };
+	} {
+		const policy = this.settingsManager.getFailoverPolicy();
+		const failed = this.agent.state.model;
+		const available = this.modelRuntime.getAvailableSnapshot();
+		const attempted = this._failoverAttempted;
+		attempted.add(`${failed?.provider}:${failed?.id}`);
+
+		const decision = selectFailoverCandidate({
+			failed: failed as Model<Api>,
+			policy,
+			candidates: available.map((model) => ({ model })),
+			requirements: this._turnRequirements(),
+			cooldowns: this._availability,
+			attempted,
+			now: Date.now(),
+		});
+
+		if ("unavailable" in decision) {
+			const unavailable = decision.unavailable;
+			return {
+				explanation:
+					unavailable.kind === "disabled"
+						? { reason: "automatic failover is disabled", considered: 0, freeRequired: false, blocked: [] }
+						: {
+								reason: unavailable.freeRequired
+									? "no usable free route remains; refusing to select a paid model"
+									: "no compatible route remains",
+								considered: unavailable.considered,
+								freeRequired: unavailable.freeRequired,
+								blocked: unavailable.blocked,
+							},
+			};
+		}
+
+		const replacement = decision.model;
+		attempted.add(`${replacement.provider}:${replacement.id}`);
+		const notice = failoverNotice({
+			failed: failed as Model<Api>,
+			reason: failure.reason,
+			scope: failure.scope,
+			replacement,
+			...(failure.resetAtMs === undefined ? {} : { resetAtMs: failure.resetAtMs }),
+		});
+		return {
+			model: replacement,
+			notice: {
+				...notice,
+				from: `${failed?.provider}:${failed?.id}`,
+				to: `${replacement.provider}:${replacement.id}`,
+			},
+			explanation: { reason: decision.reason, considered: available.length, freeRequired: false, blocked: [] },
+		};
+	}
+
+	/** Capabilities the unfinished turn needs from a replacement model. */
+	private _turnRequirements(): TurnRequirements {
+		const messages = this.sessionManager.buildSessionProjection().messages;
+		let requiresImageInput = false;
+		for (const message of messages) {
+			if (message.role !== "user") continue;
+			for (const block of message.content) {
+				// Legacy transcript entries allow bare strings alongside content blocks.
+				if (typeof block === "object" && block.type === "image") requiresImageInput = true;
+			}
+		}
+		return {
+			requiresTools: this.agent.state.tools.length > 0,
+			requiresImageInput,
+			requiredContextTokens: this._lastAssistantMessage?.usage.totalTokens,
+		};
 	}
 
 	/**
