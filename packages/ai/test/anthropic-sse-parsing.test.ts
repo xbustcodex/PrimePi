@@ -282,7 +282,10 @@ describe("Anthropic raw SSE parsing", () => {
 		} as unknown as Anthropic;
 
 		await streamAnthropic(
-			getModel("openrouter", "anthropic/claude-3-haiku"),
+			// OpenRouter-hosted Anthropic-API model: an OpenRouter account is configured,
+			// but the entry's catalog api is still "anthropic-messages", which
+			// getModel's literal return type proves without a cast.
+			getModel("openrouter", "anthropic/claude-haiku-4.5"),
 			normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
 			{ client, thinkingEnabled: false },
 		).result();
