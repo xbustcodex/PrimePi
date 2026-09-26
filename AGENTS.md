@@ -43,6 +43,55 @@
 - The full `packages/ai` vitest suite exceeds 600s (network tests); run targeted tests (e.g. `test/*model*.test.ts`) instead.
 - Never commit unless the user asks.
 
+## Local Build and `pi` Command (this Windows machine)
+
+This machine has no published/stock pi installed. The global `pi` command is an `npm link` junction to this working tree, so `pi` always runs the locally built coding-agent and picks up rebuilds with no relinking:
+
+```
+D:\nodejs\pi.cmd
+  -> D:\nodejs\node_modules\@earendil-works\pi-coding-agent   (Junction)
+     -> C:\Users\xkali\new_ai\pi\packages\coding-agent
+        -> dist\bundle\cli.js
+```
+
+To make changes or pull changes, then verify:
+
+```
+cd C:\Users\xkali\new_ai\pi
+
+# make changes / pull changes
+
+npm run build
+
+pi --version
+```
+
+- Node is at `D:\nodejs` (v24.21.0, npm 11.19.0), installed from the official zip. `D:\nodejs` is on the *user* PATH, so `node`, `npm`, and `npx` resolve normally in a fresh shell. Use bare commands; only fall back to `D:\nodejs\node.exe` or `D:\nodejs\npm.cmd` if PATH looks stale.
+- The user PATH was deduplicated because it had exceeded `setx`'s 1024-char truncation limit. Keep new PATH additions short, and never write a PATH that exceeds 1024 chars with `setx`.
+- Never run `pi update self`, `pi update pi`, or install pi from npm. That replaces the junction with a published package, which defeats the local-build setup. To change the local build, re-run `npm run build`.
+- `pi` resolves to `D:\nodejs\pi.cmd` in cmd.exe and `D:\nodejs\pi.ps1` in PowerShell. `where.exe pi` shows both.
+- User config, credentials, sessions, and extensions live in `C:\Users\xkali\.pi` and are independent of the link. Do not delete or relocate them. Prefer `pi auth check --provider <p> --no-refresh` over `pi auth print-api-key` when confirming credentials, so nothing is printed or rewritten.
+- To uninstall the link (leaves the repo and `C:\Users\xkali\.pi` untouched): `npm unlink -g @earendil-works/pi-coding-agent`.
+
+## Windows Machine Environment
+
+Python:
+
+- The canonical interpreter is `C:\Users\xkali\AppData\Local\Programs\Python\Python312\python.exe` (3.12.10, 328 packages). `python`, `py`, `pip`, `ruff`, `mypy`, `uvicorn`, and `fastapi` all resolve into that one tree, so `python` and `pip` share a single site-packages.
+- A second, unrelated Python 3.12 exists under `%LOCALAPPDATA%\Packages\PythonSoftwareFoundation.Python.3.12_...` (295 packages). It has no `python.exe` — only console scripts. Its `Scripts` entry was removed from the machine PATH, but the directory is still on disk because a Store-installed app may depend on it. Do not delete it, and do not let anything re-add its `Scripts` folder to PATH: the two trees have separate site-packages, so `pip install X` would write to the Store tree while `python` reads the Programs tree, and the import would fail.
+- If a Python tool appears missing, check which tree owns it before reinstalling. `pip --version` prints the owning site-packages.
+
+PowerShell:
+
+- ExecutionPolicy `CurrentUser` is `RemoteSigned`, which is what lets `npm`, `npx`, and `pi` resolve to their `.ps1` shims and run. If that is ever reverted to `Undefined`/`Restricted`, PowerShell throws `PSSecurityException` on those shims; either restore `RemoteSigned` (`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force`) or use the `.cmd` variants (`npm.cmd`, `pi.cmd`) in PowerShell.
+
+Recovery, if `node`, `npm`, or `pi` goes missing:
+
+- Node was installed from the official zip, not an MSI: `https://nodejs.org/dist/v24.21.0/node-v24.21.0-win-x64.zip`, extracted flat into `D:\nodejs`. No registry entry, no uninstaller, no admin rights needed. Re-download, extract, and add `D:\nodejs` to the user PATH.
+- PATH backups from the 2026-09-26 cleanup are in `C:\Users\xkali\AppData\Local\Temp\opencode`: `machine-path-backup.txt` (488 chars, pre-Python-consolidation), `user-path-backup.txt` (1069 chars, original), `user-path-backup-2.txt` (114 chars, after the node dedupe). That temp directory is shared with unrelated scratch scripts; do not bulk-delete it.
+- `remove-store-python-scripts.ps1` in that same directory is the idempotent, self-backing script that strips the Store `Scripts` entry from the machine PATH. It requires an elevated shell and throws if not elevated.
+- Never restore the link by installing pi from npm. Use `npm link` from `packages\coding-agent` (see above), which is offline and needs no registry access.
+
 ## Dependency and Install Security
 
 - Treat npm dep and lockfile changes as reviewed code. Direct external deps stay pinned to exact versions.
