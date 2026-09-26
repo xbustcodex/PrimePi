@@ -3,6 +3,7 @@ import type { Api, Model } from "../src/types.ts";
 import { classifyAvailabilityFailure } from "../src/utils/availability.ts";
 import { AvailabilityCooldowns, DEFAULT_UNAVAILABLE_TTL_MS } from "../src/utils/availability-cooldowns.ts";
 import { policyAllowsPaid, selectFailoverCandidate } from "../src/utils/failover.ts";
+import { isCredentialFree } from "../src/utils/free-model.ts";
 
 const T0 = 1_790_398_996_120;
 
@@ -291,6 +292,33 @@ describe("selectFailoverCandidate", () => {
 		if ("unavailable" in decision && decision.unavailable.kind === "exhausted") {
 			expect(decision.unavailable.blocked.join(" ")).toContain("missing credentials");
 		}
+	});
+
+	it("treats an anonymous credential-free candidate as usable, not missing credentials", () => {
+		// The producer decides `credentialMissing` from real auth state; a model that
+		// needs no credentials must never be marked missing just because its provider
+		// has no configured key.
+		const credentialMissing = !isCredentialFree(bunny) && true;
+		const decision = selectFailoverCandidate({
+			...base,
+			failed,
+			candidates: [{ model: bunny, credentialMissing }],
+		});
+		expect("model" in decision && decision.model.id).toBe("space-bunny-free");
+	});
+
+	it("still refuses a paid candidate under free-only even when the pool is fine", () => {
+		// Guards the free-stays-free invariant independently of any cooldown: a paid
+		// route that is fully usable must not be selected.
+		const live = new AvailabilityCooldowns();
+		const decision = selectFailoverCandidate({
+			...base,
+			cooldowns: live,
+			failed,
+			candidates: [{ model: paid }, { model: bunny }],
+		});
+		expect("model" in decision && decision.model.id).toBe("space-bunny-free");
+		expect("model" in decision && decision.model.id === "claude-opus-5").toBe(false);
 	});
 
 	it("rejects an incompatible replacement for the turn's requirements", () => {

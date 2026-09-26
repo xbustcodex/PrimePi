@@ -33,6 +33,7 @@ import {
 	contentText,
 	failoverNotice,
 	getCurrentSystemMessage,
+	isCredentialFree,
 	retryDelayMs,
 	selectFailoverCandidate,
 	type TurnRequirements,
@@ -1715,6 +1716,9 @@ export class AgentSession {
 			}
 
 			const hasConfiguredAuth =
+				// A credential-free model is served without provider credentials, so it must
+				// not be blocked by the provider auth gate.
+				isCredentialFree(this.model) ||
 				this._modelRuntime.hasConfiguredAuth(this.model.provider) ||
 				(await this._modelRuntime.checkAuth(this.model.provider)) !== undefined;
 			if (!hasConfiguredAuth) {
@@ -2150,12 +2154,14 @@ export class AgentSession {
 
 	/**
 	 * Set model directly.
-	 * Validates that auth is configured and saves to the session transcript.
-	 * Persists to global defaults only when options.persist is true.
-	 * @throws Error if no auth is configured for the model
+	 * Accepts the model when the provider authenticates, or when the model itself is
+	 * classified as credential-free and therefore needs no provider credentials.
+	 * Saves to the session transcript. Persists to global defaults only when
+	 * options.persist is true.
+	 * @throws Error if the model is neither authenticated nor credential-free
 	 */
 	async setModel(model: Model<any>, options: ModelMutationOptions = {}): Promise<void> {
-		if (!(await this._modelRuntime.checkAuth(model.provider))) {
+		if (!isCredentialFree(model) && !(await this._modelRuntime.checkAuth(model.provider))) {
 			throw new Error(`No API key for ${model.provider}/${model.id}`);
 		}
 
@@ -3427,25 +3433,33 @@ export class AgentSession {
 		// until a known reset short-circuits the backoff entirely, because repeating
 		// the identical request cannot succeed before then.
 		const failure = this._classifyAvailabilityFailure(message);
-		if (failure) {
+		// Only a scope the provider actually reported triggers a model switch. An
+		// uninformative transient error (no structured metadata) keeps the existing
+		// bounded retry-and-backoff behaviour, because a momentary overload may well
+		// clear on the same model and switching would spend the budget for nothing.
+		if (failure && failure.scope !== "model") {
 			this._availability.record({ ...failure, now: Date.now() });
 			const failover = this._selectFailoverModel(failure);
 			if (failover.model && failover.notice) {
 				this._pendingFailoverModel = failover.model;
 				this._emit({ type: "auto_failover", ...failover.notice });
-				this._retryAttempt = 0;
+				// The retry budget is deliberately NOT reset here. Failover and retry
+				// share one bounded budget, so a model that keeps failing cannot loop
+				// without limit just by changing which model is used.
 				this._omitRecoveryAttempt(message);
 				return true;
 			}
-			if (!failure.exhausted) {
-				// Not a conclusive exhaustion; fall through to ordinary retry/backoff.
-			} else {
+			if (failure.exhausted) {
 				// Conclusively unavailable until a known reset and nothing eligible is
 				// left. Stop cleanly and explain, rather than retrying or spending money.
 				this._retryAttempt = 0;
 				this._emit({ type: "auto_failover_failed", ...failover.explanation });
 				return false;
 			}
+		} else if (failure) {
+			// Still record the exclusion so a later attempt in this cycle does not
+			// re-select a model already known to be failing.
+			this._availability.record({ ...failure, now: Date.now() });
 		}
 
 		this._retryAttempt++;
@@ -3522,7 +3536,14 @@ export class AgentSession {
 		const decision = selectFailoverCandidate({
 			failed: failed as Model<Api>,
 			policy,
-			candidates: available.map((model) => ({ model })),
+			candidates: available.map((model) => ({
+				model,
+				// Real reachability, not an assumption: a candidate is unusable only when
+				// it needs credentials that are absent. A credential-free model stays
+				// eligible even on a provider with no configured auth, and a configured
+				// provider never marks its models missing.
+				credentialMissing: !isCredentialFree(model) && !this.modelRuntime.hasConfiguredAuth(model.provider),
+			})),
 			requirements: this._turnRequirements(),
 			cooldowns: this._availability,
 			attempted,
