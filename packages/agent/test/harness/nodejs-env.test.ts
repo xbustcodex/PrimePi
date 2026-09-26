@@ -57,18 +57,47 @@ function toBashSingleQuotedArg(value: string): string {
 	return `'${value.replace(/\\/g, "/").replace(/'/g, `'"'"'`)}'`;
 }
 
+/**
+ * Reproduces the inherited-stdio hang from pi#2389 / #5303: a descendant keeps the
+ * shell's stdout/stderr pipes open after the direct child exits, so the pipes never
+ * reach EOF and waiting on `close` alone hangs.
+ *
+ * The descendant is a backgrounded shell job rather than a detached `node -e` child.
+ * Both hold the pipes open past the direct child's exit, which is the property under
+ * test, but the shell form avoids spawning an inline-script node process that
+ * antivirus heuristics flag.
+ *
+ * Two timing invariants keep the test meaningful: the descendant outlives the 3000ms
+ * guard, so the pipes cannot reach EOF first, and it writes its late marker only
+ * after `LATE_MARKER_DELAY_SECONDS`, which is longer than the 100ms idle-grace
+ * fallback, so the marker's absence when the call settles proves the grace path is
+ * what settled it. The `&&` chain also means a missing `sleep` fails loudly instead
+ * of silently reproducing nothing.
+ */
+const DESCENDANT_HOLD_SECONDS = 30;
+const LATE_MARKER_DELAY_SECONDS = 1;
+
 function createInheritedStdioCommand(pidFile: string): string {
+	const lateMarker = lateMarkerPathFor(pidFile);
 	return (
-		'node -e "' +
-		"const fs=require('fs');" +
-		"const {spawn}=require('child_process');" +
-		"const child=spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'inherit',detached:true});" +
-		"fs.writeFileSync(process.argv[1], String(child.pid));" +
-		"child.unref();" +
-		"console.log('child-exiting');" +
-		'" ' +
-		toBashSingleQuotedArg(pidFile)
+		`{ sleep ${LATE_MARKER_DELAY_SECONDS} && echo late > ${toBashSingleQuotedArg(lateMarker)}; ` +
+		`sleep ${DESCENDANT_HOLD_SECONDS}; } & ` +
+		`echo $! > ${toBashSingleQuotedArg(pidFile)} && echo child-exiting`
 	);
+}
+
+/** Late-marker path paired with a pid file. */
+function lateMarkerPathFor(pidFile: string): string {
+	return `${pidFile}.late`;
+}
+
+/**
+ * Fails unless the descendant was still holding the pipes when the call settled.
+ * Marker-based rather than `process.kill(pid, 0)`: `$!` is an MSYS PID under Git
+ * Bash, which is not the PID space `process.kill`/`taskkill` use on Windows.
+ */
+function assertDescendantStillHoldingPipes(pidFile: string): void {
+	expect(existsSync(lateMarkerPathFor(pidFile))).toBe(false);
 }
 
 function cleanupDetachedChild(pidFile: string): void {
@@ -457,6 +486,7 @@ describe("NodeExecutionEnv", () => {
 					() => controller.abort(),
 				);
 				getOrThrow(collected.result);
+				assertDescendantStillHoldingPipes(pidFile);
 				expect(collected.output?.text).toContain("child-exiting");
 			} finally {
 				controller.abort();
