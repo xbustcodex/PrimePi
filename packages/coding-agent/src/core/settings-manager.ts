@@ -14,6 +14,20 @@ import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
+import { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
+import {
+	hasPath,
+	lookupSetting,
+	type ResolvedSetting,
+	readPath,
+	type SettingHandle,
+	type SettingSource,
+	type SettingValue,
+	writePath,
+} from "./settings-registry.ts";
+import "./settings-descriptors.ts";
+
+export { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 
 export interface CompactionModelOverride {
 	reserveTokens?: number;
@@ -79,7 +93,6 @@ export interface ThinkingBudgetsSettings {
 export type MermaidRenderingMode = "off" | "final" | "streaming";
 
 /** Cache-warming profile. "idle" also warms between agent runs. */
-export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const;
 export type CacheWarmingMode = (typeof CACHE_WARMING_MODES)[number];
 
 export interface MarkdownSettings {
@@ -328,7 +341,7 @@ export class SettingsManager {
 	private storage: SettingsStorage;
 	private globalSettings: Settings;
 	private projectSettings: Settings;
-	private settings: Settings;
+	private settings!: Settings;
 	private projectTrusted: boolean;
 	private modifiedFields = new Set<keyof Settings>(); // Track global fields modified during session
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>(); // Track global nested field modifications
@@ -339,6 +352,14 @@ export class SettingsManager {
 	private writeQueue: Promise<void> = Promise.resolve();
 	private errors: SettingsError[];
 	private settingsPaths: SettingsPaths;
+	/**
+	 * Bumped whenever any layer changes. Derived setting reads are memoized against
+	 * it so a consumer can read a setting in a hot loop without re-walking the layers.
+	 */
+	private revision = 0;
+	/** Top-level keys supplied by `applyOverrides`, used only to report provenance. */
+	private overrideKeys = new Set<string>();
+	private resolvedCache = new Map<string, { revision: number; resolved: ResolvedSetting }>();
 
 	private constructor(
 		storage: SettingsStorage,
@@ -358,7 +379,18 @@ export class SettingsManager {
 		this.projectSettingsLoadError = projectLoadError;
 		this.errors = [...initialErrors];
 		this.settingsPaths = settingsPaths;
+		this.recomputeMerged();
+	}
+
+	/**
+	 * Rebuilds the merged view and invalidates every memoized setting read.
+	 *
+	 * Centralized so no layer mutation can change a layer without also invalidating
+	 * the reads derived from it.
+	 */
+	private recomputeMerged(): void {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.revision++;
 	}
 
 	/** Create a SettingsManager that loads from files */
@@ -534,7 +566,7 @@ export class SettingsManager {
 		if (!trusted) {
 			this.projectSettings = {};
 			this.projectSettingsLoadError = null;
-			this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+			this.recomputeMerged();
 			return;
 		}
 
@@ -544,7 +576,7 @@ export class SettingsManager {
 		if (projectLoad.error) {
 			this.recordError("project", projectLoad.error);
 		}
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMerged();
 	}
 
 	async reload(): Promise<void> {
@@ -572,12 +604,112 @@ export class SettingsManager {
 			this.recordError("project", projectLoad.error);
 		}
 
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMerged();
 	}
 
 	/** Apply additional overrides on top of current settings */
 	applyOverrides(overrides: Partial<Settings>): void {
 		this.settings = deepMergeSettings(this.settings, overrides);
+		// Recorded so a layered read can report `override` as the source. The merge
+		// itself is unchanged: overrides still accumulate onto the merged view.
+		for (const key of Object.keys(overrides)) {
+			this.overrideKeys.add(key);
+		}
+		this.revision++;
+	}
+
+	/** Bumped whenever any layer changes; memoized reads compare against it. */
+	getRevision(): number {
+		return this.revision;
+	}
+
+	/**
+	 * Resolves a registered setting across the layers, reporting which layer won.
+	 *
+	 * Precedence: override, then project, then global, then environment fallback,
+	 * then the descriptor default. A `globalOnly` descriptor skips the project layer
+	 * because the setting is global by design.
+	 */
+	getSetting<T extends SettingValue>(key: string): ResolvedSetting<T> | undefined {
+		const handle = lookupSetting(key);
+		if (!handle) return undefined;
+
+		const cached = this.resolvedCache.get(key);
+		if (cached && cached.revision === this.revision) {
+			return cached.resolved as ResolvedSetting<T>;
+		}
+
+		const resolved = this.resolveSetting(handle) as ResolvedSetting;
+		this.resolvedCache.set(key, { revision: this.revision, resolved });
+		return resolved as ResolvedSetting<T>;
+	}
+
+	private resolveSetting(handle: SettingHandle): ResolvedSetting {
+		const { id, descriptor } = handle;
+		const root = id.split(".")[0];
+
+		const layers: { source: SettingSource; container: unknown }[] = [];
+		if (this.overrideKeys.has(root)) {
+			layers.push({ source: "override", container: this.settings });
+		}
+		if (!descriptor.globalOnly) {
+			layers.push({ source: "project", container: this.projectSettings });
+		}
+		layers.push({ source: "global", container: this.globalSettings });
+
+		for (const layer of layers) {
+			const raw = readPath(layer.container, id);
+			if (raw === undefined) continue;
+			// A malformed persisted value falls through to the next layer rather than
+			// throwing, matching the existing getters' lenient reads.
+			try {
+				return { value: handle.parse(raw), source: layer.source, isExplicit: true };
+			} catch {}
+		}
+
+		if (descriptor.env) {
+			const raw = process.env[descriptor.env];
+			if (raw !== undefined) {
+				const parsed = descriptor.parseEnv?.(raw);
+				if (parsed !== undefined) {
+					return { value: parsed as SettingValue, source: "default", isExplicit: false };
+				}
+			}
+		}
+
+		return { value: descriptor.default, source: "default", isExplicit: false };
+	}
+
+	/**
+	 * Validates and writes a registered setting.
+	 *
+	 * Validation happens before any mutation so a bad value cannot reach the file.
+	 * The write then reuses the existing field-scoped persistence and trust gates by
+	 * delegating to the same helper the typed setters use.
+	 */
+	setSetting(key: string, value: unknown, scope: SettingsScope = "global"): void {
+		const handle = lookupSetting(key);
+		if (!handle) {
+			throw new Error(`Unknown setting: ${key}`);
+		}
+		const parsed = handle.parse(value);
+		if (scope === "project") {
+			this.assertProjectTrustedForWrite();
+			const projectSettings = structuredClone(this.projectSettings);
+			writePath(projectSettings as Record<string, unknown>, key, parsed);
+			this.markProjectModified(key.split(".")[0] as keyof Settings);
+			this.saveProjectSettings(projectSettings);
+			return;
+		}
+		writePath(this.globalSettings as Record<string, unknown>, key, parsed);
+		this.markModified(key.split(".")[0] as keyof Settings);
+		this.save();
+	}
+
+	/** True when the setting key resolves to a defined value in the given layer. */
+	hasSettingInScope(key: string, scope: SettingsScope): boolean {
+		const container = scope === "project" ? this.projectSettings : this.globalSettings;
+		return hasPath(container, key);
 	}
 
 	/** Mark a global field as modified during this session */
@@ -677,7 +809,7 @@ export class SettingsManager {
 	}
 
 	private save(): void {
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMerged();
 
 		if (this.globalSettingsLoadError) {
 			return;
@@ -695,7 +827,7 @@ export class SettingsManager {
 	private saveProjectSettings(settings: Settings): void {
 		this.assertProjectTrustedForWrite();
 		this.projectSettings = structuredClone(settings);
-		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		this.recomputeMerged();
 
 		if (this.projectSettingsLoadError) {
 			return;
