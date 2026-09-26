@@ -21,6 +21,7 @@ import { ProjectTrustStore } from "../src/core/trust-manager.ts";
 import { main } from "../src/main.ts";
 import { ConfigSelectorComponent } from "../src/modes/interactive/components/config-selector.ts";
 import { handlePackageCommand } from "../src/package-manager-cli.ts";
+import { ALLOW_SELF_UPDATE_ENV } from "../src/utils/self-update-barrier.ts";
 import { allowNetwork } from "./test-network-env.ts";
 
 describe("package commands", () => {
@@ -135,6 +136,10 @@ if (process.platform !== "win32") fs.chmodSync(piPath, 0o755);
 
 	beforeEach(() => {
 		allowNetwork();
+		// The self-update barrier is opt-in; these tests exercise the upstream
+		// self-update code paths that the default blocks. The default-blocked
+		// behavior is covered in test/self-update-barrier.test.ts.
+		vi.stubEnv(ALLOW_SELF_UPDATE_ENV, "1");
 		tempDir = join(tmpdir(), `pi-package-commands-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
 		projectDir = join(tempDir, "project");

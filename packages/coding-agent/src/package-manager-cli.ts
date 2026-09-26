@@ -37,6 +37,7 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { spawnProcess, spawnProcessSync, waitForChildProcess } from "./utils/child-process.ts";
 import { canonicalizePath, getCwdRelativePath } from "./utils/paths.ts";
 import { getPiUserAgent } from "./utils/pi-user-agent.ts";
+import { isSelfUpdateAllowed, selfUpdateBlockedMessage } from "./utils/self-update-barrier.ts";
 import { formatVersionCheckError, getLatestPiRelease, isNewerPackageVersion } from "./utils/version-check.ts";
 import {
 	cleanupWindowsSelfUpdateQuarantine,
@@ -1020,6 +1021,12 @@ export async function handlePackageCommand(
 					}
 				}
 				if (updateTargetIncludesSelf(target)) {
+					// Hard barrier: this fork must never be replaced by a published package.
+					if (!isSelfUpdateAllowed()) {
+						console.error(chalk.red(selfUpdateBlockedMessage(APP_NAME)));
+						process.exitCode = 1;
+						return true;
+					}
 					const managedInstallRoot = getActiveManagedInstallRoot();
 					if (managedInstallRoot && options.force) {
 						console.error(
