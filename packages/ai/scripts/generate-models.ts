@@ -41,7 +41,7 @@ import {
 	getRadiusModelsFromConfig,
 	loadRadiusGatewayConfig,
 } from "../src/providers/radius-config.ts";
-import { withFreeFlag } from "../src/utils/free-model.ts";
+import { withAccessFlag, withFreeFlag } from "../src/utils/free-model.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -3371,7 +3371,7 @@ async function generateModels() {
 	for (const model of allModels) {
 		providers[model.provider] ??= { chat: {}, image: {}, classifier: {} };
 		// Only add if not already present (models.dev takes priority over OpenRouter).
-		providers[model.provider].chat[model.id] ??= { ...withFreeFlag(model), type: "chat" };
+		providers[model.provider].chat[model.id] ??= { ...withAccessFlag(withFreeFlag(model)), type: "chat" };
 	}
 	for (const model of openRouterCatalog.images) {
 		applyImageInputMetadata(model);

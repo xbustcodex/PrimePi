@@ -1058,6 +1058,25 @@ export interface ModelInputLimits {
 	images?: ModelImageInputLimits;
 }
 
+/**
+ * How a model must be reached. Deliberately separate from {@link BaseModel.free}:
+ * price and reachability are independent, and conflating them would either hide
+ * usable free models or advertise paid ones as free.
+ */
+export type ModelAccess =
+	/** Served without any credentials. */
+	| "anonymous"
+	/** Requires an interactive account login (OAuth-style). */
+	| "login"
+	/** Requires an API key. */
+	| "api-key"
+	/** Requires an active paid subscription. */
+	| "subscription"
+	/** Hosted locally; no upstream account or network egress. */
+	| "local"
+	/** Not classified. Treat as requiring the provider's credentials. */
+	| "unknown";
+
 /** Fields shared by every catalog entry, regardless of what you can do with it. */
 export interface BaseModel<TApi extends string> {
 	id: string;
@@ -1072,6 +1091,19 @@ export interface BaseModel<TApi extends string> {
 	headers?: Record<string, string>;
 	/** Free-tier model: upstream marks it explicitly (OpenRouter `:free` or the `openrouter/free` router, OpenCode `-free`). Never derived from cost, which is also 0 for paid routers and promos. */
 	free?: boolean;
+	/**
+	 * What this model needs before it can be used, independent of price.
+	 *
+	 * `free` answers "does this cost money"; `access` answers "can I call it".
+	 * A free model can still require an account, a key, or a subscription, so
+	 * `free` must never be read as "usable".
+	 *
+	 * Unset means "not classified": fall back to the provider's credential
+	 * requirement. Only models that are genuinely reachable *without*
+	 * credentials carry an explicit `"anonymous"` or `"local"` value, so an
+	 * unclassified model is never accidentally treated as credential-free.
+	 */
+	access?: ModelAccess;
 }
 
 /** Chat model: usable with `stream()` and friends. */

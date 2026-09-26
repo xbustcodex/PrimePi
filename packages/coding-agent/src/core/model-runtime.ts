@@ -28,6 +28,7 @@ import {
 	type ImageModel,
 	type ImagesContext,
 	type ImagesOptions,
+	isCredentialFree,
 	lazyStream,
 	type Model,
 	type Models,
@@ -301,7 +302,13 @@ export class ModelRuntime implements Models {
 		this.snapshot = {
 			...this.snapshot,
 			all,
-			available: all.filter((model) => this.snapshot.configuredProviders.has(model.provider)),
+			// Mirrors Models.getAvailable(): a provider's models are available when its
+			// credentials resolved, or for the subset that needs no credentials at all.
+			// Without the second clause, a model the user can actually call right now
+			// (served anonymously) stays hidden behind an unrelated login.
+			available: all.filter(
+				(model) => this.snapshot.configuredProviders.has(model.provider) || isCredentialFree(model),
+			),
 		};
 	}
 

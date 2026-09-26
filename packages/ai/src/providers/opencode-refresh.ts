@@ -1,6 +1,6 @@
 import type { RefreshModelsContext } from "../models.ts";
 import type { Api, Model, OpenAICompletionsCompat, OpenAIResponsesCompat } from "../types.ts";
-import { withFreeFlag } from "../utils/free-model.ts";
+import { withAccessFlag, withFreeFlag } from "../utils/free-model.ts";
 
 /**
  * Runtime self-healing for the OpenCode Zen and Go catalogs.
@@ -129,25 +129,27 @@ function buildOpenCodeRuntimeModel<TApi extends Api>(
 		compat = { ...(compat ?? {}), maxTokensField: "max_tokens" };
 	}
 
-	return withFreeFlag<Model<Api>>({
-		id,
-		name: entry.name || id,
-		api,
-		provider: config.provider,
-		baseUrl,
-		reasoning: entry.reasoning === true,
-		input: entry.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-		cost: {
-			input: entry.cost?.input || 0,
-			output: entry.cost?.output || 0,
-			cacheRead: entry.cost?.cache_read || 0,
-			cacheWrite: entry.cost?.cache_write || 0,
-		},
-		...(compat ? { compat } : {}),
-		contextWindow: entry.limit?.context || 4096,
-		maxTokens: entry.limit?.output || 4096,
-		type: "chat",
-	});
+	return withAccessFlag(
+		withFreeFlag<Model<Api>>({
+			id,
+			name: entry.name || id,
+			api,
+			provider: config.provider,
+			baseUrl,
+			reasoning: entry.reasoning === true,
+			input: entry.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+			cost: {
+				input: entry.cost?.input || 0,
+				output: entry.cost?.output || 0,
+				cacheRead: entry.cost?.cache_read || 0,
+				cacheWrite: entry.cost?.cache_write || 0,
+			},
+			...(compat ? { compat } : {}),
+			contextWindow: entry.limit?.context || 4096,
+			maxTokens: entry.limit?.output || 4096,
+			type: "chat",
+		}),
+	);
 }
 
 /**

@@ -342,12 +342,21 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const isDefault = this.isDefaultModel(item.model);
 			const defaultBadge = isDefault ? theme.fg("muted", " · default") : "";
 			const freeBadge = item.model.free ? theme.fg("success", " · free") : "";
+			// Surface reachability next to price: "free" says nothing about whether the
+			// model can actually be called. A model shown here is usable now, so the badge
+			// explains why it is visible without a login for that provider.
+			const accessBadge =
+				item.model.access === "anonymous"
+					? theme.fg("success", " · anonymous")
+					: item.model.access === "local"
+						? theme.fg("success", " · local")
+						: "";
 
 			const cursor = isSelected ? theme.fg("accent", "→ ") : "  ";
 			const currentMarker = isCurrent ? theme.fg("accent", "✓ ") : "  ";
 			const modelText = isSelected ? theme.fg("accent", item.id) : item.id;
 			const providerBadge = theme.fg("muted", `[${item.provider}]`);
-			const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${freeBadge}${defaultBadge}`;
+			const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${freeBadge}${accessBadge}${defaultBadge}`;
 
 			this.listContainer.addChild(new Text(line, 0, 0));
 		}

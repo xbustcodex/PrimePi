@@ -49,6 +49,7 @@ import type {
 	Usage,
 } from "./types.ts";
 import { operationSignal, raceWithAbortSignal } from "./utils/abort.ts";
+import { hasCredentialFreeModels, isCredentialFree } from "./utils/free-model.ts";
 import {
 	assertChatModel,
 	assertClassifierModel,
@@ -678,7 +679,13 @@ class ModelsImpl implements MutableModels {
 		return raceWithAbortSignal(check, signal);
 	}
 
-	private async getAuthenticatedProviders(providerId: string | undefined, signal: AbortSignal) {
+	/**
+	 * Providers that can be reached, either because their credentials resolved or
+	 * because they serve at least one model that needs no credentials. The returned
+	 * `auth` stays `undefined` in the second case so callers can restrict the
+	 * provider's models to the credential-free ones.
+	 */
+	private async getReachableProviders(providerId: string | undefined, signal: AbortSignal) {
 		signal.throwIfAborted();
 		const providers = providerId
 			? [this.providers.get(providerId)].filter((entry) => entry !== undefined)
@@ -689,16 +696,20 @@ class ModelsImpl implements MutableModels {
 				return { provider, credential, auth: await this.checkProviderAuth(provider, credential, signal) };
 			}),
 		);
-		return checks.filter((entry) => entry.auth !== undefined);
+		return checks.filter((entry) => entry.auth !== undefined || hasCredentialFreeModels(entry.provider.getModels()));
 	}
 
 	getAvailable(providerId?: string, options?: AuthOperationOptions): Promise<readonly Model<Api>[]> {
 		const signal = operationSignal(options?.signal);
 		const available = (async () => {
-			const providers = await this.getAuthenticatedProviders(providerId, signal);
-			return providers.flatMap(({ provider, credential }) => {
+			const providers = await this.getReachableProviders(providerId, signal);
+			return providers.flatMap(({ provider, credential, auth }) => {
 				const models = provider.getModels();
-				return provider.filterModels?.(models, credential) ?? models;
+				const narrowed = provider.filterModels?.(models, credential) ?? models;
+				// Without resolved credentials, only models that need none are usable.
+				// This is what lets an anonymously served free model be selected without
+				// a login, while every other model on that provider still requires one.
+				return auth === undefined ? narrowed.filter(isCredentialFree) : narrowed;
 			});
 		})();
 		return raceWithAbortSignal(available, signal);
@@ -717,9 +728,10 @@ class ModelsImpl implements MutableModels {
 	getAllAvailable(providerId?: string, options?: AuthOperationOptions): Promise<readonly AnyModel[]> {
 		const signal = operationSignal(options?.signal);
 		const available = (async () => {
-			const providers = await this.getAuthenticatedProviders(providerId, signal);
-			return providers.flatMap(({ provider, credential }) => {
+			const providers = await this.getReachableProviders(providerId, signal);
+			return providers.flatMap(({ provider, credential, auth }) => {
 				const models = provider.getAllModels?.() ?? provider.getModels();
+				if (auth === undefined) return models.filter(isCredentialFree);
 				if (provider.filterAllModels) return provider.filterAllModels(models, credential);
 				if (!provider.filterModels) return models;
 				const availableChatIds = new Set(
