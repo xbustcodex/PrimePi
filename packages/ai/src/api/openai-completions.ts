@@ -37,6 +37,7 @@ import type {
 } from "../types.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
+import { CREDENTIAL_FREE_API_KEY, isCredentialFree, resolveCredentialFreeApiKey } from "../utils/free-model.ts";
 import { shortHash } from "../utils/hash.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
@@ -79,9 +80,20 @@ function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean 
 	return false;
 }
 
-function getClientApiKey(provider: string, apiKey: string | undefined, headers: ProviderHeaders | undefined): string {
+function getClientApiKey(
+	model: Model<"openai-completions">,
+	apiKey: string | undefined,
+	headers: ProviderHeaders | undefined,
+): string {
 	if (apiKey) return apiKey;
 	if (hasHeader(headers, "authorization") || hasHeader(headers, "cf-aig-authorization")) return "unused";
+	// A credential-free model is served without credentials, so it needs a
+	// placeholder key to satisfy the SDK constructor while sending no bearer token.
+	// createClient suppresses the Authorization header for exactly this case.
+	return resolveCredentialFreeApiKey(model, apiKey, false) ?? throwMissingApiKey(model.provider);
+}
+
+function throwMissingApiKey(provider: string): never {
 	throw new Error(`No API key for provider: ${provider}`);
 }
 
@@ -333,7 +345,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 		};
 
 		try {
-			const apiKey = getClientApiKey(model.provider, options?.apiKey, options?.headers);
+			const apiKey = getClientApiKey(model, options?.apiKey, options?.headers);
 			const compat = getCompat(model);
 			const grammarToolInputProperties = createGrammarToolInputProperties(
 				getDeclaredTools(normalizedContext.messages),
@@ -733,7 +745,7 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 	context: TranscriptContext,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
-	getClientApiKey(model.provider, options?.apiKey, options?.headers);
+	getClientApiKey(model, options?.apiKey, options?.headers);
 
 	const base = {
 		...buildBaseOptions(model, context, options, options?.apiKey),
@@ -785,12 +797,18 @@ function createClient(
 		Object.assign(headers, optionsHeaders);
 	}
 
+	// A credential-free model must not carry a bearer token. The SDK derives
+	// `Authorization: Bearer <apiKey>` from the key, so the header is explicitly
+	// nulled instead; SDKs read a null default header as "unset", not as a value.
+	// Only the placeholder key reaches this point, and only for such a model.
+	const anonymousRequest = isCredentialFree(model) && apiKey === CREDENTIAL_FREE_API_KEY;
+
 	return new OpenAI({
 		apiKey,
 		baseURL: model.baseUrl,
 		dangerouslyAllowBrowser: true,
 		fetch,
-		defaultHeaders: headers,
+		defaultHeaders: anonymousRequest ? { ...headers, Authorization: null } : headers,
 	});
 }
 

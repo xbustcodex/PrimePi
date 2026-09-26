@@ -67,3 +67,34 @@ export function isCredentialFree(model: { access?: ModelAccess }): boolean {
 export function hasCredentialFreeModels(models: readonly { access?: ModelAccess }[]): boolean {
 	return models.some(isCredentialFree);
 }
+
+/**
+ * Placeholder credential for a request that must carry no `Authorization` header.
+ *
+ * Provider SDKs generally refuse to construct a client without a non-empty key, so a
+ * sentinel is still required. It is never sent: adapters pair this with an
+ * explicitly nulled `Authorization` header, which those SDKs treat as "unset this
+ * header" rather than "set it to null".
+ */
+export const CREDENTIAL_FREE_API_KEY = "credential-free";
+
+/**
+ * Resolves the placeholder credential for a request that must carry no
+ * `Authorization` header, or `undefined` when the normal credential path applies.
+ *
+ * Returning `undefined` for every ordinary model is what keeps authentication
+ * untouched: a resolved key always wins, and a model with no classification is
+ * never treated as credential-free. Adapters pair the placeholder with an
+ * explicitly nulled `Authorization` header, which provider SDKs read as "unset
+ * this header" rather than "set it to null".
+ */
+export function resolveCredentialFreeApiKey(
+	model: { access?: ModelAccess },
+	apiKey: string | undefined,
+	hasAuthHeader: boolean,
+): string | undefined {
+	if (apiKey !== undefined) return undefined;
+	if (hasAuthHeader) return undefined;
+	if (!isCredentialFree(model)) return undefined;
+	return CREDENTIAL_FREE_API_KEY;
+}

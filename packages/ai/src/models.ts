@@ -856,16 +856,21 @@ class ModelsImpl implements MutableModels {
 			env: options?.env,
 			signal: options?.signal,
 		});
-		if (!resolution) {
+		// A model classified as credential-free is served without credentials, so an
+		// absent resolution is the expected outcome rather than a misconfiguration.
+		// Every other model still requires the provider's auth to resolve, so this
+		// does not weaken authentication for ordinary models.
+		if (!resolution && !isCredentialFree(model)) {
 			throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
 		}
-		const auth = resolution.auth;
+		const auth = resolution?.auth ?? {};
 
 		// Explicit request options win per-field; the Models-only transform runs last.
 		const apiKey = options?.apiKey ?? auth.apiKey;
 		let headers = mergeHeaders(auth.headers, options?.headers);
 		if (options?.transformHeaders) headers = await options.transformHeaders(headers ?? {});
-		const env = resolution.env || options?.env ? { ...(resolution.env ?? {}), ...(options?.env ?? {}) } : undefined;
+		const resolvedEnv = resolution?.env;
+		const env = resolvedEnv || options?.env ? { ...(resolvedEnv ?? {}), ...(options?.env ?? {}) } : undefined;
 		const requestModel: TModel = auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
 		const { transformHeaders: _transformHeaders, ...providerOptions } = options ?? {};
 		const requestOptions = { ...providerOptions, apiKey, headers, env } as Omit<TOptions, "transformHeaders"> &

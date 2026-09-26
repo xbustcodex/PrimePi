@@ -646,23 +646,27 @@ export class ModelRuntime implements Models {
 			env: options?.env,
 			signal: options?.signal,
 		});
-		if (!resolution) throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
+		// A credential-free model is served without credentials, so an absent resolution
+		// is expected for it. Every other model still requires provider auth.
+		if (!resolution && !isCredentialFree(model)) {
+			throw new ModelsError("auth", `Provider is not configured: ${model.provider}`);
+		}
 
 		const { transformHeaders, ...rawProviderOptions } = options ?? {};
 		const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
-		let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
+		const resolvedAuth = resolution?.auth ?? {};
+		let headers = mergeHeaders(resolvedAuth.headers, providerOptions.headers);
 		if (transformHeaders) headers = await transformHeaders(headers ?? {});
+		const resolvedEnv = resolution?.env;
 		const env =
-			resolution.env || providerOptions.env
-				? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
-				: undefined;
-		const requestModel: TModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
+			resolvedEnv || providerOptions.env ? { ...(resolvedEnv ?? {}), ...(providerOptions.env ?? {}) } : undefined;
+		const requestModel: TModel = resolvedAuth.baseUrl ? { ...model, baseUrl: resolvedAuth.baseUrl } : model;
 		return {
 			provider,
 			model: requestModel,
 			options: {
 				...providerOptions,
-				apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
+				apiKey: providerOptions.apiKey ?? resolvedAuth.apiKey,
 				headers,
 				env,
 			} as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
