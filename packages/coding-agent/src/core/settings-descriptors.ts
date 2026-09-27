@@ -522,6 +522,32 @@ export const toolApprovalPolicies = registerSetting({
 	default: {},
 });
 
+// --- Secrets -----------------------------------------------------------------
+
+/**
+ * Whether recognized credentials are redacted before content leaves the machine.
+ *
+ * Defaults to on: the failure mode of leaving it off is silently shipping a
+ * credential to a provider, and the failure mode of leaving it on is a
+ * placeholder in a transcript, which is visible and recoverable.
+ */
+export const secretsRedactionEnabled = registerSetting({
+	key: "secrets.enabled",
+	type: "boolean",
+	default: true,
+});
+
+/**
+ * Redact recognized credentials from tool arguments before they are shown.
+ *
+ * Separate from `secrets.enabled` because a caller may want provider-bound
+ * redaction without losing argument fidelity in the local UI.
+ */
+export const secretsRedactToolArguments = registerSetting({
+	key: "secrets.redactToolArguments",
+	type: "boolean",
+	default: true,
+});
 
 // --- Custom-renderer rows -----------------------------------------------------
 // These keep bespoke components (theme picker, model thinking levels, warnings).

@@ -123,6 +123,8 @@ import type { ModelRuntime } from "./model-runtime.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
+import { redactMessages, restoreToolArguments } from "./security/secret-transform.ts";
+import { collectEnvSecrets, detectSecrets, SecretRedactor } from "./security/secrets.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
@@ -424,6 +426,14 @@ export class AgentSession {
 	private _extensionMode: ExtensionMode = "print";
 	private _extensionCommandContextActions?: ExtensionCommandContextActions;
 	private _extensionAbortHandler?: () => void;
+	/**
+	 * Credential redactor applied to the provider-bound projection.
+	 *
+	 * Absent when redaction is disabled or when the environment held no
+	 * recognizable credential, in which case the projection passes through
+	 * untouched. Never consulted when building stored history.
+	 */
+	private _secretRedactor?: SecretRedactor;
 	private _extensionShutdownHandler?: ShutdownHandler;
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
@@ -464,6 +474,9 @@ export class AgentSession {
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
+		// Credentials the environment already holds are known up front, so the
+		// redactor exists before the first request rather than after a leak.
+		this._secretRedactor = this._buildSecretRedactor();
 		this._installAgentToolHooks();
 		this._installAgentNextTurnRefresh();
 		this._installAgentRequestProjection();
@@ -569,6 +582,11 @@ export class AgentSession {
 			// so a denied tool leaves no side effect whatsoever.
 			const tool = context.tools?.find((candidate) => candidate.name === toolCall.name);
 			if (tool) {
+				// A tool argument may legitimately contain a placeholder the redactor
+				// minted, which the tool needs as a real value to function. Restoring
+				// here — after the approval decision, before `execute` — is the one
+				// place a secret re-enters the process, and it is scoped to the
+				// in-memory argument object.
 				const approvalOptions = this._approvalOptionsForCall();
 				const result = await decideToolApproval({ tool, args, options: approvalOptions });
 				const blocked = await toBeforeToolCallResult(result);
@@ -585,7 +603,10 @@ export class AgentSession {
 					type: "tool_call",
 					toolName: toolCall.name,
 					toolCallId: toolCall.id,
-					input: args as Record<string, unknown>,
+					input: (this._secretRedactor ? restoreToolArguments(args, this._secretRedactor) : args) as Record<
+						string,
+						unknown
+					>,
 				});
 			} catch (err) {
 				if (err instanceof Error) {
@@ -655,9 +676,15 @@ export class AgentSession {
 	private _installAgentRequestProjection(): void {
 		const previousPrepareRequest = this.agent.prepareRequest;
 		this.agent.prepareRequest = async (request, signal) => {
+			// Redaction happens on the projection, never on stored history. The
+			// projection is rebuilt from the journal on every request, so the canonical
+			// record — and the provenance that says who introduced each message —
+			// is exactly as it was written. Only what leaves the machine is filtered.
+			const projected = this.sessionManager.buildSessionProjection().messages;
+			const messages = this._redactProjection(projected);
 			const canonicalContext = {
 				...request.context,
-				messages: this.sessionManager.buildSessionProjection().messages,
+				messages,
 				// Messages declare the provider-visible loadout; context.tools keeps executable implementations.
 				tools: this.agent.state.tools.slice(),
 			};
@@ -685,6 +712,15 @@ export class AgentSession {
 		};
 	}
 
+	/**
+	 * Approval configuration for one call.
+	 *
+	 * Read fresh each time so a settings change takes effect immediately rather
+	 * than at the next session start. The prompt function is supplied only when a
+	 * real interactive surface exists; without it the gate refuses anything
+	 * requiring a decision, which is the correct reading of "nobody is there to
+	 * ask" rather than "yes".
+	 */
 	private _approvalOptionsForCall(): ApprovalGateOptions {
 		const mode = this.settingsManager.getSetting("tools.approvalMode")?.value;
 		const policies = this.settingsManager.getSetting("tools.approval")?.value;
@@ -732,6 +768,53 @@ export class AgentSession {
 			// A prompt that fails has not granted consent.
 			return "deny";
 		}
+	}
+
+	/**
+	 * Builds the credential redactor for this session.
+	 *
+	 * Two sources, in order: credentials the environment already holds, and
+	 * shapes recognized in the session's own text. Neither is written to disk.
+	 * Returns undefined when redaction is disabled or nothing was found, so the
+	 * common case pays nothing.
+	 */
+	private _buildSecretRedactor(): SecretRedactor | undefined {
+		if (!this.settingsManager.getSetting("secrets.enabled")?.value) return undefined;
+		const entries = collectEnvSecrets();
+		return entries.length > 0 ? new SecretRedactor(entries) : undefined;
+	}
+
+	/**
+	 * Redacts the provider-bound projection, in two passes.
+	 *
+	 * The first covers credentials this process already held, using the long-lived
+	 * redactor so a placeholder stays stable across turns and the prompt-cache
+	 * prefix does not churn.
+	 *
+	 * The second is a backstop for content the process never held: something the
+	 * model read from a file, or that arrived from an external source, can contain
+	 * a credential that was not in the environment at startup. Those are detected
+	 * by shape at the boundary, per request, because there was no earlier moment at
+	 * which they could have been registered.
+	 *
+	 * Neither pass touches stored history.
+	 */
+	private _redactProjection(projected: readonly AgentMessage[]): AgentMessage[] {
+		if (!this.settingsManager.getSetting("secrets.enabled")?.value) return projected as AgentMessage[];
+
+		const first = this._secretRedactor
+			? redactMessages(projected, this._secretRedactor)
+			: (projected as AgentMessage[]);
+		if (this._secretRedactor && first.length === projected.length) {
+			// Only scan when the cheap pass found nothing new to mask; detection is
+			// a regex sweep and is not worth running on every turn of a clean session.
+			return first;
+		}
+
+		const serialized = JSON.stringify(first);
+		const discovered = this._secretRedactor ? null : detectSecrets(serialized);
+		if (!discovered || discovered.length === 0) return first;
+		return redactMessages(first, new SecretRedactor(discovered));
 	}
 
 	private async _dispatchTurnEndBoundary(
