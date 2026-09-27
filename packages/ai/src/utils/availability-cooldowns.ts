@@ -104,7 +104,7 @@ export class AvailabilityCooldowns {
 	/**
 	 * Whether an entry excludes a given model.
 	 *
- * Pool and provider keys are matched by prefix because their identity carries no
+	 * Pool and provider keys are matched by prefix because their identity carries no
 	 * model id: `pool:<provider>:<source>` deliberately lets sibling models share one
 	 * exclusion, and `provider:<provider>` covers a whole provider.
 	 *
