@@ -104,15 +104,24 @@ export class AvailabilityCooldowns {
 	/**
 	 * Whether an entry excludes a given model.
 	 *
-	 * Pool and provider keys are matched by prefix because their identity is
-	 * `pool:<provider>:<source>`, which intentionally contains no model id: that is
-	 * precisely what makes sibling models share one exclusion.
+ * Pool and provider keys are matched by prefix because their identity carries no
+	 * model id: `pool:<provider>:<source>` deliberately lets sibling models share one
+	 * exclusion, and `provider:<provider>` covers a whole provider.
+	 *
+	 * The pool prefix keeps its trailing separator so an exclusion scoped to one
+	 * funding source does not leak onto a differently-sourced pool for the same
+	 * provider. A provider key has no further segment, so it is compared whole —
+	 * matching it by prefix required a separator that never appears, which meant a
+	 * provider-scoped outage silently excluded nothing.
 	 */
 	private appliesTo(entry: UnavailabilityEntry, provider: string, modelId: string): boolean {
 		if (entry.scope === "model" || entry.scope === "route") {
 			return entry.key === `model:${provider}:${modelId}`;
 		}
-		return entry.key.startsWith(`pool:${provider}:`) || entry.key.startsWith(`provider:${provider}:`);
+		if (entry.scope === "provider") {
+			return entry.key === `provider:${provider}`;
+		}
+		return entry.key.startsWith(`pool:${provider}:`);
 	}
 
 	/** Drops expired entries. Returns how many were removed. */
