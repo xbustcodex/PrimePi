@@ -99,6 +99,7 @@ import {
 	resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
+import { describePlanState } from "../../core/orchestration/plan-lifecycle.ts";
 import { DefaultPackageManager } from "../../core/package-manager.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
@@ -3105,6 +3106,14 @@ export class InteractiveMode {
 				this.handleThinkingCommand(searchTerm);
 				return;
 			}
+			// Orchestration. Routed through dedicated handlers because the state
+			// transitions are mutually exclusive and each must report the state it
+			// landed in, which a shared status line would not make clear.
+			if (text === "/plan" || text.startsWith("/plan ")) {
+				this.editor.setText("");
+				await this.handlePlanCommand(text.slice("/plan".length).trim());
+				return;
+			}
 			if (text === "/export" || text.startsWith("/export ")) {
 				await this.handleExportCommand(text);
 				this.editor.setText("");
@@ -5002,6 +5011,78 @@ export class InteractiveMode {
 			);
 			return { component: selector, focus: selector.getSettingsList() };
 		});
+	}
+
+	/**
+	 * `/plan` — the plan lifecycle, and the state the user must be able to tell apart.
+	 *
+	 * Subcommands are explicit rather than inferred. `/plan` on its own toggles
+	 * planning; turning plan mode off never approves anything, so a draft stays a
+	 * draft. `approve` is the only path that grants implementation authority, and
+	 * `supersede`/`clear` are separate from the toggle on purpose.
+	 */
+	private async handlePlanCommand(argument: string): Promise<void> {
+		const orchestration = this.session.planLifecycle;
+		const sub = argument.trim().toLowerCase();
+		const now = Date.now();
+
+		switch (sub) {
+			case "approve": {
+				if (!orchestration.state.plan) {
+					this.showStatus("No plan to approve.");
+					return;
+				}
+				orchestration.approvePlan(now);
+				// Approval lifts the write barrier, so planning is over. Routed through
+				// the session so the pre-plan model is restored in the same step.
+				await this.session.leavePlanMode(now);
+				this.showStatus("Plan approved. It will guide implementation; plan mode is off.");
+				break;
+			}
+			case "reject":
+			case "keep": {
+				if (!orchestration.state.plan) {
+					this.showStatus("No plan to reject.");
+					return;
+				}
+				// `reject` keeps the draft so it can be refined; `keep` is the explicit
+				// spelling of the same thing, matching the review dialog's wording.
+				orchestration.rejectPlan(now, { keepDraft: true });
+				this.showStatus("Plan rejected. Still in plan mode — revise and re-submit.");
+				break;
+			}
+			case "discard":
+			case "clear": {
+				orchestration.clearPlan(now);
+				this.showStatus("Plan cleared.");
+				break;
+			}
+			case "supersede": {
+				orchestration.supersedePlan(now);
+				this.showStatus("Plan superseded. Start a new one with /plan.");
+				break;
+			}
+			case "status":
+			case "show": {
+				break;
+			}
+			case "": {
+				// The toggle. Leaving planning keeps an approved plan attached; a draft
+				// that was never approved is retained but flagged, never promoted. Routed
+				// through the session so the pre-plan model is restored.
+				await this.session.leavePlanMode(now);
+				this.showStatus(`Plan mode off. ${describePlanState(orchestration.state)}`);
+				break;
+			}
+			default: {
+				// Routed through the session so the plan model transition applies; calling
+				// the coordinator directly would change state without changing the model.
+				await this.session.enterPlanMode(now);
+				this.showStatus("Plan mode on. The working tree is read-only while planning.");
+				break;
+			}
+		}
+		this.footer.invalidate();
 	}
 
 	private handleThinkingCommand(searchTerm?: string): void {

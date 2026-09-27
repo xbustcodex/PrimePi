@@ -24,6 +24,7 @@ import type {
 	AgentTool,
 	PrepareNextTurnContext,
 	ThinkingLevel,
+	ToolApprovalDeclaration,
 } from "@earendil-works/pi-agent-core";
 import {
 	type Api,
@@ -35,6 +36,7 @@ import {
 	getCurrentSystemMessage,
 	isCredentialFree,
 	resolveRoleCandidates,
+	resolveRoleChain,
 	retryDelayMs,
 	selectFailoverCandidate,
 	type TurnRequirements,
@@ -120,6 +122,12 @@ import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { PlanLifecycle } from "./orchestration/plan-lifecycle.ts";
+import {
+	planRoleEligibility,
+	resolvePlanExitTransition,
+	resolvePlanModelTransition,
+} from "./orchestration/plan-model-transition.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
@@ -434,6 +442,23 @@ export class AgentSession {
 	 * untouched. Never consulted when building stored history.
 	 */
 	private _secretRedactor?: SecretRedactor;
+	/**
+	 * Plan, goal, and TODO orchestration.
+	 *
+	 * Held as one object because the three interact: a plan guides implementation,
+	 * a goal may be added during it, and the TODO list tracks the work. Splitting
+	 * them would make the invariant — goal and TODO operations never mutate plan
+	 * state — unenforceable rather than merely intended.
+	 */
+	private _orchestration = new PlanLifecycle();
+	/**
+	 * Where plan artifacts are written while planning.
+	 *
+	 * The only writable target during the planning phase, mirroring OMP's
+	 * `local://` artifact root. Kept as a field rather than a constant so a test
+	 * can point it at a temp directory.
+	 */
+	private _planArtifactPrefix = "plan://";
 	private _extensionShutdownHandler?: ShutdownHandler;
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
@@ -588,6 +613,7 @@ export class AgentSession {
 				// place a secret re-enters the process, and it is scoped to the
 				// in-memory argument object.
 				const approvalOptions = this._approvalOptionsForCall();
+
 				const result = await decideToolApproval({ tool, args, options: approvalOptions });
 				const blocked = await toBeforeToolCallResult(result);
 				if (blocked) return blocked;
@@ -710,6 +736,108 @@ export class AgentSession {
 				thinkingLevel: previous?.thinkingLevel ?? this.agent.state.thinkingLevel,
 			};
 		};
+	}
+
+	/**
+	 * The plan / goal / TODO state machine.
+	 *
+	 * Public so the interactive layer can drive transitions and render state
+	 * without reaching into private fields.
+	 */
+	get planLifecycle(): PlanLifecycle {
+		return this._orchestration;
+	}
+
+	/**
+	 * The model captured when plan mode was entered, restored when it is left.
+	 *
+	 * Captured on entry only, so a mid-planning model change by the user is not
+	 * overwritten by the restore — OMP makes the same distinction
+	 * (`#planModePreviousModelState`, `interactive-mode.ts:3976-3981`).
+	 */
+	private _prePlanModel?: Model<Api>;
+
+	/**
+	 * Applies the plan-role model transition.
+	 *
+	 * The role is resolved through the normal chain path, so a plan can never
+	 * reach a model the access, credential, free-only, or provider gates exclude —
+	 * an unconfigured or unreachable role simply leaves the model alone.
+	 *
+	 * A deferred switch is skipped rather than queued: this runs at a mode
+	 * boundary, where the next turn will re-resolve anyway, and queuing a model
+	 * change to land at some later settle is how a stale switch ends up
+	 * overriding a deliberate user choice.
+	 */
+	private async _applyPlanModelTransition(entering: boolean): Promise<void> {
+		const configured = this.settingsManager.getModelRoles();
+
+		if (!entering) {
+			const transition = resolvePlanExitTransition({
+				current: this.model,
+				restoreTo: this._prePlanModel,
+				isStreaming: this.isStreaming,
+			});
+			if (transition.kind === "apply" && !transition.deferred) {
+				await this.setModel(transition.model);
+			}
+			this._prePlanModel = undefined;
+			return;
+		}
+
+		// Captured before any switch, so exit can undo exactly this.
+		this._prePlanModel = this.model as Model<Api> | undefined;
+
+		const resolution = resolveRoleChain({
+			role: "plan",
+			configured,
+			available: this.modelRuntime.getAvailableSnapshot(),
+			eligibility: planRoleEligibility({
+				sessionModel: this.model as Model<Api> | undefined,
+				policy: this.settingsManager.getFailoverPolicy(),
+				credentialMissing: (provider) => !this.modelRuntime.hasConfiguredAuth(provider),
+				disabledProviders: this.settingsManager.getDisabledProviders(),
+			}),
+		});
+
+		const transition = resolvePlanModelTransition({
+			current: this.model as Model<Api> | undefined,
+			candidates: resolution.candidates,
+			isStreaming: this.isStreaming,
+		});
+
+		if (transition.kind === "thinking" && this.model) {
+			this.setThinkingLevel(transition.thinkingLevel as never);
+		} else if (transition.kind === "apply" && !transition.deferred) {
+			await this.setModel(transition.model);
+		}
+	}
+
+	/**
+	 * Enters plan mode and applies the model transition.
+	 *
+	 * The caller drives the state; this owns the model side effect, so the two
+	 * cannot be applied in one order by one caller and the other order by another.
+	 */
+	async enterPlanMode(now: number = Date.now()): Promise<void> {
+		if (this._orchestration.state.phase === "planning") return;
+		this._orchestration.beginPlanning(now);
+		await this._applyPlanModelTransition(true);
+	}
+
+	/**
+	 * Leaves plan mode and restores the pre-plan model.
+	 *
+	 * An approved plan survives: `leavePlanning` retains it as guidance, and the
+	 * restore only concerns which model is in use.
+	 */
+	async leavePlanMode(now: number = Date.now()): Promise<void> {
+		if (this._orchestration.state.phase !== "planning") {
+			await this._applyPlanModelTransition(false);
+			return;
+		}
+		this._orchestration.leavePlanning(now);
+		await this._applyPlanModelTransition(false);
 	}
 
 	/**

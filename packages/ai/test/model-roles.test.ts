@@ -65,7 +65,8 @@ describe("role vocabulary", () => {
 	it("activates only roles with a real Pi consumer", () => {
 		// `slow` is inactive because OMP routes it to the advisor, reviewer subagent,
 		// commit agent, edit auto-repair, and skill summarisation — none of which Pi has.
-		expect([...activeRoles()].sort()).toEqual(["default", "smol"]);
+		// `plan` became active in Phase 4, where plan mode resolves it on entry.
+		expect([...activeRoles()].sort()).toEqual(["default", "plan", "smol"]);
 		for (const role of MODEL_ROLE_IDS) {
 			if (MODEL_ROLES[role].activeInPi) expect(MODEL_ROLES[role].consumer).toBeTruthy();
 		}

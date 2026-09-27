@@ -40,5 +40,13 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "compact", description: "Manually compact the session context" },
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "reload", description: "Reload keybindings, extensions, skills, prompts, themes, and context files" },
+	// Orchestration. The subcommands are spelled out in the description because the
+	// states they move between are not obvious from the command name alone: `/plan`
+	// toggles planning, and only `/plan approve` grants implementation authority.
+	{
+		name: "plan",
+		description: "Plan mode: toggle planning, or approve/reject/supersede/clear/show the plan",
+		argumentHint: "[approve|reject|keep|supersede|clear|status]",
+	},
 	{ name: "quit", description: `Quit ${APP_NAME}` },
 ];

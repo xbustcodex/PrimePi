@@ -214,7 +214,13 @@ export const MODEL_ROLES: Readonly<Record<ModelRole, ModelRoleInfo>> = {
 		name: "Architect",
 		section: "chat",
 		accepts: isChatModel,
-		activeInPi: false,
+		// Active: plan mode resolves this role on entry. It resolves through the
+		// normal chain path, so a role candidate is still only a *proposal* — the
+		// access, credential, free-only, and cooldown gates that govern every other
+		// role apply here unchanged, and an unusable candidate yields no model rather
+		// than one that bypasses them.
+		activeInPi: true,
+		consumer: "plan mode model transition on entry",
 		priorityChain: [],
 	},
 	commit: {
