@@ -84,6 +84,26 @@ export interface SettingDescriptor<T extends SettingValue = SettingValue> {
 	 */
 	globalOnly?: boolean;
 	ui?: SettingUiSpec;
+	/**
+	 * Marks the value as a credential or other sensitive material.
+	 *
+	 * A sensitive value is masked wherever a setting would otherwise be shown or
+	 * serialized: the settings picker, diagnostic bundles, and any log including
+	 * a settings snapshot. The stored value is untouched — only its *display* is
+	 * masked, because the runtime still has to read it.
+	 *
+	 * This is a declaration, not a second store. Marking a value sensitive
+	 * changes how it is presented, never where it lives or who owns it.
+	 */
+	sensitive?: boolean;
+	/**
+	 * Whether the masked form preserves the real value's length.
+	 *
+	 * Off by default: length is itself a disclosure, since it narrows a brute
+	 * force. Enable only where a caller must show that a value is set without
+	 * revealing how long it is.
+	 */
+	revealLength?: boolean;
 }
 
 export class SettingRegistrationError extends Error {}
@@ -178,6 +198,46 @@ export function allSettings(): readonly SettingHandle[] {
 	return ordered;
 }
 
+/**
+ * Placeholder shown in place of a sensitive value.
+ *
+ * A fixed literal, deliberately carrying no length or shape information, so a
+ * masked rendering cannot be used to probe the value it hides.
+ */
+export const MASKED_SETTING_VALUE = "<set>";
+
+/**
+ * Renders a setting's value for display or serialization.
+ *
+ * Returns the value unchanged for a setting that is not marked sensitive, and
+ * a fixed placeholder for one that is. The masked form is identical whether the
+ * value is a long credential or a single character, so it discloses neither
+ * length nor presence.
+ *
+ * `revealLength` opts into a length-preserving mask for the rare caller that
+ * must distinguish "unset" from "set but short"; it still never reveals the
+ * characters themselves.
+ */
+export function maskSensitiveValue(handle: SettingHandle | undefined, value: unknown): unknown {
+	if (!handle?.descriptor.sensitive) return value;
+	if (value === undefined || value === null) return value;
+
+	if (!handle.descriptor.revealLength) return MASKED_SETTING_VALUE;
+
+	// Preserve shape without revealing content: a string keeps its length, a list
+	// keeps its size, a record keeps its keys. None of those disclose the value.
+	if (typeof value === "string") return "*".repeat(Math.max(value.length, 1));
+	if (Array.isArray(value)) return new Array(value.length).fill(MASKED_SETTING_VALUE);
+	if (typeof value === "object") {
+		return Object.fromEntries(Object.keys(value as Record<string, unknown>).map((k) => [k, MASKED_SETTING_VALUE]));
+	}
+	return MASKED_SETTING_VALUE;
+}
+
+/** Settings declared sensitive, for diagnostics and tests. */
+export function sensitiveSettings(): readonly SettingHandle[] {
+	return ordered.filter((handle) => handle.descriptor.sensitive === true);
+}
 /** A registered setting that declares UI metadata, and so is picker-visible. */
 export type UiSettingHandle = SettingHandle & { descriptor: SettingDescriptor & { ui: SettingUiSpec } };
 

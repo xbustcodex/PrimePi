@@ -13,13 +13,29 @@ import { convertToLlm } from "./messages.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
+import { lookupSetting } from "./settings-registry.ts";
 
 export const BUG_REPORT_CUSTOM_ENTRY_TYPE = "pi.bug-report";
 const BUG_REPORT_SCHEMA_VERSION = 1;
 const REDACTED = "<redacted>";
 const SENSITIVE_KEY = /(?:^|[-_])(api[-_]?key|secret|token|password|passwd|credential|authorization|cookie)(?:$|[-_])/i;
 
+/**
+ * Whether a settings key is sensitive.
+ *
+ * Two independent sources, because either alone leaves a gap:
+ *
+ * - a descriptor may declare `sensitive`, which is authoritative and takes
+ *   precedence over any name heuristic;
+ * - a name heuristic catches values nobody bothered to declare, which is the
+ *   common case for hand-edited configuration.
+ *
+ * The heuristic alone was already in place; this adds the declaration so a
+ * setting can be marked sensitive regardless of what it happens to be called.
+ */
 function isSensitiveKey(key: string): boolean {
+	const handle = lookupSetting(key);
+	if (handle?.descriptor.sensitive === true) return true;
 	return SENSITIVE_KEY.test(key.replace(/([a-z0-9])([A-Z])/g, "$1_$2"));
 }
 

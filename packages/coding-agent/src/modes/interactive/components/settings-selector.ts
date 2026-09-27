@@ -19,7 +19,7 @@ import type {
 	TuiMode,
 	WarningSettings,
 } from "../../../core/settings-manager.ts";
-import { lookupSetting } from "../../../core/settings-registry.ts";
+import { lookupSetting, MASKED_SETTING_VALUE } from "../../../core/settings-registry.ts";
 import { getSettingsListTheme, parseAutoThemeSetting, type TerminalTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
@@ -614,13 +614,17 @@ export class SettingsSelectorComponent extends Container {
 				if (bespoke) items.push(bespoke);
 				continue;
 			}
-			const descriptor = lookupSetting(binding.key)?.descriptor.ui;
+			const handle = lookupSetting(binding.key);
+			const descriptor = handle?.descriptor.ui;
 			if (!descriptor) continue;
 			items.push({
 				id: binding.id,
 				label: descriptor.label,
 				description: binding.description?.(config) ?? descriptor.description,
-				currentValue: binding.currentValue(config),
+				// A setting declared sensitive renders masked. Masking here — the one
+				// place every row is built — means a new binding cannot expose a
+				// credential by forgetting to mask at its own call site.
+				currentValue: handle.descriptor.sensitive ? MASKED_SETTING_VALUE : binding.currentValue(config),
 				...(binding.values ? { values: [...binding.values] } : {}),
 			});
 		}
