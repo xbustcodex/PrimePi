@@ -48,3 +48,78 @@ the call is refused with the explanatory message rather than silently allowed.
 `ToolApprovalRequest` and return the same response type, but only the TUI
 surface is wired today. Those are follow-on capabilities, not a defect in what
 is committed.
+
+---
+
+## PD-2: plan approval and rejection dialogs are not UI-tested
+
+**Status:** manual verification required. Not an implementation failure.
+
+**What is proven mechanically** (`orchestration-plan-state.test.ts`,
+`orchestration-plan-mode-integration.test.ts`):
+
+- Approval lifts the write barrier while the plan stays attached as guidance.
+- Rejection with `keepDraft` returns to `planning` and keeps the barrier up.
+- `approvePlan` is guarded to `reviewing`/`planning`, so a late approval cannot
+  resurrect a rejected or superseded plan.
+- Disabling plan mode before approval leaves the draft flagged and explicitly
+  **not** authority.
+
+**What is not proven:** the review dialog. `/plan` and `/plan approve|reject` are
+dispatched and the transitions are exercised, but no test opens the approval
+popup, renders the plan body, or clicks Approve/Reject.
+
+**How to close it:** enter plan mode, have the agent produce a plan, and confirm
+the review surface shows the plan and that both Approve and Reject produce the
+state transitions above.
+
+## PD-3: plan indicator rendering is not UI-tested
+
+**Status:** manual verification required.
+
+**What is proven mechanically** (`orchestration-goals-todo.test.ts`):
+
+- `planIndicator` returns exactly one of `PLAN MODE ACTIVE`,
+  `APPROVED PLAN GUIDING IMPLEMENTATION`, `NO ACTIVE PLAN`, and an unapproved
+  draft attached to a disabled session reports `NO ACTIVE PLAN`.
+
+**What is not proven:** that the footer or status line actually renders those
+three states. The indicator function is a pure projection and is covered; whether
+it is wired into the on-screen surface is not exercised by any test.
+
+**How to close it:** drive a session through planning, approval, and exit, and
+confirm the rendered status distinguishes all three.
+
+## PD-4: a resumed session with a persisted approved plan is untested
+
+**Status:** manual verification required.
+
+**What is proven mechanically:** the plan state round-trips through a serialized
+record, and a record claiming `approved` without an approval timestamp is
+downgraded rather than trusted.
+
+**What is not proven:** a real session that writes orchestration state, is
+closed, and is resumed with an approved plan still attached and still guiding.
+This is the case OMP's trace found broken — after approval its journal records
+only `"none"`, so a fresh process cannot recover the plan. That defect is fixed
+here in principle, but only a real resume demonstrates it end to end.
+
+**How to close it:** approve a plan, exit plan mode, close the session, resume
+it, and confirm the approved plan is still attached and still reported as
+guiding implementation.
+
+## PD-5: the live `/plan` keypress workflow is untested
+
+**Status:** manual verification required.
+
+**What is proven mechanically:** the state machine and the session's
+`enterPlanMode`/`leavePlanMode` model transitions, including that a deferred
+switch is skipped rather than queued.
+
+**What is not proven:** typing `/plan` in a real session, the slash-command
+autocomplete entries, and that the plan-model switch visibly happens and is
+reverted on exit.
+
+**How to close it:** run an interactive session, toggle `/plan` with the
+keypress path, and confirm the barrier engages, the model switches to the
+configured `plan` role if one is set, and exit restores the previous model.
