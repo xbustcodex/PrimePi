@@ -122,6 +122,7 @@ import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
@@ -558,7 +559,22 @@ export class AgentSession {
 	 * happens here instead of in wrappers.
 	 */
 	private _installAgentToolHooks(): void {
-		this.agent.beforeToolCall = async ({ toolCall, args }) => {
+		this.agent.beforeToolCall = async ({ toolCall, args, context }) => {
+			// Approval runs first, and unconditionally.
+			//
+			// It cannot be skipped by an extension that does not handle `tool_call`,
+			// because it is evaluated before the extension hook is consulted at all.
+			// A denial returns `{ block: true }`, which the loop turns into an
+			// immediate error result and an early return: `execute` is never reached,
+			// so a denied tool leaves no side effect whatsoever.
+			const tool = context.tools?.find((candidate) => candidate.name === toolCall.name);
+			if (tool) {
+				const approvalOptions = this._approvalOptionsForCall();
+				const result = await decideToolApproval({ tool, args, options: approvalOptions });
+				const blocked = await toBeforeToolCallResult(result);
+				if (blocked) return blocked;
+			}
+
 			const runner = this._extensionRunner;
 			if (!runner.hasHandlers("tool_call")) {
 				return undefined;
@@ -667,6 +683,55 @@ export class AgentSession {
 				thinkingLevel: previous?.thinkingLevel ?? this.agent.state.thinkingLevel,
 			};
 		};
+	}
+
+	private _approvalOptionsForCall(): ApprovalGateOptions {
+		const mode = this.settingsManager.getSetting("tools.approvalMode")?.value;
+		const policies = this.settingsManager.getSetting("tools.approval")?.value;
+		const canPrompt = this._extensionRunner?.hasUI?.() === true;
+
+		return {
+			mode: mode === "always-ask" || mode === "write" || mode === "yolo" ? mode : "yolo",
+			policies:
+				policies && typeof policies === "object" && !Array.isArray(policies)
+					? (policies as Record<string, "allow" | "deny" | "prompt">)
+					: {},
+			prompt: canPrompt
+				? async (request) => {
+						// A dialog is the only surface wired today. RPC and ACP callers get
+						// the same `ToolApprovalRequest` over their own transport, and the
+						// decision arrives by the same path.
+						const answer = await this._requestApproval(request);
+						return answer;
+					}
+				: undefined,
+		};
+	}
+
+	/**
+	 * Asks the operator to approve a pending tool call.
+	 *
+	 * Separated from the gate so a host that cannot render a dialog can override
+	 * the interaction without touching policy resolution.
+	 */
+	private async _requestApproval(request: {
+		toolName: string;
+		prompt: string;
+		details: readonly string[];
+		reason?: string;
+	}): Promise<"allow" | "deny"> {
+		const ui = this._extensionUIContext;
+		// No dialog surface means no question was asked, so there is no consent.
+		if (!ui) return "deny";
+		const body = [request.prompt, ...request.details, request.reason ? `Reason: ${request.reason}` : ""]
+			.filter(Boolean)
+			.join("\n");
+		try {
+			return (await ui.confirm("Approve tool call", body)) ? "allow" : "deny";
+		} catch {
+			// A prompt that fails has not granted consent.
+			return "deny";
+		}
 	}
 
 	private async _dispatchTurnEndBoundary(

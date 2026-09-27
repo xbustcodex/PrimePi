@@ -15,6 +15,7 @@ import type {
 	Usage,
 } from "@earendil-works/pi-ai";
 import type { Static, TSchema } from "typebox";
+import type { ToolApproval } from "./tool-approval.ts";
 
 /**
  * Stream function used by the agent loop. `Models.streamSimple` satisfies
@@ -465,6 +466,24 @@ export interface AgentTool<TParameters extends TSchema = TSchema, TDetails = any
 	 * If omitted, the default execution mode applies.
 	 */
 	executionMode?: ToolExecutionMode;
+	/**
+	 * How dangerous this tool is, and whether it may refuse or force a prompt.
+	 *
+	 * May depend on the arguments, because the same tool can be read-only or
+	 * destructive depending on what it is asked to do.
+	 *
+	 * Omitting this means the most privileged tier. A tool is therefore not
+	 * exempt from approval by accident — it has to say it is harmless, and an
+	 * unclassified tool still answers to the mode ceiling in the strictest modes.
+	 */
+	approval?: ToolApproval;
+	/**
+	 * Extra lines describing a pending call, for an approval prompt.
+	 *
+	 * Lets a tool show what it is about to do without the approval layer
+	 * knowing anything about the tool's arguments.
+	 */
+	formatApprovalDetails?: (args: unknown) => string | string[] | undefined;
 }
 
 /** Context snapshot passed into the low-level agent loop. */

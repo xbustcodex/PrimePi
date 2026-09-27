@@ -483,6 +483,46 @@ export const retryFallbackChains = registerSetting({
 	default: {},
 });
 
+// --- Tool approval ------------------------------------------------------------
+//
+// Approval settings only take effect once a session installs the approval gate.
+// They are declared here so the gate can read them through the registry, and so
+// the vocabulary lives in one place rather than being re-derived per caller.
+
+/**
+ * How much the agent may do without asking.
+ *
+ * - `always-ask` — prompt for anything above a plain read
+ * - `write`      — prompt for process execution
+ * - `yolo`       — ask for nothing
+ *
+ * No `ui` block: this is a security control, and a settings row that cycles
+ * through it invites accidental weakening. It is set deliberately in config.
+ */
+export const toolApprovalMode = registerSetting({
+	key: "tools.approvalMode",
+	type: "enum",
+	values: ["always-ask", "write", "yolo"],
+	default: "yolo",
+});
+
+/**
+ * Per-tool approval policy, e.g. `{ "bash": "deny", "read": "allow" }`.
+ *
+ * A `record` rather than a `stringListMap`: the value is one decision per tool,
+ * not a list. The decision vocabulary is validated on read, so a typo resolves
+ * to "no policy" and falls through to the mode ceiling rather than being
+ * guessed at.
+ *
+ * A `deny` here is unconditional: no mode, including `yolo`, overrides it.
+ */
+export const toolApprovalPolicies = registerSetting({
+	key: "tools.approval",
+	type: "record",
+	default: {},
+});
+
+
 // --- Custom-renderer rows -----------------------------------------------------
 // These keep bespoke components (theme picker, model thinking levels, warnings).
 // The descriptor records the label and marks the control as a submenu; the picker

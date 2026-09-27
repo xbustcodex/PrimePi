@@ -149,4 +149,21 @@ export * from "./harness/utils/truncate.ts";
 export * from "./proxy.ts";
 export * from "./search/index.ts";
 export { setDefaultStreamFn } from "./stream-fn.ts";
+export type {
+	ToolApproval,
+	ToolApprovalDeclaration,
+	ToolApprovalMode,
+	ToolApprovalOutcome,
+	ToolApprovalPolicy,
+	ToolApprovalPrompt,
+	ToolApprovalRequest,
+	ToolApprovalResponse,
+	ToolRiskTier,
+} from "./tool-approval.ts";
+export {
+	MAX_TOOL_RISK_TIER,
+	modeApprovesTier,
+	TOOL_APPROVAL_MODE_MAX_TIER,
+	TOOL_RISK_RANKS,
+} from "./tool-approval.ts";
 export * from "./types.ts";
