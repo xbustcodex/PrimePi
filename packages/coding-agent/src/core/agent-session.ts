@@ -128,11 +128,13 @@ import {
 	resolvePlanExitTransition,
 	resolvePlanModelTransition,
 } from "./orchestration/plan-model-transition.ts";
+import { extractWriteTargetPath, planningApprovalDeclaration } from "./orchestration/planning-barrier.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
 import { redactMessages, restoreToolArguments } from "./security/secret-transform.ts";
 import { collectEnvSecrets, detectSecrets, SecretRedactor } from "./security/secrets.ts";
+import { tierForTool } from "./security/tool-classification.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
@@ -614,7 +616,16 @@ export class AgentSession {
 				// in-memory argument object.
 				const approvalOptions = this._approvalOptionsForCall();
 
-				const result = await decideToolApproval({ tool, args, options: approvalOptions });
+				// The planning barrier is an approval decision, evaluated here rather than
+				// inside any tool. That placement is the guarantee: a tool cannot forget to
+				// honour it, and a denial never reaches `execute`, so the underlying write
+				// or process never happens.
+				const barrierDeclaration = this._planningDeclaration(tool, args);
+				const subject = barrierDeclaration
+					? { name: tool.name, approval: barrierDeclaration, formatApprovalDetails: tool.formatApprovalDetails }
+					: tool;
+
+				const result = await decideToolApproval({ tool: subject, args, options: approvalOptions });
 				const blocked = await toBeforeToolCallResult(result);
 				if (blocked) return blocked;
 			}
@@ -841,6 +852,24 @@ export class AgentSession {
 	}
 
 	/**
+	 * The approval declaration the planning barrier imposes on one call.
+	 *
+	 * `undefined` when the barrier is down, so the normal approval path is
+	 * untouched, and when the tool is read-only, because exploration must stay
+	 * available while planning — constructing a plan requires it.
+	 */
+	private _planningDeclaration(
+		tool: { name: string; approval?: unknown },
+		args: unknown,
+	): ToolApprovalDeclaration | undefined {
+		return planningApprovalDeclaration({
+			planState: this._orchestration.state,
+			baseDeclaration: tool.approval as ToolApprovalDeclaration | undefined,
+			baseTier: tierForTool(tool as never),
+			planArtifactPrefix: this._planArtifactPrefix,
+			targetPath: extractWriteTargetPath(tool.name, args),
+		});
+	} /**
 	 * Approval configuration for one call.
 	 *
 	 * Read fresh each time so a settings change takes effect immediately rather
