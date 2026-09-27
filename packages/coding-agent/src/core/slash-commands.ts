@@ -48,5 +48,7 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 		description: "Plan mode: toggle planning, or approve/reject/supersede/clear/show the plan",
 		argumentHint: "[approve|reject|keep|supersede|clear|status]",
 	},
+	{ name: "goal", description: "Show or set the current goal", argumentHint: "[objective]" },
+	{ name: "todo", description: "Show the todo list, or clear it", argumentHint: "[clear]" },
 	{ name: "quit", description: `Quit ${APP_NAME}` },
 ];

@@ -55,9 +55,18 @@ export const BUILT_IN_TOOL_TIERS: Readonly<Record<string, ToolRiskTier>> = Objec
 	write: "write",
 	edit: "write",
 
-	// Process execution. Unconstrained by construction.
+	// Process execution. Unconstrained by construction: nothing the tool's own
+	// code does constrains what the spawned program can do.
 	bash: "exec",
 	powershell: "exec",
+
+	// Session-state writes.
+	//
+	// `todo` mutates structured progress state, so it is write class rather than
+	// OMP's `read`, which the trace found passes through no approval gate in any
+	// mode. It is deliberately not `exec`: it runs nothing, and an `exec` tier
+	// would make routine progress tracking unusable under a strict approval mode.
+	todo: "write",
 });
 
 /** A tool classification entry, kept as a declaration so policy and tier stay together. */

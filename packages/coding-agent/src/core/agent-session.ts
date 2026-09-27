@@ -122,7 +122,7 @@ import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
-import { PlanLifecycle } from "./orchestration/plan-lifecycle.ts";
+import { Orchestration } from "./orchestration/orchestration.ts";
 import {
 	planRoleEligibility,
 	resolvePlanExitTransition,
@@ -156,6 +156,7 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
+import { createTodoTool } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
 
@@ -452,7 +453,7 @@ export class AgentSession {
 	 * them would make the invariant — goal and TODO operations never mutate plan
 	 * state — unenforceable rather than merely intended.
 	 */
-	private _orchestration = new PlanLifecycle();
+	private _orchestration = new Orchestration();
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -755,7 +756,7 @@ export class AgentSession {
 	 * Public so the interactive layer can drive transitions and render state
 	 * without reaching into private fields.
 	 */
-	get planLifecycle(): PlanLifecycle {
+	get orchestration(): Orchestration {
 		return this._orchestration;
 	}
 
@@ -831,7 +832,7 @@ export class AgentSession {
 	 * cannot be applied in one order by one caller and the other order by another.
 	 */
 	async enterPlanMode(now: number = Date.now()): Promise<void> {
-		if (this._orchestration.state.phase === "planning") return;
+		if (this._orchestration.plan.phase === "planning") return;
 		this._orchestration.beginPlanning(now);
 		await this._applyPlanModelTransition(true);
 	}
@@ -843,7 +844,7 @@ export class AgentSession {
 	 * restore only concerns which model is in use.
 	 */
 	async leavePlanMode(now: number = Date.now()): Promise<void> {
-		if (this._orchestration.state.phase !== "planning") {
+		if (this._orchestration.plan.phase !== "planning") {
 			await this._applyPlanModelTransition(false);
 			return;
 		}
@@ -863,7 +864,7 @@ export class AgentSession {
 		args: unknown,
 	): ToolApprovalDeclaration | undefined {
 		return planningApprovalDeclaration({
-			planState: this._orchestration.state,
+			planState: this._orchestration.plan,
 			baseDeclaration: tool.approval as ToolApprovalDeclaration | undefined,
 			baseTier: tierForTool(tool as never),
 			planArtifactPrefix: this._planArtifactPrefix,
@@ -3564,6 +3565,16 @@ export class AgentSession {
 		);
 
 		const toolRegistry = new Map(wrappedBuiltInTools.map((tool) => [tool.name, tool]));
+		// `todo` is session-scoped rather than cwd-scoped: it reads and writes the
+		// orchestration state held by this session, so the cwd-only
+		// `createAllToolDefinitions` path cannot build it. It is deliberately absent
+		// from `allToolNames`, which is the fixed cwd-tool set, and added here instead —
+		// so it still participates in the approval authority and the planning barrier.
+		const todoTool = createTodoTool({
+			get: () => this._orchestration.todo,
+			set: (state) => this._orchestration.setTodo(state),
+		});
+		toolRegistry.set(todoTool.name, todoTool);
 		for (const tool of wrappedExtensionTools as AgentTool[]) {
 			toolRegistry.set(tool.name, tool);
 		}

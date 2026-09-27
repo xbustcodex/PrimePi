@@ -3114,6 +3114,16 @@ export class InteractiveMode {
 				await this.handlePlanCommand(text.slice("/plan".length).trim());
 				return;
 			}
+			if (text === "/goal" || text.startsWith("/goal ")) {
+				this.editor.setText("");
+				await this.handleGoalCommand(text.slice("/goal".length).trim());
+				return;
+			}
+			if (text === "/todo" || text.startsWith("/todo ")) {
+				this.editor.setText("");
+				await this.handleTodoCommand(text.slice("/todo".length).trim());
+				return;
+			}
 			if (text === "/export" || text.startsWith("/export ")) {
 				await this.handleExportCommand(text);
 				this.editor.setText("");
@@ -5022,13 +5032,13 @@ export class InteractiveMode {
 	 * `supersede`/`clear` are separate from the toggle on purpose.
 	 */
 	private async handlePlanCommand(argument: string): Promise<void> {
-		const orchestration = this.session.planLifecycle;
+		const orchestration = this.session.orchestration;
 		const sub = argument.trim().toLowerCase();
 		const now = Date.now();
 
 		switch (sub) {
 			case "approve": {
-				if (!orchestration.state.plan) {
+				if (!orchestration.plan.plan) {
 					this.showStatus("No plan to approve.");
 					return;
 				}
@@ -5041,7 +5051,7 @@ export class InteractiveMode {
 			}
 			case "reject":
 			case "keep": {
-				if (!orchestration.state.plan) {
+				if (!orchestration.plan.plan) {
 					this.showStatus("No plan to reject.");
 					return;
 				}
@@ -5071,7 +5081,7 @@ export class InteractiveMode {
 				// that was never approved is retained but flagged, never promoted. Routed
 				// through the session so the pre-plan model is restored.
 				await this.session.leavePlanMode(now);
-				this.showStatus(`Plan mode off. ${describePlanState(orchestration.state)}`);
+				this.showStatus(`Plan mode off. ${describePlanState(orchestration.plan)}`);
 				break;
 			}
 			default: {
@@ -5081,6 +5091,33 @@ export class InteractiveMode {
 				this.showStatus("Plan mode on. The working tree is read-only while planning.");
 				break;
 			}
+		}
+		this.footer.invalidate();
+	}
+
+	private async handleGoalCommand(argument: string): Promise<void> {
+		const orchestration = this.session.orchestration;
+		const trimmed = argument.trim();
+
+		if (trimmed === "clear" || trimmed === "drop") {
+			orchestration.clearGoal();
+			this.showStatus("Goal cleared.");
+		} else if (trimmed === "") {
+			const goal = orchestration.goal.current;
+			this.showStatus(goal ? `Goal: ${goal.objective} (${goal.status})` : "No goal set. Use /goal <objective>.");
+		} else {
+			orchestration.addGoal({ objective: trimmed, now: Date.now() });
+			this.showStatus("Goal set.");
+		}
+		this.footer.invalidate();
+	}
+
+	/** `/todo` — show the list, or clear it. */
+	private async handleTodoCommand(argument: string): Promise<void> {
+		const orchestration = this.session.orchestration;
+		if (argument.trim().toLowerCase() === "clear") {
+			orchestration.setTodo({ phases: [] });
+			this.showStatus("Todo list cleared.");
 		}
 		this.footer.invalidate();
 	}
