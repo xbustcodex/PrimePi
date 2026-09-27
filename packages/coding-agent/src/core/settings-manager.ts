@@ -359,6 +359,11 @@ export class SettingsManager {
 	private revision = 0;
 	/** Top-level keys supplied by `applyOverrides`, used only to report provenance. */
 	private overrideKeys = new Set<string>();
+	/**
+	 * The override values themselves, kept so `recomputeMerged` can re-apply them
+	 * after a layer write rebuilds the merged view from the persisted layers.
+	 */
+	private storedOverrides: Settings = {};
 	private resolvedCache = new Map<string, { revision: number; resolved: ResolvedSetting }>();
 
 	private constructor(
@@ -390,6 +395,13 @@ export class SettingsManager {
 	 */
 	private recomputeMerged(): void {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
+		// Overrides are recorded as top-level keys but stored folded into the merged
+		// view, so a rebuild has to re-apply them. Without this, any later layer write
+		// silently drops every override, which is how a caller-supplied override ends
+		// up undone by an unrelated settings change.
+		if (this.overrideKeys.size > 0) {
+			this.settings = deepMergeSettings(this.settings, this.storedOverrides);
+		}
 		this.revision++;
 	}
 
@@ -609,6 +621,8 @@ export class SettingsManager {
 
 	/** Apply additional overrides on top of current settings */
 	applyOverrides(overrides: Partial<Settings>): void {
+		// Retained so a later rebuild of the merged view does not silently drop them.
+		this.storedOverrides = deepMergeSettings(this.storedOverrides, overrides);
 		this.settings = deepMergeSettings(this.settings, overrides);
 		// Recorded so a layered read can report `override` as the source. The merge
 		// itself is unchanged: overrides still accumulate onto the merged view.
