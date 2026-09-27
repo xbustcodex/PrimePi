@@ -50,19 +50,35 @@ export {
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
 export * from "./utils/json-parse.ts";
 export {
+	type AnnotatedPattern,
 	activeRoles,
+	type CandidateThinking,
 	DEFAULT_ROLE_ALIAS,
+	evaluateEligibility,
 	expandRolePatterns,
 	formatRoleAlias,
+	type IneligibleReason,
 	isModelRole,
 	isRoleAlias,
+	isThinkingLevel,
 	MODEL_ROLE_IDS,
 	MODEL_ROLES,
 	type ModelRole,
 	type ModelRoleInfo,
+	preferenceRank,
+	type RejectedCandidate,
+	type RoleChainCandidate,
+	type RoleChainInput,
+	type RoleChainResult,
+	type RoleEligibility,
+	type RolePreferences,
 	type RoleResolution,
+	type RoleThinkingLevel,
 	resolveRoleAlias,
 	resolveRoleCandidates,
+	resolveRoleChain,
+	splitThinkingSuffix,
+	THINKING_LEVELS,
 } from "./utils/model-roles.ts";
 export * from "./utils/overflow.ts";
 export * from "./utils/retry.ts";

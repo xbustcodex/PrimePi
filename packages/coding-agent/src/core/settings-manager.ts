@@ -16,6 +16,7 @@ import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 import {
+	allSettings,
 	hasPath,
 	lookupSetting,
 	type ResolvedSetting,
@@ -25,7 +26,6 @@ import {
 	type SettingValue,
 	writePath,
 } from "./settings-registry.ts";
-import "./settings-descriptors.ts";
 
 export { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 
@@ -337,6 +337,52 @@ export class InMemorySettingsStorage implements SettingsStorage {
 	}
 }
 
+/**
+ * Notified with a setting key and its newly effective value.
+ *
+ * The key is the dotted descriptor id, and the value is what `getSetting` would
+ * now return, not the raw value that was written. A write to a layer that is
+ * shadowed by a higher layer produces no notification at all.
+ */
+export type EffectiveChangeListener = (key: string, value: SettingValue) => void;
+
+interface EffectiveChangeWatch {
+	keys: Set<string>;
+	disposed: boolean;
+}
+
+/**
+ * Stable serialization for comparing setting values.
+ *
+ * Object keys are sorted so a record rewritten with identical membership
+ * compares equal regardless of insertion order, while added or removed entries
+ * still register as a change.
+ */
+function stableStringify(value: unknown): string {
+	if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "undefined";
+	if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+	const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+	return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(",")}}`;
+}
+
+/**
+ * Identity for a listener, used to key its snapshot rows.
+ *
+ * Listeners are function values, so a `WeakMap` assigns each one a stable id
+ * without retaining it past unsubscribe.
+ */
+const listenerIds = new WeakMap<EffectiveChangeListener, string>();
+let nextListenerId = 0;
+
+function listenerId(listener: EffectiveChangeListener): string {
+	let id = listenerIds.get(listener);
+	if (id === undefined) {
+		id = `l${++nextListenerId}`;
+		listenerIds.set(listener, id);
+	}
+	return id;
+}
+
 export class SettingsManager {
 	private storage: SettingsStorage;
 	private globalSettings: Settings;
@@ -365,6 +411,121 @@ export class SettingsManager {
 	 */
 	private storedOverrides: Settings = {};
 	private resolvedCache = new Map<string, { revision: number; resolved: ResolvedSetting }>();
+	/**
+	 * Subscribers to effective-value changes, grouped by the setting keys they
+	 * asked about. `"*"` means every registered setting.
+	 */
+	private effectiveChangeListeners = new Map<EffectiveChangeListener, EffectiveChangeWatch>();
+	/**
+	 * Last observed effective value per watched key, used to decide whether a
+	 * layer mutation actually changed anything a consumer can observe.
+	 *
+	 * This is what makes a notification about *effective* values rather than
+	 * writes: a project-layer write hidden behind an override leaves the snapshot
+	 * untouched, so nothing is announced, and dropping that override reveals a
+	 * different value, so that *is* announced.
+	 */
+	private effectiveValueSnapshot = new Map<string, string>();
+
+	/**
+	 * Notifies when the effective value of a setting changes.
+	 *
+	 * `keys` selects what to watch; omit it (or pass `["*"]`) to watch every
+	 * registered setting. Returns an unsubscribe function, and calling it more
+	 * than once is a no-op, so a long-lived session can dispose defensively.
+	 */
+	onEffectiveChange(keys: readonly string[] | undefined, listener: EffectiveChangeListener): () => void {
+		const watch: EffectiveChangeWatch = {
+			keys: new Set(keys && keys.length > 0 ? keys : ["*"]),
+			disposed: false,
+		};
+		this.effectiveChangeListeners.set(listener, watch);
+		// Seed from the current effective values so the first call after
+		// subscribing reports only subsequent changes.
+		for (const key of this.watchedKeys(watch)) {
+			this.effectiveValueSnapshot.set(this.snapshotKey(listener, key), this.effectiveSignature(key));
+		}
+
+		let released = false;
+		return () => {
+			if (released) return;
+			released = true;
+			this.disposeEffectiveChangeListener(listener);
+		};
+	}
+
+	/** Number of live subscribers. Diagnostics and leak tests. */
+	getEffectiveChangeListenerCount(): number {
+		return this.effectiveChangeListeners.size;
+	}
+
+	private watchedKeys(watch: EffectiveChangeWatch): readonly string[] {
+		if (watch.keys.has("*")) return allSettings().map((handle) => handle.id);
+		return [...watch.keys].filter((key) => lookupSetting(key) !== undefined);
+	}
+
+	private snapshotKey(listener: EffectiveChangeListener, key: string): string {
+		return `${listenerId(listener)}\u0000${key}`;
+	}
+
+	private disposeEffectiveChangeListener(listener: EffectiveChangeListener): void {
+		const watch = this.effectiveChangeListeners.get(listener);
+		if (!watch) return;
+		watch.disposed = true;
+		this.effectiveChangeListeners.delete(listener);
+		for (const key of watch.keys) {
+			this.effectiveValueSnapshot.delete(this.snapshotKey(listener, key));
+		}
+	}
+
+	/**
+	 * A stable string for a setting's current effective value.
+	 *
+	 * Object values are serialized in sorted key order so a record whose entries
+	 * were rewritten identically compares equal, while a record whose membership
+	 * changed does not.
+	 */
+	private effectiveSignature(key: string): string {
+		const resolved = this.getSetting(key);
+		if (!resolved) return "\u0000absent";
+		return `${resolved.source}\u0001${resolved.isExplicit ? "1" : "0"}\u0001${stableStringify(resolved.value)}`;
+	}
+
+	/**
+	 * Compares watched effective values and announces the ones that moved.
+	 *
+	 * Called after the merged view changes, so it observes the same revision the
+	 * memoized `getSetting` reads do. Listeners are invoked outside the map
+	 * mutation so one unsubscribing during dispatch cannot corrupt the walk, and a
+	 * throwing listener cannot prevent the others from running.
+	 */
+	private emitEffectiveChanges(): void {
+		if (this.effectiveChangeListeners.size === 0) return;
+
+		const announcements: { listener: EffectiveChangeListener; key: string; value: SettingValue }[] = [];
+		for (const [listener, watch] of this.effectiveChangeListeners) {
+			if (watch.disposed) continue;
+			for (const key of this.watchedKeys(watch)) {
+				const snapshotKey = this.snapshotKey(listener, key);
+				const signature = this.effectiveSignature(key);
+				if (this.effectiveValueSnapshot.get(snapshotKey) === signature) continue;
+				this.effectiveValueSnapshot.set(snapshotKey, signature);
+				announcements.push({ listener, key, value: this.getSetting(key)?.value as SettingValue });
+			}
+		}
+
+		if (announcements.length === 0) return;
+		for (const { listener, key, value } of announcements) {
+			// Re-check: an earlier listener in this batch may have disposed this one.
+			if (!this.effectiveChangeListeners.has(listener)) continue;
+			try {
+				listener(key, value);
+			} catch {
+				// A subscriber must not be able to break the settings layer or the
+				// mutation that triggered it.
+			}
+		}
+	}
 
 	private constructor(
 		storage: SettingsStorage,
@@ -391,7 +552,8 @@ export class SettingsManager {
 	 * Rebuilds the merged view and invalidates every memoized setting read.
 	 *
 	 * Centralized so no layer mutation can change a layer without also invalidating
-	 * the reads derived from it.
+	 * the reads derived from it, and so effective-value notifications are emitted
+	 * from exactly one place.
 	 */
 	private recomputeMerged(): void {
 		this.settings = deepMergeSettings(this.globalSettings, this.projectSettings);
@@ -403,6 +565,7 @@ export class SettingsManager {
 			this.settings = deepMergeSettings(this.settings, this.storedOverrides);
 		}
 		this.revision++;
+		this.emitEffectiveChanges();
 	}
 
 	/** Create a SettingsManager that loads from files */
@@ -630,6 +793,7 @@ export class SettingsManager {
 			this.overrideKeys.add(key);
 		}
 		this.revision++;
+		this.emitEffectiveChanges();
 	}
 
 	/** Bumped whenever any layer changes; memoized reads compare against it. */
@@ -742,6 +906,85 @@ export class SettingsManager {
 			roles[role] = value;
 		}
 		this.setSetting("modelRoles", roles, "global");
+	}
+
+	/**
+	 * Reads a flat `stringList` setting as a fresh array.
+	 *
+	 * Returns a copy so a caller cannot mutate the merged view, and normalizes a
+	 * malformed persisted value to an empty list rather than throwing, matching the
+	 * lenient reads the rest of the layer performs.
+	 */
+	private getStringList(key: string): readonly string[] {
+		const value = this.getSetting(key)?.value;
+		if (!Array.isArray(value)) return [];
+		return value.filter((entry): entry is string => typeof entry === "string");
+	}
+
+	/**
+	 * Reads a `stringListMap` setting as a fresh role-keyed map of string lists.
+	 */
+	private getStringListMap(key: string): Record<string, string[]> {
+		const value = this.getSetting(key)?.value;
+		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+		const result: Record<string, string[]> = {};
+		for (const [entryKey, entryValue] of Object.entries(value as Record<string, unknown>)) {
+			if (Array.isArray(entryValue)) {
+				result[entryKey] = entryValue.filter((item): item is string => typeof item === "string");
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Provider ids excluded from the pool.
+	 *
+	 * A `Set`, because the test is membership and runs per candidate. This is a
+	 * hard filter: a disabled provider cannot re-enter through a role alias or a
+	 * fallback chain.
+	 */
+	getDisabledProviders(): ReadonlySet<string> {
+		return new Set(this.getStringList("disabledProviders"));
+	}
+
+	/**
+	 * Model selectors that are allowed. Empty means no allowlist, which is a
+	 * different state from an allowlist that matches nothing.
+	 */
+	getEnabledModelPatterns(): readonly string[] {
+		return this.getStringList("enabledModels");
+	}
+
+	/**
+	 * Provider preference order.
+	 *
+	 * A ranking hint only. It can promote one reachable provider over another and
+	 * can never resurrect a candidate that failed an access, credential, policy, or
+	 * cooldown check.
+	 */
+	getModelProviderOrder(): readonly string[] {
+		return this.getStringList("modelProviderOrder");
+	}
+
+	/** Whether a role assignment is written to the global or project layer. */
+	getModelRoleStorage(): "global" | "project" {
+		return this.getSetting("modelRoleStorage")?.value === "project" ? "project" : "global";
+	}
+
+	/**
+	 * Fallback candidate lists per role, e.g. `{ smol: ["@tiny", "xai/grok-4.5"] }`.
+	 *
+	 * Ordering data, not a retry policy. A configured list replaces the built-in
+	 * chain for that role so a user can narrow it deliberately, and every entry in
+	 * it still passes the same eligibility gates as the role's own preferences.
+	 */
+	getRetryFallbackChains(): Record<string, string[]> {
+		return this.getStringListMap("retry.fallbackChains");
+	}
+
+	/** Fallback candidates configured for one role, or undefined when unset. */
+	getRetryFallbackChain(role: string): readonly string[] | undefined {
+		return this.getStringListMap("retry.fallbackChains")[role];
 	}
 
 	/** True when the setting declares at least one path, in any layer. */

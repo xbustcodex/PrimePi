@@ -16,7 +16,16 @@
  * unchanged and remain in `SettingsManager`.
  */
 
-export type SettingValue = boolean | string | number | Record<string, string>;
+export type SettingValue = boolean | string | number | Record<string, string> | string[] | Record<string, string[]>;
+
+/**
+ * A map whose values are lists of strings, e.g. `{ smol: ["@tiny", "xai/grok-4.5"] }`.
+ *
+ * Kept distinct from `record` and from `stringList` so a descriptor states which
+ * shape it means: a flat string map cannot silently widen to hold lists, and a
+ * plain list cannot silently become a map.
+ */
+export type SettingStringListMap = Record<string, string[]>;
 
 export type SettingSource = "default" | "global" | "project" | "override";
 
@@ -54,7 +63,7 @@ export interface SettingUiSpec {
 export interface SettingDescriptor<T extends SettingValue = SettingValue> {
 	/** Dotted path into the persisted settings object, e.g. `terminal.showImages`. */
 	key: string;
-	type: "boolean" | "string" | "number" | "enum" | "record";
+	type: "boolean" | "string" | "number" | "enum" | "record" | "stringList" | "stringListMap";
 	/** Value used when no layer supplies one. */
 	default: T;
 	/** Permitted values for `enum`, and the cycle order for a `cycle` control. */
@@ -124,6 +133,22 @@ export class SettingHandle<T extends SettingValue = SettingValue> {
 				if (typeof raw !== "object" || raw === null || Array.isArray(raw)) break;
 				const entries = Object.entries(raw as Record<string, unknown>);
 				if (entries.some(([, value]) => typeof value !== "string")) break;
+				return Object.fromEntries(entries) as T;
+			}
+			case "stringList": {
+				// A string list accepts only arrays of strings, so a scalar or a nested
+				// object cannot be persisted under a key that will be iterated.
+				if (!Array.isArray(raw) || raw.some((entry) => typeof entry !== "string")) break;
+				return [...raw] as T;
+			}
+			case "stringListMap": {
+				// Each value must itself be a string list, so a role entry cannot hold a
+				// scalar and silently expand to a single unusable pattern.
+				if (typeof raw !== "object" || raw === null || Array.isArray(raw)) break;
+				const entries = Object.entries(raw as Record<string, unknown>);
+				if (entries.some(([, entry]) => !Array.isArray(entry) || entry.some((item) => typeof item !== "string"))) {
+					break;
+				}
 				return Object.fromEntries(entries) as T;
 			}
 		}

@@ -534,3 +534,417 @@ export function resolveRoleCandidates(input: RoleResolutionInput): RoleResolutio
 		emptyReason: blockedByPolicy ? "policy-blocked" : blockedByCredential ? "no-credential" : "no-match",
 	};
 }
+
+/**
+ * Thinking levels Pi can request from a provider.
+ *
+ * Mirrors `ThinkingLevel` in `@earendil-works/pi-agent-core`, redeclared here to
+ * keep this module free of an agent-core dependency: `pi-ai` sits below that
+ * package in the dependency graph.
+ */
+export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+export type RoleThinkingLevel = (typeof THINKING_LEVELS)[number];
+
+/** Whether a string names a thinking level Pi supports. */
+export function isThinkingLevel(value: string): value is RoleThinkingLevel {
+	return (THINKING_LEVELS as readonly string[]).includes(value);
+}
+
+/**
+ * Thinking configuration attached to a resolved candidate.
+ *
+ * This is metadata about *how* to talk to a model, not a statement about *which*
+ * model to use: carrying a level never changes a candidate's eligibility, and a
+ * candidate with no level is no less eligible than one that has it.
+ */
+export interface CandidateThinking {
+	/** The level requested via a selector suffix, absent when none was given. */
+	level?: RoleThinkingLevel;
+	/** The selector the level was parsed from, for diagnostics. */
+	source?: string;
+}
+
+/**
+ * A pattern paired with the metadata parsed off it.
+ *
+ * The suffix is stripped before matching, so `@smol:high` matches exactly what
+ * `@smol` matches. That is the point: the suffix is metadata, so it must not
+ * narrow the candidate set.
+ */
+export interface AnnotatedPattern {
+	pattern: string;
+	thinking: CandidateThinking;
+}
+
+/**
+ * Splits a trailing `:level` off a selector.
+ *
+ * The colon is only a suffix when it follows the alias prefix, so `@smol:high`
+ * splits while a bare `pi/smol:high` does not split on the wrong colon. A
+ * malformed suffix is dropped rather than treated as part of the model id, so a
+ * typo cannot silently resolve to a different model than intended.
+ */
+export function splitThinkingSuffix(value: string): AnnotatedPattern {
+	const trimmed = value.trim();
+	const colonIndex = trimmed.lastIndexOf(":");
+	if (colonIndex <= 0) return { pattern: trimmed, thinking: {} };
+
+	const base = trimmed.slice(0, colonIndex);
+	const suffix = trimmed.slice(colonIndex + 1);
+	// `@role:level` and `pi/role:level` both have their colon after the prefix.
+	if (base.length === 0 || !isRoleAlias(trimmed)) {
+		// Not alias-shaped, so a colon is only a suffix when what precedes it could be
+		// a model reference. `provider/id:level` qualifies; a bare `llama3:8b` does
+		// not, because that colon belongs to the model id.
+		if (colonIndex < trimmed.lastIndexOf("/") + 1) return { pattern: trimmed, thinking: {} };
+	}
+
+	if (isThinkingLevel(suffix)) return { pattern: base, thinking: { level: suffix, source: trimmed } };
+	// A recognized-but-unsupported or misspelled level contributes no level, and the
+	// suffix is not folded into the pattern. Deterministic, and never a surprise match.
+	return { pattern: trimmed, thinking: {} };
+}
+
+// --- Eligibility -------------------------------------------------------------
+
+/**
+ * Hard constraints. A candidate failing any of these is removed.
+ *
+ * Nothing in this object expresses a preference, and nothing in here can be
+ * overridden by ordering: exclusion is not a ranking signal.
+ */
+export interface RoleEligibility {
+	/** The live session model, used to decide whether paid routes are reachable. */
+	sessionModel?: Model<Api>;
+	/**
+	 * Whether paid routes may be used, read from the caller's failover policy.
+	 * Defaults to forbidding paid routes, because a chain that does not say
+	 * otherwise is not permitted to spend money on its own.
+	 */
+	policy?: "off" | "same-provider" | "free-only" | "compatible";
+	/** True when a credential is absent for the given provider. */
+	credentialMissing?: (provider: string) => boolean;
+	/** Provider ids excluded by configuration. A hard exclusion. */
+	disabledProviders?: ReadonlySet<string>;
+	/**
+	 * Model selectors that are allowed. Non-empty acts as an allowlist: a model
+	 * matching no pattern is excluded. Empty means no allowlist.
+	 */
+	enabledModelPatterns?: readonly string[];
+	/**
+	 * Whether a model speaks the API the caller's turn needs. A capability
+	 * constraint, not a preference.
+	 */
+	accepts?: (model: Model<Api>) => boolean;
+}
+
+/** Why a candidate was removed, for diagnostics and tests. */
+export type IneligibleReason =
+	| "role-inactive"
+	| "disabled-provider"
+	| "not-allowlisted"
+	| "kind-ineligible"
+	| "policy-paid"
+	| "missing-credential";
+
+/** A candidate that was removed, with the reason, so nothing fails silently. */
+export interface RejectedCandidate {
+	model: Model<Api>;
+	reason: IneligibleReason;
+}
+
+/**
+ * Applies every hard constraint to one model.
+ *
+ * Ordered cheapest-and-most-decisive first so a disabled provider is not reported
+ * as missing credentials, which would be a misleading diagnostic.
+ */
+export function evaluateEligibility(
+	model: Model<Api>,
+	role: ModelRole,
+	eligibility: RoleEligibility,
+): IneligibleReason | undefined {
+	if (!MODEL_ROLES[role].activeInPi) return "role-inactive";
+	if (eligibility.disabledProviders?.has(model.provider)) return "disabled-provider";
+	if (
+		eligibility.enabledModelPatterns &&
+		eligibility.enabledModelPatterns.length > 0 &&
+		!eligibility.enabledModelPatterns.some((pattern) => matchesSelector(model, pattern))
+	) {
+		return "not-allowlisted";
+	}
+	if (eligibility.accepts && !eligibility.accepts(model)) return "kind-ineligible";
+
+	// Free stays free: a free session must not cross into a paid candidate.
+	if (eligibility.sessionModel?.free === true && !policyAllowsPaid(eligibility.policy ?? "free-only")) {
+		if (model.free !== true) return "policy-paid";
+	}
+
+	if (!isCredentialFree(model) && !isAnonymouslyAccessible(model.provider, model.id)) {
+		if (eligibility.credentialMissing?.(model.provider) ?? true) return "missing-credential";
+	}
+	return undefined;
+}
+
+/**
+ * Whether a model satisfies a selector.
+ *
+ * Supports an exact `provider/id`, a bare id, a provider-wide `provider/*`, and
+ * a leading glob on the qualified id. A bare id also tolerates a `:` tag suffix,
+ * so `llama3` matches `llama3:8b`.
+ */
+function matchesSelector(model: Model<Api>, pattern: string): boolean {
+	const trimmed = pattern.trim();
+	if (!trimmed) return false;
+	if (trimmed === "*") return true;
+	if (trimmed.endsWith("/*")) return model.provider === trimmed.slice(0, -2);
+
+	const qualified = `${model.provider}/${model.id}`;
+	if (qualified === trimmed) return true;
+	if (trimmed.includes("*")) return qualified.startsWith(trimmed.slice(0, trimmed.indexOf("*")));
+	return model.id === trimmed || model.id.startsWith(`${trimmed}:`);
+}
+
+// --- Preferences -------------------------------------------------------------
+
+/**
+ * Soft ranking inputs. These order candidates that are already eligible.
+ *
+ * Deliberately a separate type from `RoleEligibility` so a future port cannot
+ * pass a preference where a constraint belongs, or read a constraint as though it
+ * were tunable.
+ */
+export interface RolePreferences {
+	/**
+	 * Provider preference order, most preferred first. Providers absent from the
+	 * list rank after those present.
+	 */
+	providerOrder?: readonly string[];
+	/**
+	 * Model keys the caller has used recently, most recent first, as
+	 * `provider/id`. Purely a familiarity hint.
+	 */
+	usageOrder?: readonly string[];
+}
+
+/**
+ * Produces a sort key for an eligible candidate.
+ *
+ * The key is compared ascending, so a lower number ranks higher. Every component
+ * is derived from the candidate itself, and none can encode a preference for a
+ * model that failed eligibility, because such a model never reaches the comparator.
+ */
+export function preferenceRank(model: Model<Api>, preferences: RolePreferences): number[] {
+	const providerIndex = preferences.providerOrder?.indexOf(model.provider) ?? -1;
+	// An unlisted provider sorts after every listed one.
+	const providerRank = providerIndex === -1 ? Number.MAX_SAFE_INTEGER : providerIndex;
+
+	const key = `${model.provider}/${model.id}`;
+	const usageIndex = preferences.usageOrder?.indexOf(key) ?? -1;
+	const usageRank = usageIndex === -1 ? Number.MAX_SAFE_INTEGER : usageIndex;
+
+	// Anonymous access is a tie-break within a tier, never a way to reach an
+	// ineligible model: it is applied only to candidates that already passed.
+	const anonymousRank = model.access === "anonymous" ? 0 : 1;
+
+	return [providerRank, usageRank, anonymousRank];
+}
+
+// --- Chains ------------------------------------------------------------------
+
+/** One proposed candidate: the model, where it came from, and its metadata. */
+export interface RoleChainCandidate {
+	model: Model<Api>;
+	/** The pattern that matched, before any suffix was stripped. */
+	pattern: string;
+	/**
+	 * True when the candidate came from configuration the user wrote, rather than
+	 * a built-in priority chain. Lets a caller prefer an explicit choice without
+	 * letting it bypass eligibility.
+	 */
+	explicit: boolean;
+	/** True when the candidate came from a configured fallback list. */
+	fromFallback: boolean;
+	/** Thinking metadata parsed off the selector, if any. */
+	thinking: CandidateThinking;
+}
+
+export interface RoleChainInput {
+	role: ModelRole;
+	/** Explicit per-role configuration, e.g. `{ smol: "@tiny, xai/grok-4.5" }`. */
+	configured: Readonly<Record<string, string>>;
+	/**
+	 * Per-role fallback lists. When a role has one, it replaces the built-in
+	 * priority chain, so a user can narrow the candidate set deliberately.
+	 */
+	fallbackChains?: Readonly<Record<string, readonly string[]>>;
+	/** Models the runtime currently offers. */
+	available: readonly Model<Api>[];
+	/** Hard constraints. */
+	eligibility?: RoleEligibility;
+	/** Soft ranking, applied only after eligibility. */
+	preferences?: RolePreferences;
+}
+
+export interface RoleChainResult {
+	role: ModelRole;
+	/** Candidates that passed every hard constraint, in preference order. */
+	candidates: RoleChainCandidate[];
+	/** Everything removed, with the reason. */
+	rejected: RejectedCandidate[];
+	/** The selector list the role expanded to, for diagnostics. */
+	patterns: string[];
+}
+
+/**
+ * Builds the ordered candidate list for a role.
+ *
+ * The procedure is fixed and each stage has one job:
+ *
+ *   1. expand the role into selector patterns (alias, inheritance, fallback, then
+ *      the built-in chain when nothing is configured);
+ *   2. split any thinking suffix off each pattern;
+ *   3. match patterns against the available models;
+ *   4. remove anything that fails a hard constraint, recording why;
+ *   5. order the survivors by preference.
+ *
+ * Stage 5 only ever sees stage 4's output. That ordering is the whole guarantee:
+ * a preferred model that was removed in stage 4 has nothing to be ranked against.
+ */
+export function resolveRoleChain(input: RoleChainInput): RoleChainResult {
+	const { role, configured, available } = input;
+	const eligibility = input.eligibility ?? {};
+	const info = MODEL_ROLES[role];
+	const knownRoles = new Set<string>(Object.keys(configured).filter((key) => isModelRole(key)));
+
+	// A configured fallback list replaces the built-in chain rather than extending
+	// it. An empty-but-present list therefore means "no fallbacks", not "defaults".
+	const configuredFallbacks = input.fallbackChains?.[role];
+	const hasFallbacks = configuredFallbacks !== undefined;
+
+	const patterns = hasFallbacks
+		? expandFallbackPatterns(configuredFallbacks, configured, knownRoles)
+		: expandRolePatterns({ role, configured, knownRoles });
+
+	if (!info.activeInPi) {
+		return {
+			role,
+			candidates: [],
+			rejected: [],
+			patterns: [],
+		};
+	}
+
+	const annotated = patterns.map(splitThinkingSuffix);
+	const rejected: RejectedCandidate[] = [];
+	const candidates: RoleChainCandidate[] = [];
+	const seen = new Set<string>();
+
+	for (const { pattern, thinking } of annotated) {
+		// A selector that is still role-shaped resolved to no role, so it names no
+		// model. Matching it would let a role id collide with a model id.
+		if (isRoleAlias(pattern)) continue;
+		// The explicit configuration mark drives preference, never eligibility.
+		const explicit = hasConfiguredSelector(configured, role, pattern) || hasFallbacks;
+		const fromFallback = hasFallbacks && !hasConfiguredSelector(configured, role, pattern);
+
+		for (const model of available) {
+			const key = `${model.provider}:${model.id}`;
+			if (seen.has(key)) continue;
+			if (!matchesSelector(model, pattern)) continue;
+
+			const reason = evaluateEligibility(model, role, eligibility);
+			if (reason) {
+				rejected.push({ model, reason });
+				continue;
+			}
+			seen.add(key);
+			candidates.push({ model, pattern, explicit, fromFallback, thinking });
+		}
+	}
+
+	// An explicit configuration keeps its position; only implicit candidates move
+	// when preferences disagree. That way a user's stated choice is not reordered
+	// underneath them by a provider-order hint.
+	candidates.sort((a, b) => {
+		if (a.explicit !== b.explicit) return Number(b.explicit) - Number(a.explicit);
+		if (!input.preferences) return 0;
+		const left = preferenceRank(a.model, input.preferences);
+		const right = preferenceRank(b.model, input.preferences);
+		for (let index = 0; index < left.length; index++) {
+			if (left[index] !== right[index]) return left[index] - right[index];
+		}
+		return 0;
+	});
+
+	return { role, candidates, rejected, patterns };
+}
+
+function hasConfiguredSelector(
+	configured: Readonly<Record<string, string>>,
+	role: ModelRole,
+	pattern: string,
+): boolean {
+	const own = configured[role];
+	if (!own) return false;
+	return own
+		.split(",")
+		.map((part) => splitThinkingSuffix(part.trim()).pattern)
+		.includes(pattern);
+}
+
+/**
+ * Expands a configured fallback list into selectors.
+ *
+ * The result is used as-is, including when it is empty: a user who configures an
+ * empty list has said "no fallbacks", and re-seeding from the built-in chain here
+ * would quietly undo that. Only a list that was never configured falls through to
+ * the built-in chain, and the caller decides that.
+ */
+function expandFallbackPatterns(
+	fallbacks: readonly string[],
+	configured: Readonly<Record<string, string>>,
+	knownRoles: ReadonlySet<string>,
+): string[] {
+	const resolved: string[] = [];
+	for (const entry of fallbacks) {
+		for (const part of entry.split(",")) {
+			const element = part.trim();
+			if (!element) continue;
+			const { pattern } = splitThinkingSuffix(element);
+			if (!isRoleAlias(pattern)) {
+				resolved.push(pattern);
+				continue;
+			}
+			// A fallback may name a role, and expansion stays bounded and cycle-safe
+			// because it reuses the same expander the primary path uses.
+			const aliased = expandRoleAliasTarget(pattern);
+			if (!aliased) continue;
+			resolved.push(
+				...expandRolePatterns({ role: aliased, configured, knownRoles }).map((p) => splitThinkingSuffix(p).pattern),
+			);
+		}
+	}
+	return resolved;
+}
+
+/**
+ * The role a selector names, or undefined when it names none.
+ *
+ * `*` is OMP's shorthand for the default role. An unrecognised or still
+ * alias-shaped selector resolves to undefined so it contributes no candidates
+ * rather than falling back to a guess.
+ */
+function expandRoleAliasTarget(value: string): ModelRole | undefined {
+	const trimmed = value.trim();
+	if (trimmed === "*") return "default";
+	const candidate = trimmed.startsWith("@")
+		? trimmed.slice(1)
+		: trimmed.startsWith("pi/")
+			? trimmed.slice(3)
+			: trimmed;
+	// A role id is recognised whether or not it is currently configured; the
+	// expander decides whether it has anything to contribute.
+	return isModelRole(candidate) ? candidate : undefined;
+}

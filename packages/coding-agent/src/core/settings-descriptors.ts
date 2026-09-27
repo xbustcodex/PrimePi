@@ -411,6 +411,78 @@ export const modelRoles = registerSetting({
 	default: {},
 });
 
+// --- Model controls ---------------------------------------------------------
+//
+// These narrow or rank the model pool. None of them can make an ineligible model
+// eligible: they remove candidates or order them, and `selectFailoverCandidate`
+// still has the final say. Like `modelRoles` they carry no `ui` block, because a
+// settings row would imply a control that is not wired to anything yet.
+
+/**
+ * Provider ids excluded from the model pool entirely.
+ *
+ * Exclusion is a hard filter applied before any role expansion, so a disabled
+ * provider cannot re-enter a chain through a fallback or an alias.
+ */
+export const disabledProviders = registerSetting({
+	key: "disabledProviders",
+	type: "stringList",
+	default: [],
+});
+
+/**
+ * Model selectors that are allowed, e.g. `["xai/*", "openrouter/anthropic/*"]`.
+ *
+ * An allowlist. When non-empty, a model that matches no pattern is excluded, so
+ * this narrows the pool the same way `disabledProviders` does, only positively.
+ */
+export const enabledModels = registerSetting({
+	key: "enabledModels",
+	type: "stringList",
+	default: [],
+});
+
+/**
+ * Provider preference order, e.g. `["openrouter", "opencode"]`.
+ *
+ * Purely a ranking hint applied after eligibility. It can promote a reachable
+ * provider over another reachable one, and it can never resurrect a candidate
+ * that failed an access, credential, policy, or cooldown check.
+ */
+export const modelProviderOrder = registerSetting({
+	key: "modelProviderOrder",
+	type: "stringList",
+	default: [],
+});
+
+/**
+ * Where a role assignment is persisted: `global` or `project`.
+ *
+ * A project-scoped role is only readable when the project is trusted, which is
+ * enforced by the layer read rather than here, so an untrusted project cannot
+ * redirect role resolution by shipping its own config.
+ */
+export const modelRoleStorage = registerSetting({
+	key: "modelRoleStorage",
+	type: "enum",
+	values: ["global", "project"],
+	default: "global",
+});
+
+/**
+ * Per-role candidate lists tried after a role's own preference list,
+ * e.g. `{ smol: ["@tiny", "openrouter/anthropic/claude-haiku-4-5"] }`.
+ *
+ * Ordering and narrowing data only. This is deliberately not a retry policy: it
+ * names candidates, and every one of them still passes the same gates as the
+ * role's primary list before Pi can select it.
+ */
+export const retryFallbackChains = registerSetting({
+	key: "retry.fallbackChains",
+	type: "stringListMap",
+	default: {},
+});
+
 // --- Custom-renderer rows -----------------------------------------------------
 // These keep bespoke components (theme picker, model thinking levels, warnings).
 // The descriptor records the label and marks the control as a submenu; the picker
