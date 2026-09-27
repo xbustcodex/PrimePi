@@ -706,7 +706,31 @@ export class SettingsManager {
 		this.save();
 	}
 
-	/** True when the setting key resolves to a defined value in the given layer. */
+	/**
+	 * Per-role model preferences, e.g. `{ smol: "@tiny, xai/grok-4.5" }`.
+	 *
+	 * Read through the registry so the value is validated like any other setting.
+	 * Returns a fresh copy so a caller cannot mutate the merged view.
+	 */
+	getModelRoles(): Record<string, string> {
+		const resolved = this.getSetting("modelRoles");
+		const value = resolved?.value;
+		if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+		return { ...(value as Record<string, string>) };
+	}
+
+	/** Assigns a role's model preference. Pass `undefined` to clear it. */
+	setModelRole(role: string, value: string | undefined): void {
+		const roles = this.getModelRoles();
+		if (value === undefined) {
+			delete roles[role];
+		} else {
+			roles[role] = value;
+		}
+		this.setSetting("modelRoles", roles, "global");
+	}
+
+	/** True when the setting declares at least one path, in any layer. */
 	hasSettingInScope(key: string, scope: SettingsScope): boolean {
 		const container = scope === "project" ? this.projectSettings : this.globalSettings;
 		return hasPath(container, key);

@@ -49,6 +49,21 @@ export {
 } from "./utils/failover.ts";
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
 export * from "./utils/json-parse.ts";
+export {
+	activeRoles,
+	DEFAULT_ROLE_ALIAS,
+	expandRolePatterns,
+	formatRoleAlias,
+	isModelRole,
+	isRoleAlias,
+	MODEL_ROLE_IDS,
+	MODEL_ROLES,
+	type ModelRole,
+	type ModelRoleInfo,
+	type RoleResolution,
+	resolveRoleAlias,
+	resolveRoleCandidates,
+} from "./utils/model-roles.ts";
 export * from "./utils/overflow.ts";
 export * from "./utils/retry.ts";
 export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";

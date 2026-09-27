@@ -34,6 +34,7 @@ import {
 	failoverNotice,
 	getCurrentSystemMessage,
 	isCredentialFree,
+	resolveRoleCandidates,
 	retryDelayMs,
 	selectFailoverCandidate,
 	type TurnRequirements,
@@ -2462,12 +2463,18 @@ export class AgentSession {
 			}
 
 			const settings = this.settingsManager.getCompactionSettings(model);
+			// Compaction thresholds and overrides stay keyed to the session model, because
+			// they describe the conversation being compacted. Only the summarisation
+			// request itself may use the `smol` role, and only when that role resolves to
+			// a candidate that clears the access, credential, spending, and availability
+			// gates. Anything unresolvable falls back to today's behavior.
+			const summarizationModel = this._resolveRoleModelForSummarization(model);
 			const {
 				model: requestModel,
 				apiKey,
 				headers,
 				env,
-			} = await this._getSummarizationRequestAuth(model, this._compactionAbortController.signal);
+			} = await this._getSummarizationRequestAuth(summarizationModel, this._compactionAbortController.signal);
 
 			const pathEntries = this.sessionManager.getBranch();
 
@@ -2819,7 +2826,10 @@ export class AgentSession {
 				apiKey,
 				headers,
 				env,
-			} = await this._getSummarizationRequestAuth(model, abortController.signal);
+			} = await this._getSummarizationRequestAuth(
+				this._resolveRoleModelForSummarization(model),
+				abortController.signal,
+			);
 			abortController.signal.throwIfAborted();
 
 			let extensionCompaction: CompactionResult | undefined;
@@ -3603,6 +3613,63 @@ export class AgentSession {
 			requiresImageInput,
 			requiredContextTokens: this._lastAssistantMessage?.usage.totalTokens,
 		};
+	}
+
+	/**
+	 * Resolves the model to use for a summarisation request via the `smol` role.
+	 *
+	 * The role only *proposes* candidates. Each one must then clear the same gates a
+	 * failover candidate does, because a role must never be a way around them:
+	 *
+	 *  - `policyAllowsPaid`, so a free session under `free-only` never reaches a paid
+	 *    candidate even if the role's chain lists one first;
+	 *  - credential reachability, so a model needing an absent key is skipped and an
+	 *    anonymous model stays eligible;
+	 *  - `selectFailoverCandidate`, which remains the final eligibility authority and
+	 *    also enforces compatibility, availability, and failure-scope exclusions.
+	 *
+	 * Returns `sessionModel` unchanged whenever any of that fails to produce a usable
+	 * candidate, so unconfigured, invalid, or unreachable roles reproduce today's
+	 * behaviour exactly.
+	 */
+	private _resolveRoleModelForSummarization(sessionModel: Model<any>): Model<any> {
+		if (!sessionModel) return sessionModel;
+		try {
+			const configured = this.settingsManager.getModelRoles();
+			// An unconfigured role must not perturb behaviour at all.
+			if (Object.keys(configured).length === 0) return sessionModel;
+
+			const policy = this.settingsManager.getFailoverPolicy();
+			if (policy === "off") return sessionModel;
+
+			const resolution = resolveRoleCandidates({
+				role: "smol",
+				configured,
+				available: this.modelRuntime.getAvailableSnapshot(),
+				sessionModel,
+				policy,
+				credentialMissing: (provider: string) => !this.modelRuntime.hasConfiguredAuth(provider),
+			});
+			if (resolution.candidates.length === 0) return sessionModel;
+
+			// The role's own preference order, then the final eligibility gate.
+			for (const candidate of resolution.candidates) {
+				const decision = selectFailoverCandidate({
+					failed: sessionModel,
+					policy,
+					candidates: [{ model: candidate }],
+					requirements: { requiresTools: false },
+					cooldowns: this._availability,
+					attempted: new Set<string>(),
+					now: Date.now(),
+				});
+				if ("model" in decision) return decision.model;
+			}
+			return sessionModel;
+		} catch {
+			// A role is an optimisation. It must never be able to break summarisation.
+			return sessionModel;
+		}
 	}
 
 	/**

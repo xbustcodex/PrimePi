@@ -396,6 +396,21 @@ export const fullscreenCopyOnSelect = registerSetting({
 	},
 });
 
+// --- Model roles -------------------------------------------------------------
+
+/**
+ * Per-role model preferences, e.g. `{ "smol": "@tiny, xai/grok-4.5" }`.
+ *
+ * Declared without a `ui` block on purpose: role assignment belongs with the model
+ * picker, not a settings row, and a config-file-only descriptor never produces a
+ * control. The value is a flat string map so the registry can validate it.
+ */
+export const modelRoles = registerSetting({
+	key: "modelRoles",
+	type: "record",
+	default: {},
+});
+
 // --- Custom-renderer rows -----------------------------------------------------
 // These keep bespoke components (theme picker, model thinking levels, warnings).
 // The descriptor records the label and marks the control as a submenu; the picker

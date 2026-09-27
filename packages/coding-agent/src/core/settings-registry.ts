@@ -16,7 +16,7 @@
  * unchanged and remain in `SettingsManager`.
  */
 
-export type SettingValue = boolean | string | number;
+export type SettingValue = boolean | string | number | Record<string, string>;
 
 export type SettingSource = "default" | "global" | "project" | "override";
 
@@ -54,7 +54,7 @@ export interface SettingUiSpec {
 export interface SettingDescriptor<T extends SettingValue = SettingValue> {
 	/** Dotted path into the persisted settings object, e.g. `terminal.showImages`. */
 	key: string;
-	type: "boolean" | "string" | "number" | "enum";
+	type: "boolean" | "string" | "number" | "enum" | "record";
 	/** Value used when no layer supplies one. */
 	default: T;
 	/** Permitted values for `enum`, and the cycle order for a `cycle` control. */
@@ -117,6 +117,14 @@ export class SettingHandle<T extends SettingValue = SettingValue> {
 			case "enum": {
 				if (typeof raw === "string" && descriptor.values?.includes(raw)) return raw as T;
 				break;
+			}
+			case "record": {
+				// A record setting accepts only a flat string map, so a stray scalar or a
+				// nested object cannot be written into the settings file.
+				if (typeof raw !== "object" || raw === null || Array.isArray(raw)) break;
+				const entries = Object.entries(raw as Record<string, unknown>);
+				if (entries.some(([, value]) => typeof value !== "string")) break;
+				return Object.fromEntries(entries) as T;
 			}
 		}
 		throw new SettingRegistrationError(`Invalid value for setting ${this.id}: ${JSON.stringify(raw)}`);
