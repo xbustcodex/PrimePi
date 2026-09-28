@@ -123,3 +123,49 @@ reverted on exit.
 **How to close it:** run an interactive session, toggle `/plan` with the
 keypress path, and confirm the barrier engages, the model switches to the
 configured `plan` role if one is set, and exit restores the previous model.
+
+## PD-6: delegation is proven against a stubbed provider, not a live one
+
+**Status:** manual verification required. Not an implementation failure.
+
+**What is proven mechanically** (`delegated-child-runner.test.ts`,
+`delegation-task-tool.test.ts`, `delegation-authority.test.ts`,
+`worktree-isolation.test.ts`, `delegation-recovery.test.ts`,
+`live-tool-classification.test.ts`, and a 28-assertion script run against
+`packages/coding-agent/dist/`):
+
+- **A real child loop, through a real session.** `delegated-child-runner.test.ts`
+  constructs an actual `AgentSession`, invokes the real `task` tool, and drives
+  `AgentSession._runDelegatedChild` with a stubbed model runtime. It proves the
+  child returns a text answer, executes a granted tool, feeds the tool result
+  back for a second turn, is refused a tool outside its grant, and terminates on
+  its request budget. A single-turn implementation would pass every other
+  delegation test and still be useless, so this is the test that matters most.
+- The `task` tool is reachable from a live session's active tool set, is
+  classified `exec`, and is withheld when the allow-list excludes it.
+- A gate denial prevents the spawn, is consulted before registration, and
+  leaves no registry entry or permit behind.
+- A child's tools are narrowed to a subset of the parent's, and a resolver
+  rejection ends the spawn rather than falling back to a paid model.
+- Against a **real git repository**, an isolated child writes without touching
+  the parent checkout, two children get separate directories, the parent branch
+  is never auto-merged into, and provisioning is refused outside a repository
+  rather than silently falling back.
+- An in-flight job recovers as `interrupted` and never as `running`; a settled
+  result survives a restart; recovery is deterministic and a corrupt journal
+  recovers to empty instead of throwing.
+
+**What is not proven:** the provider is stubbed everywhere. A child's request
+has never moved over a real wire, so the redactor applied to a child's
+provider-bound context is exercised only in-process, and no real model has been
+observed choosing a tool, using it, and reporting a result. Streaming, retry and
+failure behaviour are likewise unexercised for a child.
+
+**Why it is not unit-tested:** a real turn requires provider credentials. The
+existing suite has 28 files that fail for exactly that reason, so adding one
+more would not be evidence.
+
+**How to close it:** in an authenticated session, ask the agent to delegate a
+small task that requires a tool call, confirm the child's result reaches the
+parent, then repeat with `isolated: true` against a scratch repository and
+confirm the parent checkout is unchanged and `/tasks` reports the child.
