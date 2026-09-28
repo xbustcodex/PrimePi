@@ -253,11 +253,19 @@ function fingerprint(text: string): string {
 /**
  * Whether two memories say the same thing.
  *
- * Exact match on a normalised hash catches the common case. The word-set overlap
- * catches the case that matters more: the same fact reworded. Two memories that
- * share every significant word and differ only in filler are one memory, and
- * storing both means the older one can be recalled as if it were a separate
- * piece of evidence.
+ * Exact match on a normalised form catches the common case. The word-set
+ * comparison catches the one that matters more: the same fact reworded.
+ *
+ * The measure is **containment of the smaller set**, not a symmetric ratio. A
+ * ratio punishes a reworded fact for every word it phrases differently - "a
+ * fixed method set" against "a fixed set of methods" shares five of six
+ * significant words and scored 0.83, just under the threshold, so the same fact
+ * was stored twice. Containment asks the question that actually matters: is the
+ * shorter claim saying nothing the longer one does not also say?
+ *
+ * Storing both is not a cosmetic duplicate. Two records for one fact let the
+ * older phrasing be recalled as if it were separate corroboration, which is how
+ * a single unverified claim acquires the appearance of two sources.
  */
 export function isSameFact(a: string, b: string): boolean {
 	const left = fingerprint(a);
@@ -266,10 +274,35 @@ export function isSameFact(a: string, b: string): boolean {
 	const leftWords = new Set(left.split(" ").filter((word) => word.length > 3));
 	const rightWords = new Set(right.split(" ").filter((word) => word.length > 3));
 	if (leftWords.size === 0 || rightWords.size === 0) return false;
+	// A differing number makes these different claims, however similar the prose.
+	// Checked before the word overlap so a corrected value is never deduplicated
+	// away against the value it corrects.
+	const leftNumbers = numbersIn(a).sort();
+	const rightNumbers = numbersIn(b).sort();
+	if (leftNumbers.join("|") !== rightNumbers.join("|")) return false;
 	let shared = 0;
 	for (const word of leftWords) if (rightWords.has(word)) shared++;
 	const smaller = Math.min(leftWords.size, rightWords.size);
-	return smaller > 0 && shared / smaller >= 0.85;
+	if (smaller === 0) return false;
+	// Containment, plus a floor on how much the *longer* claim must overlap, so a
+	// short generic sentence contained in a long specific one is not a match.
+	const larger = Math.max(leftWords.size, rightWords.size);
+	return shared / smaller >= 0.8 && shared / larger >= 0.5;
+}
+
+/**
+ * The numeric literals a claim contains, in order.
+ *
+ * "The cooldown is 30 seconds" and "The cooldown is 90 seconds" share every
+ * significant word, so word overlap alone calls them one fact. They are not -
+ * the number *is* the claim. A memory pipeline that deduplicates them keeps the
+ * first and silently discards the corrected value, which is worse than storing
+ * both, because the stale number then reads as the only one.
+ */
+function numbersIn(text: string): string[] {
+	return fingerprint(text)
+		.split(" ")
+		.filter((word) => /^\d+(\.\d+)?$/.test(word));
 }
 
 /**
