@@ -22,6 +22,7 @@ beforeEach(async () => {
 describe("backend evidence is a claim about testing, not a setting", () => {
 	it("distinguishes the four states", () => {
 		expect(backendEvidence("local-store")).toBe("live-verified");
+		expect(backendEvidence("bank-store")).toBe("live-verified");
 		// Promoted after PD-9 closed: the engine was installed from its own declared
 		// dependencies and exercised end to end through the adapter.
 		expect(backendEvidence("iai-personal")).toBe("live-verified");
@@ -34,7 +35,7 @@ describe("backend evidence is a claim about testing, not a setting", () => {
 		// Wiring requires a proven runtime consumer. Nothing has one yet, so nothing
 		// may report it - a setting that says "wired" is a claim about testing, and
 		// no test has earned it.
-		for (const id of ["local-store", "iai-personal", "local", "off"]) {
+		for (const id of ["local-store", "bank-store", "iai-personal", "local", "off"]) {
 			expect(backendEvidence(id), id).not.toBe("wired");
 		}
 	});

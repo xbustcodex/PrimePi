@@ -35,6 +35,7 @@
 
 import path from "node:path";
 import type { MemoryBackend, MemoryQuery, MemoryScope } from "./backend.ts";
+import type { BankScoping } from "./bank-scope.ts";
 import { buildMemoryContext, type MemoryContext } from "./context.ts";
 import { configurePrimePiBackends, createMemoryBackend } from "./registry.ts";
 import { type CurrentState, MemoryService, type RecallResult, type WorkEvent } from "./retention.ts";
@@ -57,6 +58,9 @@ const EVIDENCE: Readonly<Record<string, BackendEvidence>> = {
 	mnemopi: "registered",
 	sharpshooter: "registered",
 	"local-store": "live-verified",
+	// Live verified: per-project isolation, restart durability and the no-leak
+	// property are all exercised against real SQLite banks in the suite.
+	"bank-store": "live-verified",
 	// Live verified: the engine was installed from its own declared dependencies
 	// and exercised end to end - capture, recall, restart persistence, and
 	// supersession all proven through this adapter. One derived markdown cache is
@@ -75,8 +79,25 @@ export interface MemorySessionOptions {
 	/** Where local backends write. Ignored by backends with their own storage. */
 	readonly agentDir?: string;
 	readonly project?: string;
+	/**
+	 * The per-project bank store's settings, as resolved from the registry.
+	 *
+	 * Passed as a resolved value rather than read from the registry here, so this
+	 * module stays free of the settings layer and a test can construct a session
+	 * with any configuration. This is the wiring point that makes the
+	 * `mnemopi.dbPath`, `mnemopi.bank` and `mnemopi.scoping` rows consumed rather
+	 * than merely declared.
+	 */
+	readonly bankStore?: BankStoreConfig;
 	/** Overrides the default retention policy. */
 	readonly policy?: Partial<import("./retention.ts").RetentionPolicy>;
+}
+
+/** The resolved bank-store settings a caller supplies. */
+export interface BankStoreConfig {
+	readonly root?: string;
+	readonly bank?: string;
+	readonly scoping?: BankScoping;
 }
 
 /** What a caller needs to know about memory this session. */
@@ -126,8 +147,9 @@ export class SessionMemory {
 		// session was given are installed before the backend is constructed. A
 		// backend that owns its own storage ignores them entirely, which is the
 		// point: passing a path must not imply the backend needs one.
-		if (options.agentDir || options.project) {
+		if (options.agentDir || options.project || options.bankStore) {
 			configurePrimePiBackends({
+				...(options.bankStore ? { bankStore: { ...options.bankStore } } : {}),
 				...(options.agentDir ? { agentDir: options.agentDir } : {}),
 				...(options.project ? { localStore: { project: options.project } } : {}),
 			});

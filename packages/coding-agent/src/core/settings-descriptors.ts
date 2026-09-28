@@ -620,6 +620,60 @@ export const memoryBackend = registerSetting({
 	},
 });
 
+// The three settings the per-project bank store consumes. They sit in the
+// reference's `mnemopi` group rather than a PrimePi group of their own, so the
+// settings panel structure does not shift when they activate. The remaining
+// `mnemopi.*` rows stay unmigrated: the embedding subsystem is a separate
+// capability with its own failure modes, and claiming those rows would claim
+// something nothing reads.
+export const bankStorePath = registerSetting({
+	key: "mnemopi.dbPath",
+	type: "string",
+	// Empty means unset. The reference models this as an optional string, but a
+	//  cannot be undefined, and an empty default parses back to the
+	// same absence - so no consumer has to special-case a sentinel.
+	default: "",
+	parse: (raw) => (typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : ""),
+	ui: {
+		label: "Mnemopi DB Path",
+		description: "Optional SQLite DB path. Defaults to the agent memories directory.",
+		tab: "memory",
+		group: "Mnemopi",
+	},
+});
+
+export const bankStoreName = registerSetting({
+	key: "mnemopi.bank",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : ""),
+	ui: {
+		label: "Mnemopi Bank",
+		description: "Optional shared bank base name. Per-project modes derive project-local banks from it.",
+		tab: "memory",
+		group: "Mnemopi",
+	},
+});
+
+export const bankStoreScoping = registerSetting({
+	key: "mnemopi.scoping",
+	type: "enum",
+	default: "per-project",
+	values: ["global", "per-project", "per-project-tagged"],
+	parse: (raw) => {
+		if (raw !== "global" && raw !== "per-project" && raw !== "per-project-tagged") return undefined;
+		return raw;
+	},
+	ui: {
+		label: "Mnemopi Scoping",
+		description:
+			"global = one shared bank; per-project = isolated bank per project path; per-project-tagged = project-local writes plus shared recall visibility",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "submenu",
+	},
+});
+
 export const autolearnEnabled = registerSetting({
 	key: "autolearn.enabled",
 	type: "boolean",

@@ -25,6 +25,8 @@
 
 import path from "node:path";
 import type { MemoryBackend, MemoryBackendDescriptor } from "./backend.ts";
+import type { BankScoping } from "./bank-scope.ts";
+import { BankStoreBackend } from "./bank-store.ts";
 import { type IaiAdapterOptions, IaiPersonalBackend } from "./iai-adapter.ts";
 import { LocalStoreBackend } from "./local-store.ts";
 
@@ -193,6 +195,23 @@ export const MEMORY_BACKEND_DESCRIPTORS: readonly MemoryBackendDescriptor[] = [
  */
 const PRIMEPI_DESCRIPTORS: MemoryBackendDescriptor[] = [
 	{
+		id: "bank-store",
+		label: "Bank Store",
+		description: "Per-project SQLite memory banks, isolated by project path",
+		create: () => {
+			const root =
+				primePiOptions?.bankStore?.root ??
+				(primePiOptions?.agentDir ? path.join(primePiOptions.agentDir, "banks") : undefined);
+			if (!root) return { unavailable: "no agent directory configured for bank storage" };
+			return new BankStoreBackend({
+				root,
+				cwd: primePiOptions?.bankStore?.cwd ?? process.cwd(),
+				...(primePiOptions?.bankStore?.bank ? { bank: primePiOptions.bankStore.bank } : {}),
+				...(primePiOptions?.bankStore?.scoping ? { scoping: primePiOptions.bankStore.scoping } : {}),
+			});
+		},
+	},
+	{
 		id: "local-store",
 		label: "Local Store",
 		description: "Persistent local memory store, one file per project",
@@ -225,6 +244,7 @@ let primePiOptions:
 			iai?: IaiAdapterOptions;
 			agentDir?: string;
 			localStore?: { root?: string; project?: string };
+			bankStore?: { root?: string; cwd?: string; bank?: string; scoping?: BankScoping };
 	  }
 	| undefined;
 
@@ -239,6 +259,7 @@ export function configurePrimePiBackends(options: {
 	iai?: IaiAdapterOptions;
 	agentDir?: string;
 	localStore?: { root?: string; project?: string };
+	bankStore?: { root?: string; cwd?: string; bank?: string; scoping?: BankScoping };
 }): void {
 	// Merged, not replaced. Two callers configuring different backends - a session
 	// supplying `agentDir` while startup already configured the IAI engine - must

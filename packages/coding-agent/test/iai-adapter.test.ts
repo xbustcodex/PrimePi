@@ -22,7 +22,7 @@ describe("the IAI backend sits after every OMP backend", () => {
 		// position. `local-store` precedes `iai-personal` because it is the backend
 		// whose behaviour is actually verified; see PD-9.
 		expect(ids.slice(0, 5)).toEqual(["off", "local", "hindsight", "mnemopi", "sharpshooter"]);
-		expect(ids.slice(5)).toEqual(["local-store", "iai-personal"]);
+		expect(ids.slice(5)).toEqual(["bank-store", "local-store", "iai-personal"]);
 	});
 
 	it("leaves Off first, and Off still runs nothing", () => {
