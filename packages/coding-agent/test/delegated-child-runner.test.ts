@@ -162,6 +162,8 @@ describe("delegated child loop", () => {
 		});
 	});
 
+	// An explicit budget: this case drives up to 200 model turns, which exceeds the
+	// 5s default under a parallel full-suite run without indicating a defect.
 	it("stops after the child's request budget is spent", async () => {
 		// A child that keeps calling tools must still terminate. Without a bound
 		// this is an unbounded loop against a real provider.
@@ -173,5 +175,5 @@ describe("delegated child loop", () => {
 			expect(runtime.turns.length).toBeLessThanOrEqual(201);
 			expect(runtime.turns.length).toBeGreaterThan(0);
 		});
-	});
+	}, 60_000);
 });

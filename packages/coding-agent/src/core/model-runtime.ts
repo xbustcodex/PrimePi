@@ -64,6 +64,7 @@ import {
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
+import { type DisabledProvidersReader, isProviderUsable } from "./model/provider-usability.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -174,6 +175,69 @@ export class ModelRuntime implements Models {
 	private readonly providerAvailabilitySeq = new Map<string, number>();
 	private availabilityError: string | undefined;
 	private readonly credentialOperations = new Map<string, Promise<unknown>>();
+	/**
+	 * Live reader of the disabled-provider set.
+	 *
+	 * A function rather than a captured set, so a settings change takes effect on
+	 * the next snapshot without reconstructing the runtime. The session installs it
+	 * once at construction; a runtime built without one treats nothing as
+	 * disabled, which is the correct default for a consumer with no settings.
+	 */
+	private disabledProviders: DisabledProvidersReader = () => new Set<string>();
+	/** The disabled set the current snapshot was built from, for change detection. */
+	#appliedDisabled: ReadonlySet<string> = new Set<string>();
+
+	/**
+	 * Replaces the disabled-provider source.
+	 *
+	 * Called by the session once, after construction, because settings are
+	 * resolved by the caller rather than by the runtime. A disposer would imply
+	 * the runtime owns the binding; it does not.
+	 */
+	setDisabledProvidersReader(reader: DisabledProvidersReader): void {
+		// Re-evaluate immediately when the set differs from the one already applied.
+		// The reader is live, but the snapshot is built once; without this, a
+		// settings change would be invisible until some unrelated event happened to
+		// rebuild it, which is what made re-enabling a provider require a restart.
+		// Comparing the sets — rather than always rebuilding — keeps a reader that
+		// returns a fresh object each call from rebuilding on every read.
+		const next = reader();
+		const changed =
+			next.size !== this.#appliedDisabled.size ||
+			[...next].some((provider) => !this.#appliedDisabled.has(provider));
+		this.disabledProviders = reader;
+		if (changed) this.updateModelSnapshot();
+	}
+
+	/**
+	 * The current disabled set, read live.
+	 *
+	 * Also re-applies it when it has changed since the snapshot was built, so a
+	 * settings change takes effect on the next read rather than at the next
+	 * unrelated refresh. That is what makes re-enabling a provider work without a
+	 * restart.
+	 */
+	getDisabledProviders(): ReadonlySet<string> {
+		this.ensureDisabledProvidersApplied();
+		return this.disabledProviders();
+	}
+
+	/**
+	 * Rebuilds the snapshot if the live disabled set has changed since it was last
+	 * applied. Called by consumers that read availability, so a settings change is
+	 * visible without a restart or an unrelated refresh.
+	 */
+	private ensureDisabledProvidersApplied(): void {
+		const current = this.disabledProviders();
+		if (
+			current.size === this.#appliedDisabled.size &&
+			[...current].every((provider) => this.#appliedDisabled.has(provider))
+		) {
+			return;
+		}
+		this.#appliedDisabled = current;
+		this.updateModelSnapshot();
+	}
 
 	private constructor(
 		credentials: RuntimeCredentials,
@@ -299,6 +363,10 @@ export class ModelRuntime implements Models {
 
 	private updateModelSnapshot(): void {
 		const all = [...this.models.getModels()];
+		const disabled = this.disabledProviders();
+		// Record what this snapshot was built from, so a later change is detectable
+		// rather than silently unapplied.
+		this.#appliedDisabled = disabled;
 		this.snapshot = {
 			...this.snapshot,
 			all,
@@ -306,8 +374,15 @@ export class ModelRuntime implements Models {
 			// credentials resolved, or for the subset that needs no credentials at all.
 			// Without the second clause, a model the user can actually call right now
 			// (served anonymously) stays hidden behind an unrelated login.
+			//
+			// The disabled check is separate and comes first, because a credential-free
+			// model on a disabled provider is still disabled. Folding the two into
+			// one condition is what let a disabled provider stay a live failover
+			// candidate: `isCredentialFree` alone was enough to keep it in `available`.
 			available: all.filter(
-				(model) => this.snapshot.configuredProviders.has(model.provider) || isCredentialFree(model),
+				(model) =>
+					isProviderUsable(model.provider, disabled) &&
+					(this.snapshot.configuredProviders.has(model.provider) || isCredentialFree(model)),
 			),
 		};
 	}
@@ -333,9 +408,14 @@ export class ModelRuntime implements Models {
 				.filter((entry): entry is [string, AuthCheck] => entry[1] !== undefined)
 				.map(([providerId]) => providerId),
 		);
+		const disabled = this.disabledProviders();
 		this.snapshot = {
 			all: [...this.models.getModels()],
-			available: [...available],
+			// The network's availability answer says which models are reachable, not
+			// which the user permits. Filtering through the same authority as
+			// `updateModelSnapshot` is what stops a disabled provider from being
+			// reintroduced by a refresh that ran after the disable.
+			available: available.filter((model) => isProviderUsable(model.provider, disabled)),
 			configuredProviders,
 			storedProviders: new Set(credentials.map((entry) => entry.providerId)),
 			auth,
@@ -478,6 +558,11 @@ export class ModelRuntime implements Models {
 	}
 
 	getAvailableSnapshot(): readonly Model<Api>[] {
+		// Re-apply first: a settings change must be visible to a consumer that only
+		// reads availability, which is how failover and the model pickers see the
+		// world. Without this, a disable would sit unapplied until some unrelated
+		// refresh happened to rebuild the snapshot.
+		this.ensureDisabledProvidersApplied();
 		return this.snapshot.available;
 	}
 

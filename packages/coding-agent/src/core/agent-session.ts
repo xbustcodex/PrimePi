@@ -569,6 +569,16 @@ export class AgentSession {
 		this._customTools = config.customTools ?? [];
 		this._cwd = config.cwd;
 		this._modelRuntime = config.modelRuntime;
+		// The runtime cannot read settings itself, so the session hands it a live
+		// reader. A reader rather than a captured set is what makes re-enabling a
+		// provider effective without reconstructing the runtime — a snapshot would
+		// make the change visible only to consumers built after it.
+		// Guarded because the runtime is an injected dependency: a host or a test
+		// double that predates the reader still constructs a session, and refusing to
+		// would be a worse failure than a missing re-enable.
+		if (typeof this._modelRuntime.setDisabledProvidersReader === "function") {
+			this._modelRuntime.setDisabledProvidersReader(() => this.settingsManager.getDisabledProviders());
+		}
 		this._cacheWarmer = config.cacheWarmer;
 		if (this._cacheWarmer) {
 			this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
@@ -1291,6 +1301,10 @@ ${context}`
 				current: this.model,
 				restoreTo: this._prePlanModel,
 				isStreaming: this.isStreaming,
+				// Re-read now rather than reusing what plan mode captured on entry: the
+				// provider may have been disabled while planning, and the captured
+				// model is history, not authorization.
+				disabledProviders: this.settingsManager.getDisabledProviders(),
 			});
 			if (transition.kind === "apply" && !transition.deferred) {
 				await this.setModel(transition.model);
@@ -1298,10 +1312,6 @@ ${context}`
 			this._prePlanModel = undefined;
 			return;
 		}
-
-		// Captured before any switch, so exit can undo exactly this.
-		this._prePlanModel = this.model as Model<Api> | undefined;
-
 		const resolution = resolveRoleChain({
 			role: "plan",
 			configured,

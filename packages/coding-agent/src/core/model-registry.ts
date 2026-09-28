@@ -12,6 +12,7 @@ import type {
 	Provider,
 	ProviderHeaders,
 } from "@earendil-works/pi-ai";
+import { isProviderUsable } from "./model/provider-usability.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { AuthStatus, ProviderConfigInput } from "./provider-composer.ts";
 
@@ -55,15 +56,41 @@ export class ModelRegistry {
 		return [...this.runtime.getAvailableSnapshot()];
 	}
 
+	/**
+	 * Literal lookup by provider and id.
+	 *
+	 * Answers nothing for a disabled provider. Every caller that falls back to a
+	 * literal lookup when availability-filtered resolution misses — a retry
+	 * fallback chain, a restored model, a plan-mode restore — reaches a disabled
+	 * provider through this method, so the gate belongs here rather than at those
+	 * call sites. The upstream reference fixed exactly this leak in commit
+	 * `f10425abad`.
+	 */
 	find(provider: string, modelId: string): Model<Api> | undefined {
+		if (!isProviderUsable(provider, this.runtime.getDisabledProviders())) return undefined;
 		return this.runtime.getModel(provider, modelId);
 	}
 
 	hasConfiguredAuth(model: Model<Api>): boolean {
+		// A disabled provider is reported as having no configured auth, so a caller
+		// that consults this before selecting a candidate cannot select it. Reporting
+		// otherwise would leave a reachable-looking provider on a path that skips the
+		// eligibility check.
+		if (!isProviderUsable(model.provider, this.runtime.getDisabledProviders())) return false;
 		return this.runtime.hasConfiguredAuth(model.provider);
 	}
 
+	/**
+	 * Resolves a credential for a model.
+	 *
+	 * Issues no credential for a disabled provider, however one exists. Ambient
+	 * credentials are the specific case: an API key present in the environment is
+	 * not permission, so its presence must not make a disabled provider eligible.
+	 */
 	async getApiKeyAndHeaders(model: Model<Api>): Promise<ResolvedRequestAuth> {
+		if (!isProviderUsable(model.provider, this.runtime.getDisabledProviders())) {
+			return { ok: false, error: `Provider "${model.provider}" is disabled.` };
+		}
 		try {
 			const resolution = await this.runtime.getAuth(model);
 			if (!resolution) {
@@ -132,7 +159,15 @@ export class ModelRegistry {
 		return this.runtime.getAuth(provider);
 	}
 
+	/**
+	 * Resolves a provider's API key by provider id.
+	 *
+	 * Answers nothing for a disabled provider. This is the path that turned an
+	 * ambient environment credential into a usable one: the key existed, so the
+	 * request was authorized, regardless of the user having disabled the provider.
+	 */
 	async getApiKeyForProvider(provider: string): Promise<string | undefined> {
+		if (!isProviderUsable(provider, this.runtime.getDisabledProviders())) return undefined;
 		try {
 			return (await this.runtime.getAuth(provider))?.auth.apiKey;
 		} catch {

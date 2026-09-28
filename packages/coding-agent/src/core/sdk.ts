@@ -10,6 +10,7 @@ import { CacheWarmer } from "./cache-warmer.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { convertToLlm } from "./messages.ts";
+import { isProviderUsable } from "./model/provider-usability.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
@@ -199,8 +200,14 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	let modelFallbackMessage: string | undefined;
 
 	// If session has data, try to restore model from it
+	// A session's recorded model is history, not authorization: the provider may
+	// have been disabled since that session was written. Restoring it without
+	// re-checking would put a new session on a model the user has since turned
+	// off, which is the same leak as the plan-mode restore.
 	if (!model && hasExistingSession && existingSession.model) {
-		const restoredModel = modelRuntime.getModel(existingSession.model.provider, existingSession.model.modelId);
+		const restoredModel = isProviderUsable(existingSession.model.provider, settingsManager.getDisabledProviders())
+			? modelRuntime.getModel(existingSession.model.provider, existingSession.model.modelId)
+			: undefined;
 		if (restoredModel && modelRuntime.hasConfiguredAuth(restoredModel.provider)) {
 			model = restoredModel;
 		}
