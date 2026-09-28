@@ -163,7 +163,7 @@ import { createTaskTool, createTaskToolDefinition, type TaskOperations } from ".
 import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
-import { discoverRepository, type GitService } from "./vcs/index.ts";
+import { CheckpointStore, discoverRepository, type GitService } from "./vcs/index.ts";
 
 // ============================================================================
 // Skill Block Parsing
@@ -509,6 +509,8 @@ export class AgentSession {
 	 * to the tree it was given.
 	 */
 	private _vcsService?: GitService | null;
+	/** One store per checkout, keyed by checkout identity. */
+	private readonly _vcsCheckpoints = new Map<string, CheckpointStore>();
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -1037,6 +1039,22 @@ export class AgentSession {
 			this._vcsService = discoverRepository({ cwd: this._cwd, boundary: this._cwd });
 		}
 		return this._vcsService ?? undefined;
+	}
+
+	/**
+	 * The checkpoint store for a checkout, created on first use.
+	 *
+	 * Keyed by checkout identity rather than held singly, because a delegated
+	 * child in an isolated worktree needs its own store: a checkpoint taken in
+	 * the parent must not be restorable from the child, and the store is what
+	 * enforces that.
+	 */
+	checkpointsFor(service: GitService): CheckpointStore {
+		const existing = this._vcsCheckpoints.get(service.checkoutKey);
+		if (existing) return existing;
+		const created = new CheckpointStore(service);
+		this._vcsCheckpoints.set(service.checkoutKey, created);
+		return created;
 	}
 
 	/** What the `task` tool closes over. */
