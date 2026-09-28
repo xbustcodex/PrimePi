@@ -163,6 +163,7 @@ import { createTaskTool, createTaskToolDefinition, type TaskOperations } from ".
 import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
+import { discoverRepository, type GitService } from "./vcs/index.ts";
 
 // ============================================================================
 // Skill Block Parsing
@@ -372,6 +373,24 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 // AgentSession Class
 // ============================================================================
 
+/**
+ * Tools that are session-scoped rather than cwd-scoped.
+ *
+ * Derived from the active-tool union so a new one is covered by construction.
+ * These are built from live session state, so the cwd-only definition path
+ * cannot produce them; they are registered here instead. That also means they
+ * are not auto-activated on a refresh: doing so would silently widen a
+ * configured `defaultTools` list, which is a complete selection.
+ */
+const SESSION_SCOPED_TOOL_NAMES = new Set<string>([
+	"todo",
+	"task",
+	"git_inspect",
+	"git_stage",
+	"git_commit",
+	"checkpoint",
+]);
+
 export class AgentSession {
 	readonly agent: Agent;
 	readonly sessionManager: SessionManager;
@@ -481,6 +500,15 @@ export class AgentSession {
 	 */
 	private _taskJobs?: JobManager;
 	private _worktrees?: WorktreeManager;
+	/**
+	 * The repository these tools act on, resolved once per session.
+	 *
+	 * Resolved with the project boundary as a fence, so a repository whose root
+	 * lies above the project is refused rather than adopted. A delegated child
+	 * resolves its own service against its own worktree, which is what confines it
+	 * to the tree it was given.
+	 */
+	private _vcsService?: GitService | null;
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -995,6 +1023,20 @@ export class AgentSession {
 		}
 
 		return finalText.trim();
+	}
+
+	/**
+	 * The repository authority for this session's checkout.
+	 *
+	 * `undefined` when the working directory is not inside a repository, or when
+	 * the repository that owns it starts above the project boundary. Both are
+	 * ordinary states rather than errors, and the tools report them as such.
+	 */
+	get vcs(): GitService | undefined {
+		if (this._vcsService === undefined) {
+			this._vcsService = discoverRepository({ cwd: this._cwd, boundary: this._cwd });
+		}
+		return this._vcsService ?? undefined;
 	}
 
 	/** What the `task` tool closes over. */
@@ -3938,11 +3980,14 @@ export class AgentSession {
 			}
 		} else if (!options?.activeToolNames) {
 			for (const toolName of this._toolRegistry.keys()) {
-				// A newly-registered *session-scoped* tool is not activated just
-				// because it appeared. They are part of the session's selection or
-				// they are absent; auto-activating them would re-add a tool a
-				// configured `defaultTools` deliberately left out.
-				if (toolName === "task" || toolName === "todo") continue;
+				// A session-scoped tool is not activated merely because it appeared.
+				// These are part of the session's selection or they are absent;
+				// auto-activating them would re-add a tool a configured
+				// `defaultTools` deliberately left out. The set is derived from
+				// `ActiveToolName` rather than written out here, so a new
+				// session-scoped tool is covered by construction — naming them
+				// individually is how this went stale in the first place.
+				if (SESSION_SCOPED_TOOL_NAMES.has(toolName)) continue;
 				if (!previousRegistryNames.has(toolName)) {
 					nextActiveToolNames.push(toolName);
 				}
