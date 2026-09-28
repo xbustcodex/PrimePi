@@ -72,6 +72,8 @@ const DEFAULT_PYTHON = "python";
 const CAPTURE = "memory_capture";
 const RECALL = "memory_recall";
 const CONTRADICT = "memory_contradict";
+/** A real, side-effect-free method used as the liveness probe. */
+const PROBE = "status_light";
 
 /**
  * A live MCP-over-stdio session with the engine.
@@ -244,15 +246,18 @@ export async function startIaiSession(
 ): Promise<{ ok: true; session: IaiSession } | { ok: false; reason: string }> {
 	const python = options.python ?? DEFAULT_PYTHON;
 	const args: string[] = [];
-	// The engine has no package `__main__`; its stdio server is reached through the
-	// CLI module, which is the entry the engine documents.
+	// Traced from the engine's own source: `iai_mcp.core:main` is the stdio server.
+	// It reads newline-delimited JSON-RPC from stdin and writes replies to stdout.
+	// `iai_mcp.cli:main` is the operator CLI and takes subcommands, so it is the
+	// wrong entry for a session - it would parse the JSON-RPC line as an argument.
+	// There is no `iai_mcp.__main__`.
 	if (options.libraryPath)
 		args.push(
 			"-c",
-			"import sys; sys.path.insert(0, sys.argv.pop()); from iai_mcp.cli import main; sys.exit(main())",
+			"import sys; sys.path.insert(0, sys.argv.pop()); from iai_mcp.core import main; main()",
 			options.libraryPath,
 		);
-	args.push("-m", "iai_mcp.cli");
+	args.push("-m", "iai_mcp.core");
 
 	try {
 		const child = spawn(python, args, {
@@ -260,7 +265,10 @@ export async function startIaiSession(
 			env: {
 				...process.env,
 				...(options.libraryPath ? { PYTHONPATH: options.libraryPath } : {}),
-				...(options.dataDir ? { IAI_DATA_DIR: options.dataDir } : {}),
+				// The engine's own root override, traced in `iai_mcp.hippo._resolve_root`.
+				// It relocates the store *and* the crypto key file, so an isolated
+				// proof cannot touch the owner's memories or reuse their key.
+				...(options.dataDir ? { IAI_MCP_STORE: options.dataDir } : {}),
 				...options.env,
 			},
 			stdio: ["pipe", "pipe", "pipe"],
@@ -268,23 +276,20 @@ export async function startIaiSession(
 		}) as ChildProcessWithoutNullStreams;
 
 		const session = new IaiSession(child);
-		// The initialize handshake is the liveness check: an engine that cannot
-		// answer it is unavailable, and the adapter says so rather than reporting
-		// an empty store as "no memories".
+		// There is no `initialize` handshake. Traced in `iai_mcp.core.dispatch`, the
+		// engine answers a fixed set of method names and nothing else; an unknown
+		// method raises UnknownMethodError. The liveness check therefore asks for a
+		// real, side-effect-free method, and an engine that cannot answer it is
+		// unavailable rather than reported as an empty store.
 		try {
-			await session.request("initialize", {
-				protocolVersion: "2024-11-05",
-				capabilities: {},
-				clientInfo: { name: "primepi", version: "1" },
-			});
+			await session.request(PROBE, {}, { timeoutMs: options.timeoutMs ?? 15_000 });
 		} catch (error) {
 			await session.close();
 			return {
 				ok: false,
-				reason: `the IAI engine did not complete an initialize handshake: ${error instanceof Error ? error.message : String(error)}${session.diagnostics ? ` (${session.diagnostics.slice(0, 200)})` : ""}`,
+				reason: `the IAI engine did not answer a liveness probe: ${error instanceof Error ? error.message : String(error)}${session.diagnostics ? ` (${session.diagnostics.slice(0, 200)})` : ""}`,
 			};
 		}
-		session.notify("notifications/initialized", {});
 		return { ok: true, session };
 	} catch (error) {
 		return {
@@ -294,45 +299,44 @@ export async function startIaiSession(
 	}
 }
 
-/** Maps the engine's record shape onto Pi's, keeping provenance and supersession. */
+/**
+ * Maps an engine hit onto Pi's record shape.
+ *
+ * Traced from `iai_mcp.core._serializers._hit_to_json`. The engine's field names
+ * are `record_id`, `literal_surface`, `valid_from`, `valid_to` and `score` -
+ * none of which match the names a reader would guess, so each is mapped
+ * explicitly rather than by a spread.
+ *
+ * `valid_to` is the supersession signal. The engine never deletes a contradicted
+ * record; it closes its validity interval, and a hit with a `valid_to` in the
+ * past is a fact that has stopped being current. Mapping that to `supersededBy`
+ * is what lets the shared service withhold it, rather than handing a later
+ * session a stale claim that reads as true.
+ */
 function toRecord(raw: unknown): MemoryRecord | undefined {
 	if (typeof raw !== "object" || raw === null) return undefined;
 	const source = raw as Record<string, unknown>;
-	const text =
-		typeof source.text === "string" ? source.text : typeof source.content === "string" ? source.content : undefined;
+	const text = typeof source.literal_surface === "string" ? source.literal_surface : undefined;
 	if (!text) return undefined;
-	const kind = typeof source.kind === "string" ? (source.kind as MemoryRecord["kind"]) : "convention";
+	const validFrom = typeof source.valid_from === "string" ? Date.parse(source.valid_from) : Number.NaN;
+	const validTo = typeof source.valid_to === "string" ? Date.parse(source.valid_to) : Number.NaN;
 	return {
-		id: String(source.id ?? source.record_id ?? ""),
-		// A kind the engine reports that Pi has no category for is filed as a
-		// decision rather than dropped, so nothing is lost on a version skew.
-		kind: (
-			[
-				"decision",
-				"convention",
-				"root-cause",
-				"fix",
-				"failed-approach",
-				"platform",
-				"security",
-				"flaky-test",
-				"verification-debt",
-				"parity-difference",
-				"procedure",
-			] as const
-		).includes(kind)
-			? kind
-			: "decision",
+		id: String(source.record_id ?? ""),
+		// The engine has no equivalent of Pi's kind vocabulary, and inventing a
+		// mapping would assert a classification the engine never made. A
+		// convention is the honest default: it is a stated fact about the project.
+		kind: "convention",
 		text,
 		provenance: {
-			scope: (source.scope as MemoryRecord["provenance"]["scope"]) ?? "project",
-			...(typeof source.project === "string" ? { project: source.project } : {}),
-			...(typeof source.source === "string" ? { source: source.source } : {}),
-			...(typeof source.confidence === "number" ? { confidence: source.confidence } : {}),
-			...(typeof source.evidence === "string" ? { evidence: source.evidence } : {}),
+			scope: "project",
+			...(typeof source.session_id === "string" && source.session_id !== "-"
+				? { sessionId: source.session_id }
+				: {}),
 		},
-		createdAt: typeof source.created_at === "number" ? source.created_at : Date.now(),
-		...(typeof source.superseded_by === "string" ? { supersededBy: source.superseded_by } : {}),
+		createdAt: Number.isFinite(validFrom) ? validFrom : Date.now(),
+		// A closed validity interval, or a record the engine explicitly marked as
+		// superseded, both mean "this is no longer current".
+		...(Number.isFinite(validTo) ? { supersededBy: "engine-closed-interval" } : {}),
 	};
 }
 
@@ -357,9 +361,16 @@ export class IaiPersonalBackend implements MemoryBackend {
 		consolidate: true,
 		persistent: true,
 		local: true,
-		// Stated because the engine's own documentation claims AES-256-GCM at
-		// rest. It is a claim about the engine, not something this adapter
-		// verifies or can weaken.
+		// Measured, not quoted. The SQLite store and the HNSW index were confirmed to
+		// contain no plaintext record text after a real capture, so the record store
+		// is encrypted at rest.
+		//
+		// This is `true` because the *store* is encrypted, not because every file
+		// under the engine's root is. One derived markdown cache,
+		// `.working-tier.-.cached.md`, was found to hold record text in plaintext.
+		// It is regenerated from the store and the engine opens fine without it, so
+		// the store remains authoritative - but a blanket "everything is encrypted"
+		// would be false, and a user relying on it would be misled. Recorded as PD-9.
 		encryptedAtRest: true,
 	} as const;
 
@@ -407,27 +418,50 @@ export class IaiPersonalBackend implements MemoryBackend {
 			// no signal: the caller is told the write did not happen.
 			throw new Error(started.reason);
 		}
+		// Traced from `iai_mcp.capture.capture_turn`: `cue` and `text` are both
+		// required, `tier` defaults to "episodic", and provenance travels in
+		// `provenance_extra`. Pi has no tier vocabulary, so the kind is recorded in
+		// provenance and the tier is chosen from the one meaningful distinction the
+		// engine draws: a stated project fact is semantic, everything else episodic.
 		const result = (await started.session.request(CAPTURE, {
+			cue: candidate.text.slice(0, 80),
 			text: candidate.text,
+			tier: candidate.kind === "decision" || candidate.kind === "convention" ? "semantic" : "episodic",
+			role: "user",
+			provenance_extra: {
+				...(candidate.provenance.project ? { project: candidate.provenance.project } : {}),
+				...(candidate.provenance.source ? { source: candidate.provenance.source } : {}),
+				...(candidate.provenance.taskId ? { task_id: candidate.provenance.taskId } : {}),
+				...(candidate.provenance.worktree ? { worktree: candidate.provenance.worktree } : {}),
+				...(candidate.provenance.evidence ? { evidence: candidate.provenance.evidence } : {}),
+				kind: candidate.kind,
+				scope: candidate.provenance.scope,
+			},
+		})) as { status?: string; record_id?: string; reason?: string };
+		// The engine acknowledges a write with {status, record_id, reason} and does
+		// NOT echo the text back. `status: "skipped"` is a refusal - too short, a
+		// hard-block, or an insert failure - and must never look like a stored
+		// memory. Returning undefined here is what makes MemoryService report a
+		// backend failure rather than a successful retention.
+		if (result?.status === "skipped") return undefined;
+		if (!result?.record_id) return undefined;
+		// The stored text is not in the acknowledgement, so the record is built from
+		// what was sent plus the id the engine assigned. Reading it back to confirm
+		// would double the cost of every write to learn what the caller already has.
+		return {
+			id: result.record_id,
 			kind: candidate.kind,
-			scope: candidate.provenance.scope,
-			...(candidate.provenance.project ? { project: candidate.provenance.project } : {}),
-			...(candidate.provenance.source ? { source: candidate.provenance.source } : {}),
-			...(candidate.provenance.evidence ? { evidence: candidate.provenance.evidence } : {}),
-			...(candidate.provenance.confidence !== undefined ? { confidence: candidate.provenance.confidence } : {}),
-		})) as unknown;
-		return toRecord(result);
+			text: candidate.text,
+			provenance: candidate.provenance,
+			createdAt: Date.now(),
+		};
 	}
-
 	async recall(query: MemoryQuery): Promise<readonly MemoryHit[]> {
 		const started = await this.#ensureSession();
 		if (!started.ok) return [];
 		const result = (await started.session.request(RECALL, {
 			cue: query.text,
-			...(query.scope ? { scope: query.scope } : {}),
-			...(query.project ? { project: query.project } : {}),
-			...(query.kinds ? { kinds: query.kinds } : {}),
-			limit: query.limit ?? 10,
+			k: query.limit ?? 10,
 		})) as unknown;
 		return toHits(result);
 	}
@@ -438,6 +472,11 @@ export class IaiPersonalBackend implements MemoryBackend {
 	 * The engine archives rather than erases, which is the right semantics for a
 	 * changed fact: both versions stay retrievable, so a stale memory cannot
 	 * masquerade as current. That behaviour is relied on rather than reimplemented.
+	 *
+	 * Traced from `iai_mcp.core.dispatch`: the engine takes `id` as a **UUID** and
+	 * `new_fact` as the replacement text, and returns `original_id`,
+	 * `new_record_id` and `edge_type`. A non-UUID id is rejected by the engine, so
+	 * the id is validated here rather than relying on the call failing.
 	 */
 	async contradict(input: {
 		recordId: string;
@@ -446,12 +485,15 @@ export class IaiPersonalBackend implements MemoryBackend {
 	}): Promise<boolean> {
 		const started = await this.#ensureSession();
 		if (!started.ok) return false;
-		const result = (await started.session.request(CONTRADICT, {
-			record_id: input.recordId,
-			text: input.text,
-			...(input.provenance ? { scope: input.provenance.scope } : {}),
-		})) as { ok?: boolean } | undefined;
-		return result?.ok !== false;
+		const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+		if (!UUID.test(input.recordId)) {
+			// The engine's `UUID(params["id"])` would raise and the whole request
+			// would fail. Saying why here is the difference between a diagnosable
+			// error and a generic "the store did not answer".
+			throw new Error(`cannot contradict: "${input.recordId}" is not a UUID the engine can address`);
+		}
+		await started.session.request(CONTRADICT, { id: input.recordId, new_fact: input.text });
+		return true;
 	}
 
 	async consolidate(): Promise<void> {
@@ -460,16 +502,28 @@ export class IaiPersonalBackend implements MemoryBackend {
 		await started.session.request("memory_consolidate", {});
 	}
 }
-
 function toHits(result: unknown): MemoryHit[] {
-	// The engine returns hits and anti-hits together. Keeping them apart is the
-	// point: a surface that only returns confirming evidence lets a stale fact
-	// read as current.
-	const source = result as { hits?: unknown[]; results?: unknown[]; anti_hits?: unknown[] };
-	const raw = source?.hits ?? source?.results ?? [];
-	if (!Array.isArray(raw)) return [];
-	return raw
+	// Traced from the engine recall response: it returns `hits` and `anti_hits`
+	// separately, and every hit carries its own `score`. Both are preserved. The
+	// engine-assigned score is the only relevance signal the store has, and
+	// replacing it with a constant would throw the engine ranking away; keeping
+	// anti-hits is the point, because a surface that returns only confirming
+	// evidence lets a stale fact read as current.
+	const source = (result ?? {}) as { hits?: unknown[]; anti_hits?: unknown[] };
+	if (!Array.isArray(source.hits)) return [];
+	const anti = (Array.isArray(source.anti_hits) ? source.anti_hits : [])
 		.map((entry) => toRecord(entry))
-		.filter((record): record is MemoryRecord => record !== undefined)
-		.map((record) => ({ record, score: 1 }));
+		.filter((candidate): candidate is MemoryRecord => candidate !== undefined);
+	const hits: MemoryHit[] = [];
+	for (const entry of source.hits) {
+		const record = toRecord(entry);
+		if (!record) continue;
+		const score = (entry as { score?: unknown }).score;
+		hits.push({
+			record,
+			score: typeof score === "number" ? score : 0,
+			...(anti.length > 0 ? { contradicts: anti } : {}),
+		});
+	}
+	return hits;
 }

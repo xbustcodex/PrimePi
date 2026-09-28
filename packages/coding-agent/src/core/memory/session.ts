@@ -57,9 +57,11 @@ const EVIDENCE: Readonly<Record<string, BackendEvidence>> = {
 	mnemopi: "registered",
 	sharpshooter: "registered",
 	"local-store": "live-verified",
-	// Adapter implemented, engine never run: numpy is a declared hard dependency
-	// of the engine and is absent from its venv. PD-9.
-	"iai-personal": "adapter-exists",
+	// Live verified: the engine was installed from its own declared dependencies
+	// and exercised end to end - capture, recall, restart persistence, and
+	// supersession all proven through this adapter. One derived markdown cache is
+	// plaintext; see PD-9.
+	"iai-personal": "live-verified",
 };
 
 export function backendEvidence(id: string): BackendEvidence {

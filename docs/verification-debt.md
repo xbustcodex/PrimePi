@@ -272,47 +272,71 @@ disable one through Settings, then run a turn and confirm (a) it never routes to
  disabled provider holding a free model, which is the case the credential-free
  clause used to let through.
 
-## PD-9: the IAI Personal engine is exercised only as far as its dependencies allow
+## PD-9: CLOSED - the IAI Personal engine is live verified
 
-**Status:** partial verification. Adapter and interface are proven; the
-engine's own runtime is not.
+**Status:** closed 2026-09-28. Evidence: `live-verified`.
 
-**What was verified against the built engine** (`iai_mcp` imported from its
-`build/lib.win-amd64-cpython-312` under the engine's own venv):
+The engine was installed from its own declared dependencies into its own venv,
+then exercised end to end. Pre-install state, the authoritative dependency
+declaration, and the exact install command are recorded in
+`docs/pd9-pre-install-record.md`.
 
-- The native extension imports and exports `MemoryRecord`, `MemoryHit` and
-  `RecallResponse`.
-- The Python layer imports no network client (`requests`, `httpx`,
-  `urllib.request`, `aiohttp`) and no telemetry SDK (`opentelemetry`,
-  `sentry_sdk`). That is the mechanical evidence available for the "local only,
-  no telemetry" claim; it is not a traffic capture.
-- The engine ships `memory_capture`, `memory_recall`, `memory_contradict` and
-  `memory_consolidate` as MCP tools.
+**Install.** `pip install -e <iai project>` into
+`iai-personal-memory-engine/.venv` (Python 3.12.10). `pip check` reports no
+broken requirements. All twelve declared runtime dependencies resolved within
+their declared bounds: numpy 2.2.6 (<2.3.0), scipy 1.18.1, numba 0.67.0,
+tiktoken 0.14.0, cryptography 50.0.1, keyring 25.7.0, cachetools 7.2.0,
+psutil 7.2.2, pandas 2.3.3 (<3.0), zstandard 0.25.0 (<1.0), pypdf 6.19.0,
+setproctitle 1.3.7. No constraint was relaxed and no undeclared package was
+added. The earlier trace named only three dependencies; the project declares
+twelve, and that earlier list was wrong.
 
-**What could not be verified, and why:**
+**What the source trace corrected, before any proof was attempted.**
 
-- **Store lifecycle, capture, recall and supersession.** `iai_mcp.hippo` imports
-  `numpy` at module load. `numpy>=1.26` is a declared hard dependency in the
-  engine's `pyproject.toml` and is absent from its venv, which contains only
-  `pip`. Nothing was installed to change that.
-- **MCP over stdio.** The package has no `iai_mcp.__main__`; the server is
-  reached through `iai_mcp.cli`. The adapter spawns that entry, but the
-  handshake could not be exercised while `numpy` is missing.
+- **Transport.** The stdio server is `iai_mcp.core:main`, not
+  `iai_mcp.cli:main`. `iai_mcp.cli` is the operator CLI and parses
+  subcommands, so it would have consumed the JSON-RPC line as an argument.
+  There is no `iai_mcp.__main__`. The adapter had the wrong entry point.
+- **No handshake.** The engine answers a fixed set of method names via
+  `dispatch`. There is no `initialize`. The adapter's MCP-style handshake
+  would have failed against a working engine, so the liveness probe now calls a
+  real, side-effect-free method.
+- **Parameters.** `memory_capture` takes `cue`/`text`/`tier`/
+  `provenance_extra`. `memory_recall` takes `cue`/`k`.
+  `memory_contradict` takes `id` (a UUID) and `new_fact`. The adapter had
+  invented `limit`, `record_id` and `text`.
+- **Response fields.** Hits carry `record_id`, `literal_surface`,
+  `score`, `valid_from`, `valid_to`, and sit beside `anti_hits`. None of
+  those matched the names the adapter first assumed.
 
-**What the adapter does about it.** `IaiPersonalBackend` is built to the
-documented protocol and every call is checked against the engine's own error
-contract. An unreachable engine reports unavailability with a reason; a recall
-yields nothing so an optional backend cannot break a session; a retain throws,
-because a silently dropped memory is worse than a visible failure. Those paths
-are tested with a command that cannot exist, so the degradation is proven
-deterministically rather than assumed.
+**Proof, 22/22 checks** (`pd9proof.py`, isolated store): server start; real
+JSON-RPC on stdio; capture with a unique marker; recall of that marker; clean
+shutdown; restart against the same store; recall again, proving durability;
+malformed UUID rejected; supersession archiving with `edge_type=contradicts`;
+recall reflecting a closed validity interval; malformed JSON and an unknown
+method both rejected without the engine dying; a 32-byte key file created in
+the isolated root; the owner's real store never opened. The owner's personal
+memories and key were never read, decrypted, or written.
 
-**How to close it:** install the engine's own declared dependencies in its venv
-(`pip install -e .` in the engine checkout, or `pip install "numpy>=1.26,<2.3.0"`
-`"scipy>=1.13.0"` `"numba>=0.59"`), then re-run the adapter against the live
-engine: open a store on a temporary directory, capture, recall, contradict, and
-assert the earlier record is archived rather than erased. Record encryption at
-rest by inspecting the store files, without reading or logging any key.
+**Then through the PrimePi adapter** (`iai-adapter-live.test.ts`, 3 tests in the
+suite so it cannot rot): capture, recall, engine-assigned scores preserved,
+stop, fresh process, recall again, and a non-UUID id rejected with an
+explanation rather than an opaque engine error.
+
+**One finding that qualifies the encryption claim.** The SQLite store and the
+HNSW index contain no plaintext record text - confirmed by capturing a known
+marker and scanning the raw bytes, and confirmed in the other direction by
+recalling it back through the engine. But one derived file,
+`.working-tier.-.cached.md`, holds record text in **plaintext**. Deleting it in
+an isolated store left the store openable and the file unregenerated, so it is
+a derived cache and not authoritative. The store is encrypted; not every file
+under the engine root is. `encryptedAtRest` stays `true` and now says so in
+its comment rather than implying a blanket guarantee.
+
+**Not claimed.** No traffic capture was performed, so this establishes no
+network behaviour at runtime; only that the traced import path pulls in no
+network client. The earlier no-telemetry observation is unchanged and remains
+source inspection, not runtime evidence.
 
 ## PD-10: 86-96 pre-existing failures in the coding-agent suite, none caused by the migration
 

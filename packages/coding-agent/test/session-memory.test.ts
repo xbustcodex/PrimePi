@@ -22,8 +22,9 @@ beforeEach(async () => {
 describe("backend evidence is a claim about testing, not a setting", () => {
 	it("distinguishes the four states", () => {
 		expect(backendEvidence("local-store")).toBe("live-verified");
-		// The IAI adapter exists and its engine has never been run here.
-		expect(backendEvidence("iai-personal")).toBe("adapter-exists");
+		// Promoted after PD-9 closed: the engine was installed from its own declared
+		// dependencies and exercised end to end through the adapter.
+		expect(backendEvidence("iai-personal")).toBe("live-verified");
 		// The reference's remote backends are registered and nothing more.
 		expect(backendEvidence("hindsight")).toBe("registered");
 		expect(backendEvidence("a-backend-that-does-not-exist")).toBe("registered");
