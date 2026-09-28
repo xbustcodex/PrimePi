@@ -131,8 +131,8 @@ const FINDINGS: readonly Finding[] = [
 const backendId = "bank-store";
 const memory = await SessionMemory.create({
 	backendId,
-	agentDir: "C:/Users/xkali/.primepi-agent",
 	bankStore: {
+		root: "C:/Users/xkali/.primepi-agent/memory",
 		cwd: CWD,
 		// The registry exposes defaults on the descriptor; there is no resolved-value
 		// getter yet, and a settings-manager-backed lookup belongs in the wiring that

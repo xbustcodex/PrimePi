@@ -152,18 +152,31 @@ export class BankStoreBackend implements MemoryBackend {
 		const scope = this.scope;
 		const db = this.#database(scope.retainBank);
 		const createdAt = Date.now();
-		// A memory id that is content-addressed, so an identical fact written twice
-		// collides on the primary key instead of accumulating as a near-duplicate.
-		const id = `${createdAt.toString(36)}-${Math.abs(hashText(text)).toString(36)}`;
+		// Content-addressed, with no timestamp in the id. The earlier form mixed
+		// `createdAt` into the id, so re-running the same seed produced a *new* id
+		// every time and `INSERT OR IGNORE` never collided: 45 rows holding 17
+		// distinct facts, and recall returned every one of them three times.
+		//
+		// The store is the authority for its own contents, so the dedup has to live
+		// here rather than relying on a caller having checked. Two different
+		// projects writing the same fact must still get two records, which the
+		// per-bank split already guarantees.
+		const id = Math.abs(hashText(text)).toString(36);
 		db.prepare(
 			"INSERT OR IGNORE INTO working_memory (id, content, kind, metadata_json, cwd, created_at) VALUES (?, ?, ?, ?, ?, ?)",
 		).run(id, text, candidate.kind, JSON.stringify(candidate.provenance), this.#options.cwd, createdAt);
+		// The stored `created_at` may predate this call, if the row already existed.
+		// Reporting the attempt time would make a re-retained memory look refreshed,
+		// which is how a stale fact starts ranking above a correct one.
+		const existing = db.prepare("SELECT created_at FROM working_memory WHERE id = ?").get(id) as
+			| { created_at?: number }
+			| undefined;
 		return {
 			id,
 			kind: candidate.kind,
 			text,
 			provenance: candidate.provenance,
-			createdAt,
+			createdAt: existing?.created_at ?? createdAt,
 		};
 	}
 
@@ -183,8 +196,18 @@ export class BankStoreBackend implements MemoryBackend {
 			this.#options.failWith,
 		);
 		const records: MemoryRecord[] = [];
+		const seen = new Set<string>();
 		for (const bank of banks) {
-			records.push(...this.#readBank(bank));
+			for (const record of this.#readBank(bank)) {
+				// A bank file is user-writable and may predate the content-addressed
+				// id, so duplicates are collapsed here as well as prevented on write.
+				// Recalling the same fact three times wastes the budget and reads as
+				// three independent sources supporting one claim.
+				const key = `${record.kind} ${record.text}`;
+				if (seen.has(key)) continue;
+				seen.add(key);
+				records.push(record);
+			}
 		}
 		return rankByRelevance(records, query, query.limit ?? 10);
 	}

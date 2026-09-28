@@ -192,6 +192,53 @@ describe("the backend keeps one project's facts out of another's recall", () => 
 		await storeBeta.stop();
 	});
 
+	it("stores the same fact once however many times it is offered", async () => {
+		const root = await mkdtemp(path.join(tmpdir(), "bank-dedup-"));
+		const store = new BankStoreBackend({ root, cwd: path.join(root, "proj") });
+		const fact = {
+			kind: "decision" as const,
+			text: "The project bank identity is derived from the absolute project path",
+			provenance: { scope: "project" as const },
+		};
+		// The content-addressed id is what makes this hold. An earlier form mixed the
+		// write timestamp into the id, so every attempt produced a new row and the
+		// store accumulated 45 rows holding 17 distinct facts.
+		const first = await store.retain(fact);
+		const second = await store.retain(fact);
+		expect(second.id).toBe(first.id);
+		// Re-retaining must not refresh the timestamp either: a stale fact that looks
+		// newly written starts outranking a correct one.
+		expect(second.createdAt).toBe(first.createdAt);
+		const hits = await store.recall({ text: "project bank identity absolute path" });
+		expect(hits).toHaveLength(1);
+		await store.stop();
+	});
+
+	it("collapses duplicates that predate the content-addressed id", async () => {
+		const root = await mkdtemp(path.join(tmpdir(), "bank-legacy-dup-"));
+		const cwd = path.join(root, "proj");
+		const store = new BankStoreBackend({ root, cwd });
+		await store.retain({ kind: "decision", text: "A durable fact about the rescue bank rule", provenance: { scope: "project" } });
+		await store.stop();
+
+		// A bank file is user-writable and may hold rows written by an older version,
+		// so recall collapses duplicates itself rather than trusting the id alone.
+		const { DatabaseSync } = await import("node:sqlite");
+		const { readdirSync } = await import("node:fs");
+		const bankDir = path.join(root, "banks", readdirSync(path.join(root, "banks"))[0] as string);
+		const db = new DatabaseSync(path.join(bankDir, "bank.db"));
+		db.prepare(
+			"INSERT INTO working_memory (id, content, kind, metadata_json, cwd, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+		).run("legacy-duplicate", "A durable fact about the rescue bank rule", "decision", "{}", cwd, Date.now());
+		db.close();
+
+		const reopened = new BankStoreBackend({ root, cwd });
+		const hits = await reopened.recall({ text: "durable fact rescue bank rule" });
+		// Recalling the same fact twice reads as two sources supporting one claim.
+		expect(hits).toHaveLength(1);
+		await reopened.stop();
+	});
+
 	it("reads back its own record after a fresh handle, proving durability", async () => {
 		const root = await mkdtemp(path.join(tmpdir(), "bank-durable-"));
 		const cwd = path.join(root, "proj");
