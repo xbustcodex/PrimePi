@@ -3124,6 +3124,11 @@ export class InteractiveMode {
 				await this.handleTodoCommand(text.slice("/todo".length).trim());
 				return;
 			}
+			if (text === "/tasks") {
+				this.editor.setText("");
+				this.handleTasksCommand();
+				return;
+			}
 			if (text === "/export" || text.startsWith("/export ")) {
 				await this.handleExportCommand(text);
 				this.editor.setText("");
@@ -5120,6 +5125,23 @@ export class InteractiveMode {
 			this.showStatus("Todo list cleared.");
 		}
 		this.footer.invalidate();
+	}
+
+	/**
+	 * `/tasks` — report live delegation state.
+	 *
+	 * Read from the registry rather than from the transcript, so the answer
+	 * reflects what is actually running now rather than what the log once said.
+	 */
+	private handleTasksCommand(): void {
+		const agents = this.session.taskRunner.list();
+		if (agents.length === 0) {
+			this.showStatus("No delegated tasks in this session.");
+			return;
+		}
+		this.showStatus(
+			agents.map((agent) => `${agent.id}  ${agent.name}  ${agent.state}  depth=${agent.depth}`).join("\n"),
+		);
 	}
 
 	private handleThinkingCommand(searchTerm?: string): void {

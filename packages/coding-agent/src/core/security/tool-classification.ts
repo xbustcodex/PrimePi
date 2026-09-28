@@ -67,6 +67,15 @@ export const BUILT_IN_TOOL_TIERS: Readonly<Record<string, ToolRiskTier>> = Objec
 	// mode. It is deliberately not `exec`: it runs nothing, and an `exec` tier
 	// would make routine progress tracking unusable under a strict approval mode.
 	todo: "write",
+
+	// Delegation.
+	//
+	// `task` is `exec`, matching OMP's own classification. It can start a child
+	// that runs tools, so it can change the world — which means it is gated by
+	// exactly the same authority as `bash`, and is refused by the same Plan Mode
+	// barrier. Being an orchestration tool grants it no exemption: the child's
+	// calls are re-decided by the parent's gate rather than inherited.
+	task: "exec",
 });
 
 /** A tool classification entry, kept as a declaration so policy and tier stay together. */

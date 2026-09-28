@@ -19,6 +19,7 @@ import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
 import { SettingsManager } from "./settings-manager.ts";
 import { time } from "./timings.ts";
 import {
+	type ActiveToolName,
 	createBashTool,
 	createCodingTools,
 	createEditTool,
@@ -29,7 +30,6 @@ import {
 	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
-	type ToolName,
 	withFileMutationQueue,
 } from "./tools/index.ts";
 
@@ -255,7 +255,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		thinkingLevel = clampThinkingLevel(model, thinkingLevel) as ThinkingLevel;
 	}
 
-	const defaultActiveToolNames: ToolName[] = ["read", "bash", "edit", "write"];
+	// `todo` and `task` are session-scoped: they are built from live session state,
+	// so the cwd-only definition path cannot produce them. They still belong in the
+	// default set — a registered but never-active tool is not a capability, and
+	// omitting them here is what kept them invisible to the model. `options.tools`
+	// and `excludeTools` still restrict them, since `allowedToolNames` and
+	// `isAllowedTool` apply after this list.
+	const defaultActiveToolNames: ActiveToolName[] = ["read", "bash", "edit", "write", "todo", "task"];
 	const configuredDefaultToolNames = settingsManager.getDefaultTools();
 	const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
 	const excludedToolNames = options.excludeTools;

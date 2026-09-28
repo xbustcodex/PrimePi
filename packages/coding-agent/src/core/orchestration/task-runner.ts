@@ -79,8 +79,15 @@ export interface ChildGate {
 		toolName: string;
 		args: unknown;
 	}) => Promise<{ block?: boolean; reason?: string } | undefined>;
-	/** Tool names the parent currently has active. The ceiling for any child. */
-	parentTools: readonly string[];
+	/**
+	 * Tool names the parent currently has active. The ceiling for any child.
+	 *
+	 * A getter rather than a value: the session constructs the runner while its
+	 * tool registry is still being assembled, so a value captured then would be
+	 * empty and every child would be granted nothing. Reading at spawn time is
+	 * also the correct semantics — the ceiling is what the parent holds now.
+	 */
+	readonly parentTools: readonly string[];
 }
 
 /** Machine-readable cause of a non-completion. */
@@ -194,6 +201,27 @@ export class TaskRunner {
 			};
 		}
 
+		// The gate decides admission, not just individual tool calls. A child is
+		// something the parent asked for on the model's behalf, so the same
+		// authority that decides a parent's own call also decides whether the
+		// child runs at all — which is what makes delegation incapable of being a
+		// route around approval or the planning barrier.
+		//
+		// Checked before registration, so a denied spawn leaves no record and no
+		// permit, exactly like a budget refusal above.
+		const admission = await this.#options.gate.beforeToolCall({
+			toolName: "task",
+			args: { agent: request.agent, task: request.task },
+		});
+		if (admission?.block) {
+			return {
+				ok: false,
+				state: "rejected",
+				reason: admission.reason ?? "The approval policy refused to delegate this task.",
+				code: "spawns-not-allowed",
+			};
+		}
+
 		// A child may only ever narrow the parent's tools. Computed before
 		// registration so the record shows what was actually granted.
 		const granted = narrowToolNames(this.#options.gate.parentTools, request.tools);
@@ -222,7 +250,6 @@ export class TaskRunner {
 		// normalized here rather than guarded at the call site.
 		const runtimeLimit = request.maxRuntimeMs ?? this.#budgets.maxRuntimeMs;
 		const timer = runtimeLimit > 0 ? setTimeout(() => controller.abort(RUNTIME_TIMEOUT), runtimeLimit) : undefined;
-
 		try {
 			// Model resolution goes through the same chain every role uses, so a
 			// child's request cannot outrank the parent's policy.
@@ -230,7 +257,29 @@ export class TaskRunner {
 				role: request.modelRole,
 				sessionModel: this.#options.getSessionModel(),
 			});
-			if (resolution.model) this.registry.setResolvedModel(ref.id, resolution.model.id);
+			// A host that refused every eligible model must not be second-guessed.
+			// Falling through to a run with no model would either fail opaquely
+			// deeper in, or — worse — a host that silently substituted a paid model
+			// would spend money the policy declined to spend. A rejection ends the
+			// spawn, carrying the reason the model needs in order to try something
+			// else.
+			if (!resolution.model) {
+				controller.abort();
+				this.registry.finish(ref.id, {
+					state: "failed",
+					reason: "preflight-rejected",
+					message: resolution.rejectedReason ?? "No model satisfied the child's eligibility rules.",
+					at: Date.now(),
+				});
+				return {
+					ok: false,
+					id: ref.id,
+					state: "failed",
+					reason: resolution.rejectedReason ?? "No model satisfied the child's eligibility rules.",
+					code: "spawns-not-allowed",
+				};
+			}
+			this.registry.setResolvedModel(ref.id, resolution.model.id);
 
 			const result = await this.#options.run({
 				id: ref.id,

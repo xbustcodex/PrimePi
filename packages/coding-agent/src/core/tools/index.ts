@@ -93,6 +93,15 @@ import { createWriteTool, createWriteToolDefinition, type WriteToolOptions } fro
 export type Tool = AgentTool<any>;
 export type ToolDef = ToolDefinition<any, any>;
 export type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep" | "find" | "ls";
+
+/**
+ * A tool name the session may activate, which is wider than {@link ToolName}.
+ *
+ * `todo` and `task` are session-scoped: they are built from live session state,
+ * so `createAllToolDefinitions` cannot produce them and they are deliberately
+ * absent from `allToolNames`. They are still selectable by name.
+ */
+export type ActiveToolName = ToolName | "todo" | "task";
 export const allToolNames: Set<ToolName> = new Set([
 	"read",
 	"bash",

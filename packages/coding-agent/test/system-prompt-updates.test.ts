@@ -46,7 +46,9 @@ describe("system prompt updates", () => {
 			if (head?.role !== "system") throw new Error("expected system message");
 			expect(head.content).toBe("");
 			expect(Object.keys(head.sections ?? {})).toEqual(["preamble", "tools", "rules", "docs", "cwd"]);
-			expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write"]);
+			// The session-scoped tools are part of the default set, so a session
+			// declares them alongside the cwd tools.
+			expect(head.toolsAdded?.map((tool) => tool.name)).toEqual(["read", "bash", "edit", "write", "todo", "task"]);
 			expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
 		} finally {
 			harness.cleanup();

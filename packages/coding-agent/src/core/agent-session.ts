@@ -129,6 +129,7 @@ import {
 	resolvePlanModelTransition,
 } from "./orchestration/plan-model-transition.ts";
 import { extractWriteTargetPath, planningApprovalDeclaration } from "./orchestration/planning-barrier.ts";
+import { TaskRunner } from "./orchestration/task-runner.js";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
@@ -156,7 +157,8 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
-import { createTodoTool } from "./tools/todo.ts";
+import { createTaskTool, createTaskToolDefinition, type TaskOperations } from "./tools/task.ts";
+import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
 
@@ -343,8 +345,16 @@ export interface SessionStats {
 	contextUsage?: ContextUsage;
 }
 
+/**
+ * One registered tool definition.
+ *
+ * The details parameter is erased to `any` because the registry is a
+ * heterogeneous map keyed by name: a tool declaring a concrete `details` type
+ * has to be storable alongside ones that declare none. Consumers recover the
+ * shape from the tool itself, so nothing is lost.
+ */
 interface ToolDefinitionEntry {
-	definition: ToolDefinition;
+	definition: ToolDefinition<any, any, any>;
 	sourceInfo: SourceInfo;
 }
 
@@ -454,6 +464,13 @@ export class AgentSession {
 	 * state — unenforceable rather than merely intended.
 	 */
 	private _orchestration = new Orchestration();
+	/**
+	 * The delegation engine and its job substrate.
+	 *
+	 * Per session rather than global, so a new session cannot inherit a previous
+	 * one's children and a disposed session's jobs cannot outlive it.
+	 */
+	private _taskRunner?: TaskRunner;
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -615,19 +632,7 @@ export class AgentSession {
 				// here — after the approval decision, before `execute` — is the one
 				// place a secret re-enters the process, and it is scoped to the
 				// in-memory argument object.
-				const approvalOptions = this._approvalOptionsForCall();
-
-				// The planning barrier is an approval decision, evaluated here rather than
-				// inside any tool. That placement is the guarantee: a tool cannot forget to
-				// honour it, and a denial never reaches `execute`, so the underlying write
-				// or process never happens.
-				const barrierDeclaration = this._planningDeclaration(tool, args);
-				const subject = barrierDeclaration
-					? { name: tool.name, approval: barrierDeclaration, formatApprovalDetails: tool.formatApprovalDetails }
-					: tool;
-
-				const result = await decideToolApproval({ tool: subject, args, options: approvalOptions });
-				const blocked = await toBeforeToolCallResult(result);
+				const blocked = await this._decideToolCall(tool, args);
 				if (blocked) return blocked;
 			}
 
@@ -761,6 +766,216 @@ export class AgentSession {
 	}
 
 	/**
+	 * The delegation engine for this session.
+	 *
+	 * Lazy, because it needs the approval gate the constructor installs
+	 * afterwards. The gate is required, so there is no configuration in which a
+	 * child exists without one — which is what stops delegation from becoming a
+	 * route around approval.
+	 */
+	get taskRunner(): TaskRunner {
+		// Captured so the gate getters below read the session rather than the
+		// gate object they are defined on.
+		const session = this;
+		if (!this._taskRunner) {
+			this._taskRunner = new TaskRunner({
+				gate: {
+					// Resolved at spawn time, not captured here. The runner is built
+					// while the tool registry is still being assembled, so a snapshot
+					// taken now would be empty and every child would be granted nothing.
+					// A live read is also the correct semantics: the ceiling is what
+					// the parent holds *now*, and the child's every call still passes
+					// the approval gate.
+					get parentTools(): string[] {
+						return session.getActiveToolNames();
+					},
+					// The parent's own decision, for a child's tool call. Same code path
+					// as the parent's, so the Plan Mode barrier applies identically.
+					beforeToolCall: (input) => this._decideToolCall({ name: input.toolName } as never, input.args),
+				},
+				getSessionModel: () => this.model as never,
+				// Resolution goes through the same chain and eligibility every role
+				// uses, so a child's preferred role cannot reach a model the parent
+				// could not select either.
+				resolveModel: async ({ role }) => {
+					const resolution = resolveRoleChain({
+						role: (role ?? "default") as never,
+						configured: this.settingsManager.getModelRoles(),
+						available: this.modelRuntime.getAvailableSnapshot(),
+						eligibility: {
+							sessionModel: this.model as never,
+							policy: this.settingsManager.getFailoverPolicy(),
+							credentialMissing: (provider) => !this.modelRuntime.hasConfiguredAuth(provider),
+							disabledProviders: this.settingsManager.getDisabledProviders(),
+						},
+					});
+					// An unconfigured role has an empty chain, so it would resolve to
+					// nothing and refuse every child. The session model is the
+					// fallback: a child that names no role inherits what the parent is
+					// already using, which is also the cheapest correct answer.
+					const selected = resolution.candidates[0]?.model ?? this.model;
+					if (!selected) {
+						return { rejectedReason: `No model is available for role "${role ?? "default"}".` };
+					}
+					return { model: selected as never };
+				},
+				redactor: this._secretRedactor,
+				run: (input) => this._runDelegatedChild(input),
+			});
+		}
+		return this._taskRunner;
+	}
+
+	/**
+	 * Runs a child to completion and returns its final text.
+	 *
+	 * A real request loop, not a single turn: a delegated coding child has to be
+	 * able to call a tool and act on the result, which is the entire point of
+	 * handing it a narrowed tool set. The loop is bounded by the child's request
+	 * budget, so a child that keeps calling tools still terminates.
+	 *
+	 * The child's context starts empty and is never the parent's transcript — the
+	 * same rule OMP follows, and the reason `context` is an explicit parameter.
+	 * Anything the child must know is passed in.
+	 *
+	 * Every tool call is re-decided by the parent's own gate, so a child is a way
+	 * of *reaching* approval for work the parent asked for, never a way around it.
+	 */
+	private async _runDelegatedChild(input: {
+		definition: { task: string; context?: string };
+		model?: Model<Api>;
+		tools: readonly string[];
+		signal: AbortSignal;
+		budget: { exhausted: boolean; consume(): boolean };
+		redact: (messages: unknown[]) => unknown[];
+		gate: {
+			beforeToolCall: (input: {
+				toolName: string;
+				args: unknown;
+			}) => Promise<{ block?: boolean; reason?: string } | undefined>;
+		};
+	}): Promise<string> {
+		const systemPrompt = [
+			"You are a delegated subagent handling one task for a parent agent.",
+			input.definition.context ? `Context from the parent:\n${input.definition.context}` : undefined,
+			input.tools.length > 0 ? `Tools available to you: ${input.tools.join(", ")}.` : undefined,
+			"Report the result as plain text once the task is done.",
+		]
+			.filter(Boolean)
+			.join("\n\n");
+
+		const messages: unknown[] = [{ role: "system", content: systemPrompt }];
+		let finalText = "";
+
+		while (!input.signal.aborted) {
+			// The budget is consumed per request, not merely read. Without this a
+			// child that keeps calling tools loops forever against a real provider,
+			// which is the one failure mode a delegation budget exists to prevent.
+			if (!input.budget.consume()) break;
+			// A child always has a model by this point: the runner refuses a spawn
+			// whose resolution was rejected, so an undefined model is unreachable
+			// here and is treated as a hard stop rather than a request with no target.
+			if (!input.model) break;
+			const assistant = (await this.modelRuntime.completeSimple(input.model, input.redact(messages) as never, {
+				signal: input.signal,
+			})) as unknown as {
+				content?: { type: string; text?: string; id?: string; name?: string; arguments?: unknown }[];
+			};
+
+			messages.push(assistant);
+			for (const part of assistant.content ?? []) {
+				if (part.type === "text") finalText += part.text ?? "";
+			}
+
+			const calls = (assistant.content ?? []).filter(
+				(part) => part.type === "toolCall" && typeof part.name === "string",
+			);
+			// A reply with no tool calls is the child's answer.
+			if (calls.length === 0) break;
+
+			for (const call of calls) {
+				const toolName = call.name as string;
+				const args = call.arguments;
+				const decision = await input.gate.beforeToolCall({ toolName, args });
+				// A refusal is reported to the child rather than thrown, so it can
+				// adapt instead of the whole delegation collapsing.
+				const denied = decision?.block;
+				const granted = !denied && input.tools.includes(toolName);
+				if (!granted) {
+					messages.push({
+						role: "toolResult",
+						toolCallId: call.id,
+						isError: true,
+						content: [
+							{
+								type: "text",
+								text: denied
+									? `Refused by policy: ${decision?.reason ?? "not permitted."}`
+									: `Tool ${toolName} is not available to you. Available: ${input.tools.join(", ") || "none"}.`,
+							},
+						],
+					});
+					continue;
+				}
+
+				// The definition comes from the live registry, so a child runs the
+				// same tool the parent would — there is no second, weaker copy that
+				// could drift from the real one.
+				const definition = this.getToolDefinition(toolName);
+				if (!definition) {
+					messages.push({
+						role: "toolResult",
+						toolCallId: call.id,
+						isError: true,
+						content: [{ type: "text", text: `Tool ${toolName} is not available.` }],
+					});
+					continue;
+				}
+				try {
+					const outcome = await definition.execute(
+						call.id as string,
+						args ?? {},
+						input.signal,
+						() => {},
+						{} as never,
+					);
+					messages.push({
+						role: "toolResult",
+						toolCallId: call.id,
+						content: outcome.content,
+					});
+				} catch (error) {
+					// A failing tool is reported to the child, not thrown: a child that
+					// hits a bad path should be able to try another, and the parent's
+					// turn is not the place for a child's stack trace.
+					messages.push({
+						role: "toolResult",
+						toolCallId: call.id,
+						isError: true,
+						content: [
+							{
+								type: "text",
+								text: `${toolName} failed: ${error instanceof Error ? error.message : String(error)}`,
+							},
+						],
+					});
+				}
+			}
+		}
+
+		return finalText.trim();
+	}
+
+	/** What the `task` tool closes over. */
+	private _taskOperations(): TaskOperations {
+		return {
+			runner: this.taskRunner,
+			runChild: (request) => this.taskRunner.run(request),
+			parentTools: () => this.getActiveToolNames(),
+		};
+	}
+
+	/**
 	 * The model captured when plan mode was entered, restored when it is left.
 	 *
 	 * Captured on entry only, so a mid-planning model change by the user is not
@@ -768,7 +983,6 @@ export class AgentSession {
 	 * (`#planModePreviousModelState`, `interactive-mode.ts:3976-3981`).
 	 */
 	private _prePlanModel?: Model<Api>;
-
 	/**
 	 * Applies the plan-role model transition.
 	 *
@@ -879,6 +1093,33 @@ export class AgentSession {
 	 * requiring a decision, which is the correct reading of "nobody is there to
 	 * ask" rather than "yes".
 	 */
+	/**
+	 * Decides whether one tool call may run, applying the approval policy and the
+	 * planning barrier together.
+	 *
+	 * Returned as the loop's blocking result, or undefined to allow. The barrier
+	 * is folded in here rather than inside any tool, so a tool cannot forget to
+	 * honour it and a denial never reaches `execute`.
+	 *
+	 * A delegated child calls this through the gate it is handed, which is why
+	 * delegating cannot become a way around approval.
+	 */
+	private async _decideToolCall(
+		tool: {
+			name: string;
+			approval?: unknown;
+			formatApprovalDetails?: (args: unknown) => string | string[] | undefined;
+		},
+		args: unknown,
+	): Promise<{ block?: boolean; reason?: string } | undefined> {
+		const barrierDeclaration = this._planningDeclaration(tool, args);
+		const subject = barrierDeclaration
+			? { name: tool.name, approval: barrierDeclaration, formatApprovalDetails: tool.formatApprovalDetails }
+			: tool;
+		const result = await decideToolApproval({ tool: subject, args, options: this._approvalOptionsForCall() });
+		return toBeforeToolCallResult(result);
+	}
+
 	private _approvalOptionsForCall(): ApprovalGateOptions {
 		const mode = this.settingsManager.getSetting("tools.approvalMode")?.value;
 		const policies = this.settingsManager.getSetting("tools.approval")?.value;
@@ -1520,9 +1761,21 @@ export class AgentSession {
 			this.abortCompaction();
 			this.abortBranchSummary();
 			this.abortBash();
+			// Delegation first: a child still running at dispose would otherwise keep
+			// writing to a session that is being torn down. The registry cancels
+			// deepest-first so no parent outlives a child.
+			this._taskRunner?.cancelAll("cancelled-by-parent");
 			this.agent.abort();
 		} catch {
-			// Dispose must succeed even if an abort hook throws.
+			// Dispose must succeed even if an abort hook throws. Delegation
+			// teardown is retried outside the guard, since leaving a child running
+			// is worse than any single hook having thrown.
+		}
+
+		try {
+			this._taskRunner?.registry.cancelDescendants(this.taskRunner.parentId, "cancelled-by-parent");
+		} catch {
+			// A registry that is already torn down has nothing left to cancel.
 		}
 
 		this._extensionRunner.invalidate(
@@ -3509,6 +3762,12 @@ export class AgentSession {
 		const excludedToolNames = this._excludedToolNames;
 		const isAllowedTool = (name: string): boolean =>
 			(!allowedToolNames || allowedToolNames.has(name)) && !excludedToolNames?.has(name);
+		// Whether this session's own selection named the tool. Distinct from
+		// `isAllowedTool`: a tool can be permitted yet not requested.
+		const isSelected = (name: string): boolean =>
+			!allowedToolNames && !options?.activeToolNames
+				? true
+				: (options?.activeToolNames ?? previousActiveToolNames).includes(name);
 
 		const registeredTools = this._extensionRunner.getAllRegisteredTools();
 		const allCustomTools = [
@@ -3533,6 +3792,25 @@ export class AgentSession {
 			definitionRegistry.set(tool.definition.name, {
 				definition: tool.definition,
 				sourceInfo: tool.sourceInfo,
+			});
+		}
+		// The session-scoped tools belong in the definition registry as well as the
+		// tool registry. Without this, `getToolDefinition` would return undefined
+		// for them and their prompt snippet would never be declared, even though
+		// the model can call them.
+		if (isAllowedTool("task") && isSelected("task")) {
+			definitionRegistry.set("task", {
+				definition: createTaskToolDefinition(this._taskOperations()),
+				sourceInfo: createSyntheticSourceInfo("<builtin:task>", { source: "builtin" }),
+			});
+		}
+		if (isAllowedTool("todo") && isSelected("todo")) {
+			definitionRegistry.set("todo", {
+				definition: createTodoToolDefinition({
+					get: () => this._orchestration.todo,
+					set: (state) => this._orchestration.setTodo(state),
+				}),
+				sourceInfo: createSyntheticSourceInfo("<builtin:todo>", { source: "builtin" }),
 			});
 		}
 		this._toolDefinitions = definitionRegistry;
@@ -3570,11 +3848,25 @@ export class AgentSession {
 		// `createAllToolDefinitions` path cannot build it. It is deliberately absent
 		// from `allToolNames`, which is the fixed cwd-tool set, and added here instead —
 		// so it still participates in the approval authority and the planning barrier.
-		const todoTool = createTodoTool({
-			get: () => this._orchestration.todo,
-			set: (state) => this._orchestration.setTodo(state),
-		});
-		toolRegistry.set(todoTool.name, todoTool);
+		// `task` is session-scoped for the same reason `todo` is: it reads and writes
+		// this session's delegation state. It is guarded by `isAllowedTool` so it
+		// cannot slip past a `--tools` restriction the way an unguarded
+		// session-scoped tool otherwise would.
+		// A session-scoped tool joins the registry only when the session's own
+		// selection asks for it. An explicit `--tools` or `defaultTools` list is a
+		// complete selection, so adding these unconditionally would silently widen
+		// a selection the user made precise.
+		if (isAllowedTool("task") && isSelected("task")) {
+			const taskTool = createTaskTool(this._taskOperations());
+			toolRegistry.set(taskTool.name, taskTool);
+		}
+		if (isAllowedTool("todo") && isSelected("todo")) {
+			const todoTool = createTodoTool({
+				get: () => this._orchestration.todo,
+				set: (state) => this._orchestration.setTodo(state),
+			});
+			toolRegistry.set(todoTool.name, todoTool);
+		}
 		for (const tool of wrappedExtensionTools as AgentTool[]) {
 			toolRegistry.set(tool.name, tool);
 		}
@@ -3596,6 +3888,11 @@ export class AgentSession {
 			}
 		} else if (!options?.activeToolNames) {
 			for (const toolName of this._toolRegistry.keys()) {
+				// A newly-registered *session-scoped* tool is not activated just
+				// because it appeared. They are part of the session's selection or
+				// they are absent; auto-activating them would re-add a tool a
+				// configured `defaultTools` deliberately left out.
+				if (toolName === "task" || toolName === "todo") continue;
 				if (!previousRegistryNames.has(toolName)) {
 					nextActiveToolNames.push(toolName);
 				}
@@ -3649,9 +3946,15 @@ export class AgentSession {
 		this._bindExtensionCore(this._extensionRunner);
 		this._applyExtensionBindings(this._extensionRunner);
 
+		// The session-scoped tools belong in the default set. They are registered
+		// separately because the cwd-only definition path cannot build them, so
+		// listing the cwd defaults alone would leave `todo` and `task` registered
+		// but unreachable — the model would never see them, and a tool nobody can
+		// call is not a capability. `isAllowedTool` still filters both, so an
+		// explicit `--tools` restriction is honoured.
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
-			: ["read", "bash", "edit", "write"];
+			: ["read", "bash", "edit", "write", "todo", "task"];
 		const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
 		this._refreshToolRegistry({
 			activeToolNames: baseActiveToolNames,
