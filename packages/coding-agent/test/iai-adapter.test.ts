@@ -17,10 +17,12 @@ const MISSING_PYTHON = "definitely-not-a-python-interpreter";
 describe("the IAI backend sits after every OMP backend", () => {
 	it("appears in the selector without displacing the reference order", () => {
 		const ids = memoryBackendDescriptors().map((entry) => entry.id);
-		// The reference's five keep their positions; the extension is last, so a
-		// user who has learned the list still selects by position.
+		// The reference's five keep their positions, and the PrimePi extensions are
+		// appended after them, so a user who has learned the list still selects by
+		// position. `local-store` precedes `iai-personal` because it is the backend
+		// whose behaviour is actually verified; see PD-9.
 		expect(ids.slice(0, 5)).toEqual(["off", "local", "hindsight", "mnemopi", "sharpshooter"]);
-		expect(ids[5]).toBe("iai-personal");
+		expect(ids.slice(5)).toEqual(["local-store", "iai-personal"]);
 	});
 
 	it("leaves Off first, and Off still runs nothing", () => {

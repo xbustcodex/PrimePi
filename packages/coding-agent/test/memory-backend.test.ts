@@ -58,7 +58,7 @@ describe("the OMP backend selector is preserved", () => {
 		expect(descriptorFor("hindsight")?.description).toBe("Vectorize Hindsight remote memory service");
 	});
 
-	it("appends a PrimePi backend after every OMP entry", () => {
+	it("appends a registered backend after every other entry", () => {
 		registerPrimePiBackend({
 			id: "iai-personal",
 			label: "IAI Personal",
@@ -66,9 +66,10 @@ describe("the OMP backend selector is preserved", () => {
 			create: () => ({ unavailable: "adapter not yet built" }),
 		});
 		const ids = memoryBackendDescriptors().map((entry) => entry.id);
-		// The OMP five keep their positions; the addition is visibly last.
+		// The OMP five keep their positions, and a registration is appended rather
+		// than inserted, so a user who has learned the list still selects by position.
 		expect(ids.slice(0, 5)).toEqual(["off", "local", "hindsight", "mnemopi", "sharpshooter"]);
-		expect(ids[5]).toBe("iai-personal");
+		expect(ids.at(-1)).toBe("iai-personal");
 	});
 });
 
