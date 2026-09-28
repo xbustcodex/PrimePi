@@ -169,3 +169,58 @@ more would not be evidence.
 small task that requires a tool call, confirm the child's result reaches the
 parent, then repeat with `isolated: true` against a scratch repository and
 confirm the parent checkout is unchanged and `/tasks` reports the child.
+
+## PD-7: the Git surface is proven at the module and build layers, not through an interactive commit
+
+**Status:** manual verification required. Not an implementation failure.
+
+**What is proven mechanically** (`vcs-git-service.test.ts`,
+`vcs-checkpoint-commit.test.ts`, `git-authority-adversarial.test.ts`, and a
+script run against `packages/coding-agent/dist/`), against real temporary
+repositories rather than mocks:
+
+- **Discovery is fenced.** A repository whose root lies above the project
+  boundary is refused, which OMP cannot express at all — its walk runs to the
+  filesystem root (`crates/pi-vcs/src/git/mod.rs:170-172`).
+- **Status, diff, staged diff and fingerprint do not mutate.** Proven by
+  comparing the repository's state before and after three reads.
+- **A worktree and its parent are distinguishable**, and a parent's file is
+  provably unchanged by an edit made in its worktree.
+- **A checkpoint creates nothing** — no index entry, no commit, no stash — and a
+  restore touches only the paths the checkpoint recorded.
+- **A restore is refused when unrelated work changed since**, and forcing it
+  still does not widen the blast radius: the user's unrelated file survives.
+- **A checkpoint cannot restore in another worktree or another repository.**
+- **A commit contains only the named paths**; a pre-existing unrelated edit and
+  an untracked file are both provably excluded.
+- **Plan Mode refuses `git_stage`, `git_commit` and `checkpoint` through the
+  approval resolver**, so a `yolo` mode cannot undo it, while `git_inspect`
+  stays permitted. This is the gap OMP has: its plan-mode git prohibition is
+  prompt text that `bash` never consults
+  (`prompts/system/plan-mode-active.md:3`).
+- **A refused approval, a failed validation, and an unavailable commit message
+  each produce zero commits**, and the work remains recoverable in the tree.
+- **Diff content is labelled as repository data**, and a diff line reading as a
+  directive changes nothing.
+- **There is no push, fetch, or clone anywhere in the VCS subsystem**, asserted
+  against the sources rather than assumed.
+
+**What is not proven:** the commit-message generator is exercised through an
+injected `MessageGenerator`, not a real provider turn. The free-only behaviour
+is proven at the pipeline boundary — a chain that yields no eligible model
+produces `message-unavailable` and no commit — but the session-side
+`resolveRoleChain` call that decides eligibility has not been observed end to
+end under a real free-only configuration. The interactive approval dialog, the
+`git_commit` plan rendering, and the review surface are also unexercised; the
+tests assert on outcomes, not on what a person saw.
+
+**Why it is not unit-tested:** a real turn requires provider credentials, and the
+existing suite has 28 files that fail for exactly that reason. Adding one more
+would not be evidence.
+
+**How to close it:** in an authenticated session, ask the agent to commit one
+named file in a scratch repository, confirm the approval dialog shows exactly
+that file and nothing else, and confirm HEAD contains only it. Then repeat with
+`generateMessage: true` and confirm the generated message is presented as a
+draft. Finally, enter Plan Mode and confirm a commit attempt is refused before
+the repository changes, while `git_inspect` still works.

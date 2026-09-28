@@ -101,7 +101,7 @@ export type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep
  * so `createAllToolDefinitions` cannot produce them and they are deliberately
  * absent from `allToolNames`. They are still selectable by name.
  */
-export type ActiveToolName = ToolName | "todo" | "task";
+export type ActiveToolName = ToolName | "todo" | "task" | "git_inspect" | "git_stage" | "git_commit" | "checkpoint";
 export const allToolNames: Set<ToolName> = new Set([
 	"read",
 	"bash",

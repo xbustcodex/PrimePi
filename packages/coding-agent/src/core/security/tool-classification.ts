@@ -76,6 +76,38 @@ export const BUILT_IN_TOOL_TIERS: Readonly<Record<string, ToolRiskTier>> = Objec
 	// barrier. Being an orchestration tool grants it no exemption: the child's
 	// calls are re-decided by the parent's gate rather than inherited.
 	task: "exec",
+
+	// Version control.
+	//
+	// These tiers are the point of the surface. OMP has no git tool at all, so
+	// every git operation arrives through an unconstrained `bash` whose
+	// `CRITICAL_BASH_PATTERNS` list has zero git entries — `git push --force`,
+	// `git reset --hard` and `git config --global` are all unremarkable there
+	// (`oh-my-pi/packages/coding-agent/src/tools/bash.ts:188-222`). The split
+	// below is what a typed surface buys: reading is `read` and therefore
+	// permitted while planning, because planning needs to see the diff; and
+	// every mutation is `write` or `exec`, so the Phase 3 approval decision and
+	// the planning barrier apply before `execute` is reached.
+	//
+	// `git_inspect` is `read` rather than `exec` because it cannot mutate: it is
+	// a status, a diff, or a log. A tool that cannot change the world should not
+	// be gated like one that can.
+	git_inspect: "read",
+	// `git_stage` moves content between the working tree and the index. It changes
+	// no file, but it is the step that decides what a commit will contain, and
+	// under a `write` mode ceiling a strict session would admit it while refusing
+	// `bash` — which could make the same commit by another route. It is therefore
+	// `exec`: the tier of the process execution that could equally be used to
+	// stage.
+	git_stage: "exec",
+	// `git_commit` writes permanent history that is expensive to remove.
+	git_commit: "exec",
+	// `checkpoint` creates, lists and forgets records without touching the
+	// repository, but `restore` overwrites working-tree content. It is therefore
+	// `write` for the whole tool: the restore case is the one that matters, and
+	// splitting the tier per operation would let the dangerous half be reached
+	// through the safe half's classification.
+	checkpoint: "write",
 });
 
 /** A tool classification entry, kept as a declaration so policy and tier stay together. */

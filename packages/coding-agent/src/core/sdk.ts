@@ -261,7 +261,18 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	// omitting them here is what kept them invisible to the model. `options.tools`
 	// and `excludeTools` still restrict them, since `allowedToolNames` and
 	// `isAllowedTool` apply after this list.
-	const defaultActiveToolNames: ActiveToolName[] = ["read", "bash", "edit", "write", "todo", "task"];
+	const defaultActiveToolNames: ActiveToolName[] = [
+		"read",
+		"bash",
+		"edit",
+		"write",
+		"todo",
+		"task",
+		"git_inspect",
+		"git_stage",
+		"git_commit",
+		"checkpoint",
+	];
 	const configuredDefaultToolNames = settingsManager.getDefaultTools();
 	const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
 	const excludedToolNames = options.excludeTools;
