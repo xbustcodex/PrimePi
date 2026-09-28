@@ -149,6 +149,19 @@ export class JobManager {
 		};
 	}
 
+	/**
+	 * Awaits a job's terminal state by id.
+	 *
+	 * Resolves undefined for an unknown id rather than rejecting, so a caller
+	 * polling after a restart gets "no such job" instead of an exception. This is
+	 * the retrieval path the `task` tool uses, which is why it takes an id rather
+	 * than requiring a live handle.
+	 */
+	async waitById(id: string): Promise<JobState | undefined> {
+		const settled = this.#settled.get(id);
+		return settled ? settled : undefined;
+	}
+
 	/** A snapshot of one job, or undefined when unknown. */
 	status(id: string): JobRecord | undefined {
 		const record = this.#jobs.get(id);

@@ -5130,18 +5130,25 @@ export class InteractiveMode {
 	/**
 	 * `/tasks` — report live delegation state.
 	 *
-	 * Read from the registry rather than from the transcript, so the answer
-	 * reflects what is actually running now rather than what the log once said.
+	 * Read from the registry and the job manager rather than from the transcript,
+	 * so the answer reflects what is actually running now — including a background
+	 * child that outlived the turn which started it.
 	 */
 	private handleTasksCommand(): void {
 		const agents = this.session.taskRunner.list();
-		if (agents.length === 0) {
+		const jobs = this.session.taskJobs.list();
+		if (agents.length === 0 && jobs.length === 0) {
 			this.showStatus("No delegated tasks in this session.");
 			return;
 		}
-		this.showStatus(
-			agents.map((agent) => `${agent.id}  ${agent.name}  ${agent.state}  depth=${agent.depth}`).join("\n"),
-		);
+		const lines: string[] = [];
+		for (const agent of agents) {
+			lines.push(`${agent.id}  ${agent.name}  ${agent.state}  depth=${agent.depth}`);
+		}
+		for (const job of jobs) {
+			lines.push(`${job.id}  ${job.label}  ${job.state}`);
+		}
+		this.showStatus(lines.join("\n"));
 	}
 
 	private handleThinkingCommand(searchTerm?: string): void {

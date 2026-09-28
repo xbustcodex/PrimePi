@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { JobManager } from "../src/core/orchestration/job-manager.ts";
 import { TaskRunner, type TaskRunRequest } from "../src/core/orchestration/task-runner.ts";
 import { createTaskTool, type TaskOperations } from "../src/core/tools/task.ts";
 
@@ -22,6 +23,7 @@ const FREE = model("vendor/free-1", { cost: { input: 0, output: 0, cacheRead: 0,
 interface Harness {
 	ops: TaskOperations;
 	runner: TaskRunner;
+	jobs: JobManager;
 	/** Every call the host received, in order. */
 	calls: { request: TaskRunRequest; tools: readonly string[]; model?: Model<Api> }[];
 	/** Names the parent holds. */
@@ -59,8 +61,16 @@ function harness(
 		},
 	});
 
+	const jobs = new JobManager();
 	const ops: TaskOperations = {
 		runner,
+		jobs: {
+			list: () => jobs.list(),
+			status: (id) => jobs.status(id),
+			wait: async (id) => ((await jobs.waitById(id)) === undefined ? undefined : (jobs.status(id)?.result ?? "")),
+			cancel: (id) => jobs.cancel(id),
+			start: (label, run) => jobs.start(label, run),
+		},
 		runChild: (request) => runner.run(request),
 		parentTools: () => parentTools,
 	};
@@ -68,6 +78,7 @@ function harness(
 	return {
 		ops,
 		runner,
+		jobs,
 		calls,
 		parentTools,
 		cleanup: () => rmSync(cwd, { recursive: true, force: true }),
@@ -138,6 +149,75 @@ describe("delegation through the task tool", () => {
 			const out = await call(h, { op: "run", agent: "coder", task: "t" });
 			expect(out.content[0].text).toMatch(/not started|denied|gate/i);
 			expect(h.calls).toHaveLength(0);
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it("returns a job id for a background task and collects it on wait", async () => {
+		const h = harness();
+		try {
+			const started = await call(h, { op: "run", agent: "coder", task: "long job", background: true });
+			const jobId = /job `([^`]+)`/.exec(started.content[0].text)?.[1];
+			expect(jobId).toBeTruthy();
+
+			// The same tool both starts and collects, so the model needs only one
+			// verb set to manage background work.
+			const collected = await call(h, { op: "wait", jobId });
+			expect(collected.content[0].text).toBe("done: long job");
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it("cancels a running background job", async () => {
+		// A job that resolves instantly could never be caught mid-flight, so the
+		// assertion is on a job whose work never cooperates.
+		const jobs = new JobManager();
+		const started = jobs.start("coder", () => new Promise<string>(() => {}));
+		expect(jobs.runningCount).toBe(1);
+		expect(jobs.cancel(started.id)).toBe(true);
+		// Settled even though the work ignored its signal, so a caller awaiting a
+		// result is never stranded on a job that will not stop.
+		expect(jobs.status(started.id)?.state).toBe("cancelled");
+		expect(jobs.runningCount).toBe(0);
+	});
+
+	it("reports a background task that never started as a refusal", async () => {
+		const h = harness();
+		try {
+			// Without a `task` there is nothing to delegate, and the model is told
+			// so rather than handed a job id that will never resolve.
+			const out = await call(h, { op: "run", agent: "coder", background: true });
+			expect(out.content[0].text).toMatch(/needs a `task`/i);
+			expect(h.jobs.list()).toHaveLength(0);
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it("delivers a policy refusal as the job result rather than throwing", async () => {
+		const h = harness({ deny: () => true });
+		try {
+			const started = await call(h, { op: "run", agent: "coder", task: "t", background: true });
+			const jobId = /job `([^`]+)`/.exec(started.content[0].text)?.[1] ?? "";
+			const collected = await call(h, { op: "wait", jobId });
+			// A refusal is a legitimate outcome to report, not an exception: the
+			// model needs to know the task did not run, and why.
+			expect(collected.content[0].text).toMatch(/not started/i);
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it("lists jobs and reports status for inspection", async () => {
+		const h = harness();
+		try {
+			await call(h, { op: "run", agent: "coder", task: "t" });
+			const jobs = await call(h, { op: "jobs" });
+			expect(jobs.content[0].text).toMatch(/no background jobs/i);
+			const status = await call(h, { op: "status" });
+			expect(status.content[0].text).toMatch(/no job id given/i);
 		} finally {
 			h.cleanup();
 		}

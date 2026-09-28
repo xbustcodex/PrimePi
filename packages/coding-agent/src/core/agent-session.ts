@@ -157,6 +157,7 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
+import { JobManager } from "./orchestration/job-manager.js";
 import { createTaskTool, createTaskToolDefinition, type TaskOperations } from "./tools/task.ts";
 import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -471,6 +472,13 @@ export class AgentSession {
 	 * one's children and a disposed session's jobs cannot outlive it.
 	 */
 	private _taskRunner?: TaskRunner;
+	/**
+	 * Background jobs for this session.
+	 *
+	 * Per session rather than global, so a new session cannot inherit a previous
+	 * one's children and a disposed session's jobs cannot outlive it.
+	 */
+	private _taskJobs?: JobManager;
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -826,6 +834,12 @@ export class AgentSession {
 		return this._taskRunner;
 	}
 
+	/** Background jobs for this session. */
+	get taskJobs(): JobManager {
+		if (!this._taskJobs) this._taskJobs = new JobManager();
+		return this._taskJobs;
+	}
+
 	/**
 	 * Runs a child to completion and returns its final text.
 	 *
@@ -970,6 +984,16 @@ export class AgentSession {
 	private _taskOperations(): TaskOperations {
 		return {
 			runner: this.taskRunner,
+			jobs: {
+				list: () => this.taskJobs.list(),
+				status: (id) => this.taskJobs.status(id),
+				// Resolves the result text, or undefined for an unknown id, so a poll
+				// after a restart gets "no such job" rather than an exception.
+				wait: async (id) =>
+					(await this.taskJobs.waitById(id)) === undefined ? undefined : (this.taskJobs.status(id)?.result ?? ""),
+				cancel: (id) => this.taskJobs.cancel(id),
+				start: (label, run) => this.taskJobs.start(label, run),
+			},
 			runChild: (request) => this.taskRunner.run(request),
 			parentTools: () => this.getActiveToolNames(),
 		};
@@ -1761,9 +1785,10 @@ export class AgentSession {
 			this.abortCompaction();
 			this.abortBranchSummary();
 			this.abortBash();
-			// Delegation first: a child still running at dispose would otherwise keep
-			// writing to a session that is being torn down. The registry cancels
-			// deepest-first so no parent outlives a child.
+			// Delegation first: a child or job still running at dispose would
+			// otherwise keep writing to a session that is being torn down. The
+			// registry cancels deepest-first so no parent outlives a child.
+			this._taskJobs?.cancelAll("Session was disposed.");
 			this._taskRunner?.cancelAll("cancelled-by-parent");
 			this.agent.abort();
 		} catch {

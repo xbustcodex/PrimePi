@@ -58,6 +58,14 @@ export interface TaskRunRequest {
 	modelRole?: string;
 	/** Wall-clock override for this child only. */
 	maxRuntimeMs?: number;
+	/**
+	 * Run without awaiting completion.
+	 *
+	 * The tool returns a job id either way; this records which of the two paths
+	 * the caller is on, so a record recovered after a restart can tell a
+	 * background child from a foreground one.
+	 */
+	background?: boolean;
 }
 
 /**
