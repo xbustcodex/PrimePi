@@ -224,3 +224,50 @@ that file and nothing else, and confirm HEAD contains only it. Then repeat with
 `generateMessage: true` and confirm the generated message is presented as a
 draft. Finally, enter Plan Mode and confirm a commit attempt is refused before
 the repository changes, while `git_inspect` still works.
+
+## PD-8: provider usability is proven against a stubbed runtime, not a live provider account
+
+**Status:** manual verification required. Not an implementation failure.
+
+**What is proven mechanically** (`provider-usability-authority.test.ts` and a
+33-assertion script run against `packages/coding-agent/dist/`):
+
+- A disabled provider disappears from the available snapshot, is unreachable by
+  literal lookup, issues no credential even when one exists in the environment,
+  and is refused by `getApiKeyAndHeaders` and `hasConfiguredAuth`.
+- A **credential-free or free** model on a disabled provider is still disabled —
+  the case a "does it need auth" filter lets through.
+- `paid`, `free`, `login`, `local` and `unknown` access classifications do not
+  weaken the rule.
+- Automatic failover does not select a disabled provider, and disabling one
+  provider leaves another's models resolvable.
+- Plan Mode refuses to restore a model whose provider was disabled while plan
+  mode was active, and still restores one whose provider is still enabled.
+- A session's recorded model is not restored when its provider is disabled.
+- Re-enabling a provider restores eligibility on the same runtime instance, with
+  no restart.
+- Disabling is ranked above every other refusal reason, so a disabled provider is
+  never reported as merely unreachable — "turn it off" and "log in" are different
+  user actions.
+
+**What is not proven:** the runtime in both is driven with a stub or a
+ network-free `ModelRuntime` constructed from a bundled catalog. A real
+ authenticated session with `disabledProviders` set is not exercised, so the
+ end-to-end path — a settings UI toggle, a live catalog refresh landing while the
+ provider is disabled, and a real turn refusing to route to it — is unobserved.
+ The `setDisabledProvidersReader` call is additionally guarded by a
+ `typeof` check, because the runtime is an injected dependency; a host supplying
+ a pre-authority double therefore loses re-enable without a startup error, which
+ is intended but untested against such a host.
+
+**Why it is not unit-tested:** a real turn requires provider credentials, and the
+existing suite has 28 files that fail for exactly that reason. Adding one more
+would not be evidence.
+
+**How to close it:** in an authenticated session with two providers configured,
+disable one through Settings, then run a turn and confirm (a) it never routes to
+ the disabled provider, including on a model failure where failover would
+ normally switch providers, (b) the model picker does not list its models, and
+ (c) re-enabling it restores both without restarting the session. Repeat with the
+ disabled provider holding a free model, which is the case the credential-free
+ clause used to let through.
