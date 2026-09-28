@@ -595,3 +595,68 @@ export const warnings = registerSetting({
 	parse: () => "",
 	ui: { label: "Warnings", description: "Enable or disable individual warnings", order: 4, control: "submenu" },
 });
+
+/**
+ * The Memory tab, transcribed from the OMP reference.
+ *
+ * `memory.backend` is the selector the panel opens; its option list and
+ * descriptions live in `core/memory/registry.ts`, which keeps the OMP ordering
+ * in one place. The remaining rows carry `unavailable`, because their runtimes
+ * are not migrated: they render as disabled markers at their reference
+ * locations and activate in place when the runtime lands.
+ */
+export const memoryBackend = registerSetting({
+	key: "memory.backend",
+	type: "enum",
+	default: "off",
+	values: ["off", "local", "hindsight", "mnemopi", "sharpshooter"],
+	parse: (raw) => (typeof raw === "string" ? raw : undefined),
+	ui: {
+		label: "Memory Backend",
+		description: "Off, local summary pipeline, Mnemopi SQLite, Hindsight remote memory, or Sharpshooter",
+		tab: "memory",
+		group: "General",
+		control: "submenu",
+	},
+});
+
+export const autolearnEnabled = registerSetting({
+	key: "autolearn.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Auto-Learn (experimental)",
+		description: "Capture durable engineering experience at stop",
+		tab: "memory",
+		group: "Auto-Learn",
+		control: "cycle",
+		unavailable: "Auto-Learn runtime is not migrated into PrimePi",
+	},
+});
+
+export const autolearnAutoContinue = registerSetting({
+	key: "autolearn.autoContinue",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Auto-run capture at stop",
+		tab: "memory",
+		group: "Auto-Learn",
+		control: "cycle",
+		unavailable: "Depends on the Auto-Learn runtime",
+	},
+});
+
+export const sharpshooterModel = registerSetting({
+	key: "sharpshooter.model",
+	type: "string",
+	default: "",
+	ui: {
+		label: "Sharpshooter Model",
+		description: "Model selector for extraction/consolidation, empty = smol role",
+		tab: "memory",
+		group: "Sharpshooter",
+		control: "submenu",
+		unavailable: "Sharpshooter extraction/consolidation runtime is not migrated into PrimePi",
+	},
+});

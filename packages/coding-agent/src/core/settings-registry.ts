@@ -58,6 +58,27 @@ export interface SettingUiSpec {
 	 * for any future surface that does not need capability conditions.
 	 */
 	order?: number;
+	/**
+	 * Which Settings tab the row belongs in, and which section within it.
+	 *
+	 * These mirror the OMP panel's structure and are read by the tabbed surface
+	 * rather than by a second settings store, so the panel is a projection of this
+	 * registry rather than a copy of it. A setting with no `tab` is
+	 * config-file only and does not appear in the tabbed panel.
+	 */
+	tab?: string;
+	/** Section heading within the tab. Must be one the tab's group list declares. */
+	group?: string;
+	/**
+	 * Why this row cannot currently be used.
+	 *
+	 * Set for a setting whose subsystem is not migrated. The row renders as a
+	 * disabled marker at its OMP location, and a later wave activates it in
+	 * place rather than moving it.
+	 */
+	unavailable?: string;
+	/** Marks a setting PrimePi has and the reference does not. */
+	piSpecific?: boolean;
 }
 
 export interface SettingDescriptor<T extends SettingValue = SettingValue> {
