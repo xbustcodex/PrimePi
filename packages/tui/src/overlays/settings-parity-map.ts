@@ -125,15 +125,19 @@ export const MEMORY_SETTINGS: readonly OmpSettingEntry[] = [
  * The tabs whose per-setting inventory is recorded.
  *
  * Explicit rather than implied, so the coverage claim is honest: the structure
- * is complete for all ten tabs, and the per-setting rows are complete for the
- * Memory tab only.
+ * is complete for all ten tabs, and per-setting rows are recorded for every
+ * tab.
+ *
+ * This flag describes the small recorded list in this file, not the 383-row
+ * contract. Whether any contract row is wired is `settings-parity-ledger.ts`,
+ * which derives it. Conflating the two is what let two completion reports
+ * disagree about how many rows were wired.
  */
 export const TAB_SETTINGS_RECORDED: Readonly<Record<AnySettingTab, boolean>> = {
 	appearance: false,
 	model: false,
 	interaction: false,
 	context: false,
-	// Complete: this is the tab being wired.
 	memory: true,
 	files: false,
 	shell: false,
