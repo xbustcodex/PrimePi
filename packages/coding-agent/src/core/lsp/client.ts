@@ -243,6 +243,18 @@ export class LspClient {
 	}
 
 	/**
+	 * Preloads the capabilities a server reported at initialize.
+	 *
+	 * A test needs a client that believes a server supports a capability, without
+	 * completing a handshake against a real process. Operations gate on the
+	 * advertised set, so without this every gated test would exercise the refusal
+	 * path instead of the operation.
+	 */
+	__setCapabilities(capabilities: Record<string, unknown>): void {
+		this.#capabilities = capabilities as ServerCapabilities;
+	}
+
+	/**
 	 * Spawns the server and completes the initialize handshake.
 	 *
 	 * The sequence is `initialize` → response → `initialized` notification, and

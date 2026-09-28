@@ -401,10 +401,46 @@ export class TestTransport extends LspTransport {
 		return this.#sent;
 	}
 
+	/**
+	 * Answers requests by method, for a scripted server.
+	 *
+	 * The responder runs instead of a real process, so an operations test can
+	 * assert on result handling — every shape the protocol permits — without a
+	 * language server being installed.
+	 */
+	set responder(fn: (method: string, params: unknown) => unknown) {
+		this.#responder = fn;
+	}
+
+	get responder(): ((method: string, params: unknown) => unknown) | undefined {
+		return this.#responder;
+	}
+
+	#responder: ((method: string, params: unknown) => unknown) | undefined;
+
 	/** Delivers a server-originated message. */
 	deliver(message: JsonRpcMessage): void {
 		this.receive(Buffer.from(JSON.stringify(message), "utf8"));
 	}
+
+	/**
+	 * Delivers a scripted response for the request the client last issued.
+	 *
+	 * The scripted path is a whole request/response exchange driven from the test,
+	 * which is what lets result handling be exercised without a server installed.
+	 */
+	async answerNext(method: string, params: unknown): Promise<void> {
+		const issued = this.#sent.find(
+			(message) => message.method === method && typeof message.id === "number" && !this.#answered.has(message.id),
+		);
+		if (!issued) throw new Error(`TestTransport: no pending request for ${method}`);
+		const id = issued.id as number;
+		this.#answered.add(id);
+		void params;
+		this.deliverFramed({ jsonrpc: "2.0", id, result: this.responder?.(method, params) ?? null });
+	}
+
+	readonly #answered = new Set<number>();
 
 	/** Delivers raw bytes, for framing tests. */
 	deliverRaw(chunk: Buffer | string): void {
