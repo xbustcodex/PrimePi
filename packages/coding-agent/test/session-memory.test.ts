@@ -2,6 +2,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
+import { resetPrimePiBackendConfig } from "../src/core/memory/registry.ts";
 import { backendEvidence, localStorePath, RECALL_SCOPES, SessionMemory } from "../src/core/memory/session.ts";
 
 /**
@@ -81,6 +82,7 @@ describe("a live-verified backend reports itself accurately", () => {
 	it("says storage has been exercised, and does", async () => {
 		const memory = await SessionMemory.create({ backendId: "local-store", agentDir: root, project: "new_ai" });
 		const status = memory.status;
+
 		expect(status.backendId).toBe("local-store");
 		expect(status.inert).toBe(false);
 		expect(status.summary).toContain("live verified");
@@ -123,5 +125,24 @@ describe("scope and path helpers", () => {
 
 	it("places local storage under the agent directory", () => {
 		expect(localStorePath("C:/agent")).toBe(path.join("C:/agent", "memory"));
+	});
+});
+
+describe("unconfigured local storage does not write into the working directory", () => {
+	it("refuses to write into the working directory when unconfigured", async () => {
+		// Configuration is process-wide, so this test clears it rather than assuming
+		// no earlier test configured a path. Order independence is worth the explicit
+		// reset: a test that only passes first is not a test.
+		resetPrimePiBackendConfig();
+		// A memory subsystem that falls back to `process.cwd()` will eventually write
+		// into a repository and commit a memory store nobody asked for. It reports
+		// itself unavailable instead.
+		const memory = await SessionMemory.create({ backendId: "local-store", project: "new_ai" });
+		expect(memory.status.available).toBe(false);
+		expect(memory.status.reason).toContain("agent directory");
+		// And it still answers, rather than throwing.
+		const context = await memory.contextFor({ text: "anything" });
+		expect(context.block).toBe("");
+		await memory.stop();
 	});
 });

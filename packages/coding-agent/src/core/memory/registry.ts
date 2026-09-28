@@ -196,11 +196,20 @@ const PRIMEPI_DESCRIPTORS: MemoryBackendDescriptor[] = [
 		id: "local-store",
 		label: "Local Store",
 		description: "Persistent local memory store, one file per project",
-		create: () =>
-			new LocalStoreBackend({
-				root: primePiOptions?.localStore?.root ?? path.join(primePiOptions?.agentDir ?? process.cwd(), "memory"),
+		// Unconfigured, the store reports itself unavailable rather than falling back
+		// to `process.cwd()`. A memory subsystem that silently writes into whatever
+		// directory the agent happened to be launched from will, eventually, write
+		// into a repository - and then commit a memory store nobody asked for.
+		create: () => {
+			const root =
+				primePiOptions?.localStore?.root ??
+				(primePiOptions?.agentDir ? path.join(primePiOptions.agentDir, "memory") : undefined);
+			if (!root) return { unavailable: "no agent directory configured for local storage" };
+			return new LocalStoreBackend({
+				root,
 				...(primePiOptions?.localStore?.project ? { project: primePiOptions.localStore.project } : {}),
-			}),
+			});
+		},
 	},
 	{
 		id: "iai-personal",
@@ -235,13 +244,29 @@ export function configurePrimePiBackends(options: {
 	// supplying `agentDir` while startup already configured the IAI engine - must
 	// not silently discard each other's settings, because the visible symptom is a
 	// backend that stopped finding its own files.
+	//
+	// Absent keys leave the existing value alone; there is a separate call to
+	// clear. A merge that also cleared on `undefined` would make it impossible to
+	// set one field without silently unsetting another.
 	primePiOptions = {
 		...primePiOptions,
-		...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
+		...(options.iai ? { iai: options.iai } : {}),
+		...(options.agentDir ? { agentDir: options.agentDir } : {}),
 		localStore: options.localStore
 			? { ...primePiOptions?.localStore, ...options.localStore }
 			: primePiOptions?.localStore,
 	} as typeof primePiOptions;
+}
+
+/**
+ * Clears the configuration.
+ *
+ * Exists so a test can assert what an unconfigured session does without
+ * depending on running first, and so a caller that genuinely wants no local
+ * storage can say so instead of passing an empty string.
+ */
+export function resetPrimePiBackendConfig(): void {
+	primePiOptions = undefined;
 }
 
 /** The full selector: OMP's five in order, then any PrimePi additions. */
