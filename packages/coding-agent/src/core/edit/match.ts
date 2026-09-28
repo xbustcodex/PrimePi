@@ -213,7 +213,7 @@ function characterRatio(a: string, b: string): number {
 
 /** Relative indentation depth per line, so a reindented block still matches. */
 function relativeIndentDepths(lines: readonly string[]): number[] {
-	const indents = lines.map((line) => (line.match(/^[ \t]*/)?.[0].length ?? 0));
+	const indents = lines.map((line) => line.match(/^[ \t]*/)?.[0].length ?? 0);
 	const nonEmpty = lines
 		.map((line, index) => (line.trim().length > 0 ? indents[index] : undefined))
 		.filter((value): value is number => value !== undefined);
@@ -359,10 +359,12 @@ export function findMatch(content: string, target: string, options: FindMatchOpt
 	const contentWithDepth = contentLines.map((line, index) => normalizeLine(line, contentDepths[index]));
 	const targetWithDepth = targetLines.map((line, index) => normalizeLine(line, targetDepths[index]));
 
-	const loose = searchScored(contentLines.map((line) => normalizeLine(line, undefined)), targetLines.map((line) => normalizeLine(line, undefined)), threshold);
-	const strict = loose.best
-		? searchScored(contentWithDepth, targetWithDepth, threshold)
-		: loose;
+	const loose = searchScored(
+		contentLines.map((line) => normalizeLine(line, undefined)),
+		targetLines.map((line) => normalizeLine(line, undefined)),
+		threshold,
+	);
+	const strict = loose.best ? searchScored(contentWithDepth, targetWithDepth, threshold) : loose;
 	const chosen = strict.aboveThreshold >= loose.aboveThreshold ? strict : loose;
 
 	// When nothing cleared the threshold, search again with no floor so the failure
@@ -395,10 +397,7 @@ export function findMatch(content: string, target: string, options: FindMatchOpt
 	// in absolute terms and clearly ahead of the runner-up. Anything else is a
 	// refusal that names the candidates, because a coin-flip between two
 	// plausible windows is exactly the case that corrupts a file silently.
-	if (
-		closest.confidence >= DOMINANT_MIN_CONFIDENCE &&
-		closest.confidence - chosen.secondBest >= DOMINANT_DELTA
-	) {
+	if (closest.confidence >= DOMINANT_MIN_CONFIDENCE && closest.confidence - chosen.secondBest >= DOMINANT_DELTA) {
 		return { matched: closest };
 	}
 	return {

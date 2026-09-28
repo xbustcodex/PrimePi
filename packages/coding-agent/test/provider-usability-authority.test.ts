@@ -4,8 +4,8 @@ import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { evaluateModelUsability, isProviderUsable } from "../src/core/model/provider-usability.ts";
-import { DEFAULT_DELEGATION_BUDGETS } from "../src/core/orchestration/delegation-budgets.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
+import { DEFAULT_DELEGATION_BUDGETS } from "../src/core/orchestration/delegation-budgets.ts";
 import { resolvePlanExitTransition } from "../src/core/orchestration/plan-model-transition.ts";
 
 /**

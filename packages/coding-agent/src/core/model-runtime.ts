@@ -203,8 +203,7 @@ export class ModelRuntime implements Models {
 		// returns a fresh object each call from rebuilding on every read.
 		const next = reader();
 		const changed =
-			next.size !== this.#appliedDisabled.size ||
-			[...next].some((provider) => !this.#appliedDisabled.has(provider));
+			next.size !== this.#appliedDisabled.size || [...next].some((provider) => !this.#appliedDisabled.has(provider));
 		this.disabledProviders = reader;
 		if (changed) this.updateModelSnapshot();
 	}
