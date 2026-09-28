@@ -271,15 +271,14 @@ export function isSameFact(a: string, b: string): boolean {
 	const left = fingerprint(a);
 	const right = fingerprint(b);
 	if (left === right) return true;
+	// Conflict check first. A pair that differs in a number, a negation, or a
+	// discriminating token is two claims however similar the prose, and must reach
+	// the contradiction path rather than being collapsed into one. Checked before
+	// any similarity score, because similarity is exactly what misleads here.
+	if (conflictsWith(a, b)) return false;
 	const leftWords = new Set(left.split(" ").filter((word) => word.length > 3));
 	const rightWords = new Set(right.split(" ").filter((word) => word.length > 3));
 	if (leftWords.size === 0 || rightWords.size === 0) return false;
-	// A differing number makes these different claims, however similar the prose.
-	// Checked before the word overlap so a corrected value is never deduplicated
-	// away against the value it corrects.
-	const leftNumbers = numbersIn(a).sort();
-	const rightNumbers = numbersIn(b).sort();
-	if (leftNumbers.join("|") !== rightNumbers.join("|")) return false;
 	let shared = 0;
 	for (const word of leftWords) if (rightWords.has(word)) shared++;
 	const smaller = Math.min(leftWords.size, rightWords.size);
@@ -291,14 +290,159 @@ export function isSameFact(a: string, b: string): boolean {
 }
 
 /**
- * The numeric literals a claim contains, in order.
+ * The tokens that make a claim *specific*: a number, a version, a path, a
+ * dotted or camel-cased identifier, and anything a negation turns on.
  *
- * "The cooldown is 30 seconds" and "The cooldown is 90 seconds" share every
- * significant word, so word overlap alone calls them one fact. They are not -
- * the number *is* the claim. A memory pipeline that deduplicates them keeps the
- * first and silently discards the corrected value, which is worse than storing
- * both, because the stale number then reads as the only one.
+ * ## Why word overlap alone is not enough
+ *
+ * Two claims can share nearly every word and still be opposites. "The stdio
+ * server entry point is iai_mcp.core:main" and "…is iai_mcp.cli:main" differ
+ * in one token, which word overlap scores as a 0.9 match — so a memory pipeline
+ * would treat the correction as a duplicate and silently keep the *wrong* entry
+ * point. The same applies to a flipped enablement, a negated capability, a
+ * corrected path, a renamed setting key, and a different provider.
+ *
+ * Those are the tokens the claim actually hinges on. If one side has a
+ * discriminating token the other does not, they are different claims — no
+ * matter how much else they agree on.
  */
+function discriminatorsIn(text: string): string[] {
+	// Split on whitespace but keep dotted and slashed runs intact, so
+	// `iai_mcp.core:main` and `packages/ai/src/index.ts` survive as single tokens.
+	return text
+		.toLowerCase()
+		.split(/\s+/)
+		.map((token) => token.replace(/[^a-z0-9._/:+-]/g, ""))
+		.filter((token) => {
+			if (token.length === 0) return false;
+			// A number, a dotted/slashed path, a version, or a camelCase identifier:
+			// the shapes a general word will not have.
+			if (/^\d+(\.\d+)*$/.test(token)) return true;
+			if (/[._/]/.test(token) && token.length > 3) return true;
+			// camelCase, or a word glued to a suffix such as `Recallable`.
+			return /^[a-z]+[A-Z]/.test(token) || /^[a-z0-9]+:[a-z0-9]+$/i.test(token);
+		})
+		.sort();
+}
+
+/**
+ * Word pairs that invert each other.
+ *
+ * The last class of near-identical opposites. "path separators are
+ * backslashes" and "…are forward slashes" share every word but one, and that
+ * one word is the entire claim. So is `agent` against `session`, and `enabled`
+ * against `disabled`.
+ *
+ * Deliberately a short, closed list rather than a lexicon. A large synonym
+ * table would start reporting *near*-antonyms as contradictions and split
+ * memories that are genuinely the same fact. These are the pairs that appear in
+ * engineering claims and where one is a true negation of the other.
+ */
+const ANTONYMS: ReadonlyArray<readonly [string, string]> = [
+	// Path separators, in both inflections that appear in claims.
+	["backslash", "forward"],
+	["backslashes", "forward"],
+	["backslashes", "forwards"],
+	// A setting toggled.
+	["enabled", "disabled"],
+	["enable", "disable"],
+	// Which scope a memory belongs to.
+	["agent", "session"],
+	["global", "project"],
+	// Direction and polarity.
+	["always", "never"],
+	["before", "after"],
+	["increases", "decreases"],
+	["adds", "removes"],
+	["writes", "reads"],
+	["encrypts", "decrypts"],
+	["accepts", "rejects"],
+	["allows", "denies"],
+	["valid", "invalid"],
+	["cached", "uncached"],
+	["sync", "async"],
+	["primary", "secondary"],
+];
+
+/**
+ * Provider and model names, which dedup must not confuse for one another.
+ *
+ * These are ordinary lowercase words, so neither the discriminator rule nor the
+ * antonym list sees them: `openrouter` and `opencode` differ by one word, and
+ * word overlap scores that as the same claim. But a memory that says failover
+ * prefers OpenRouter is falsified by one that says OpenCode, and collapsing
+ * them would keep the wrong route.
+ *
+ * A closed list rather than a heuristic, because "any word the other side lacks
+ * is a discriminator" would make every pair of sentences a contradiction and
+ * stop the store from deduplicating anything at all.
+ */
+const ROUTE_NAMES: ReadonlySet<string> = new Set([
+	"openrouter",
+	"opencode",
+	"anthropic",
+	"openai",
+	"google",
+	"azure",
+	"bedrock",
+	"vertex",
+	"mistral",
+	"groq",
+	"together",
+	"fireworks",
+	"deepseek",
+	"xai",
+	"perplexity",
+	"local",
+	"hindsight",
+	"mnemopi",
+	"sharpshooter",
+	"iai",
+]);
+
+/**
+ * Whether the two claims differ in a way that makes them different facts.
+ *
+ * Numbers, because the number is the claim. Negation, because "supports" and
+ * "does not support" are opposites wearing the same words. A discriminating
+ * token - an identifier, a path, a version, a name - appearing on one side only.
+ * And an antonym, because the single word it changes is the whole claim.
+ */
+function conflictsWith(a: string, b: string): boolean {
+	// Negation. Presence on one side and absence on the other reverses the claim.
+	const leftNegates = /\b(not|no|never|without|cannot|does not|is not|has no|lacks?)\b/i.test(a);
+	const rightNegates = /\b(not|no|never|without|cannot|does not|is not|has no|lacks?)\b/i.test(b);
+	if (leftNegates !== rightNegates) return true;
+
+	// Numbers, in order. `30` against `90` is a different value, not a rewording.
+	if (numbersIn(a).join("|") !== numbersIn(b).join("|")) return true;
+
+	// Discriminating tokens. Only tokens on one side matter: a token both sides
+	// share is the common context that makes them look alike in the first place.
+	const left = new Set(discriminatorsIn(a));
+	const right = new Set(discriminatorsIn(b));
+	for (const token of left) if (!right.has(token)) return true;
+	for (const token of right) if (!left.has(token)) return true;
+
+	// Antonyms. Each pair contributes a conflict when one side uses the first
+	// member and the other uses the second, and a claim using neither is
+	// unaffected - so adding a word to a memory does not manufacture a conflict.
+	const leftWords = new Set(fingerprint(a).split(" "));
+	const rightWords = new Set(fingerprint(b).split(" "));
+	for (const [first, second] of ANTONYMS) {
+		if (leftWords.has(first) && rightWords.has(second)) return true;
+		if (leftWords.has(second) && rightWords.has(first)) return true;
+	}
+
+	// Route and backend names. `openrouter` against `opencode` is a different
+	// provider, and treating that as a rewording would keep the wrong one.
+	const leftRoutes = [...leftWords].filter((word) => ROUTE_NAMES.has(word));
+	const rightRoutes = [...rightWords].filter((word) => ROUTE_NAMES.has(word));
+	if (leftRoutes.join("|") !== rightRoutes.join("|")) return true;
+	return false;
+}
+
+/** The numeric literals a claim contains, in order. */
 function numbersIn(text: string): string[] {
 	return fingerprint(text)
 		.split(" ")
