@@ -30,6 +30,7 @@
  */
 
 import type { Api, Model, RoleChainCandidate, RoleEligibility } from "@earendil-works/pi-ai";
+import { isProviderUsable } from "../model/provider-usability.ts";
 
 /** What entering or leaving plan mode should do to the model. */
 export type PlanModelTransition =
@@ -123,14 +124,34 @@ export function resolvePlanExitTransition(input: {
 	/** The model captured when plan mode was entered, if one was. */
 	restoreTo: Model<Api> | undefined;
 	isStreaming: boolean;
+	/**
+	 * Live disabled-provider set, re-read at exit rather than captured at entry.
+	 *
+	 * `_prePlanModel` is historical state, not current authorization. The user may
+	 * have disabled the provider while plan mode was active, so restoring without
+	 * re-checking would put the session on a model that is no longer permitted.
+	 */
+	disabledProviders?: ReadonlySet<string>;
 }): PlanModelTransition {
-	const { current, restoreTo, isStreaming } = input;
+	const { current, restoreTo, isStreaming, disabledProviders } = input;
 
 	if (!restoreTo) {
 		return { kind: "none", reason: "No pre-plan model was captured; keeping the current model." };
 	}
 	if (sameModel(current, restoreTo)) {
 		return { kind: "none", reason: "Already on the pre-plan model." };
+	}
+	// The captured model is a record of what was true on entry. It is not a
+	// decision that the model is still allowed now, so it is revalidated through
+	// the same provider authority every other resolution path uses. Keeping the
+	// current model is the safe outcome: it is already in use and already passed
+	// whatever check admitted it, and inventing a second fallback engine here
+	// would create a path that no other code has to honour.
+	if (!isProviderUsable(restoreTo.provider, disabledProviders)) {
+		return {
+			kind: "none",
+			reason: `Keeping the current model: provider "${restoreTo.provider}" was disabled while planning.`,
+		};
 	}
 	return {
 		kind: "apply",
