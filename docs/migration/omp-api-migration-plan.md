@@ -1,4 +1,13 @@
-# OMP → Pi API migration: dependency graph and phase plan
+# OMP → PrimePi migration: dependency graph and phase plan
+
+> **Scope, corrected 2026-09-28.** This is not merely an API-layer migration.
+> The objective is migrating OMP's useful *capability layer, behavior and
+> user-facing functionality* into PrimePi while preserving PrimePi's stronger
+> architecture and authorities - ModelAccess/isCredentialFree,
+> policyAllowsPaid, selectFailoverCandidate, hierarchical failure scopes,
+> provenance-preserving context edits, project trust, the self-update barrier,
+> build/dependency integrity gates, and the typed settings registry.
+> The API surface below is the dependency order, not the destination.
 
 Source of truth: `oh-my-pi` (read-only) at `C:\Users\xkali\new_ai\oh-my-pi`.
 Target: this fork.
@@ -47,7 +56,7 @@ L5  Composition
     commands · skills · extension hooks · settings UI
 ```
 
-## 2. Per-API migration table
+## 2. Per-capability migration table
 
 Legend — **P** port · **A** adapt · **N** new.
 

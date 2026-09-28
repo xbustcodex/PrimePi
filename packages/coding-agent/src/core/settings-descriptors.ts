@@ -674,6 +674,59 @@ export const bankStoreScoping = registerSetting({
 	},
 });
 
+export const retryMaxRetries = registerSetting({
+	key: "retry.maxRetries",
+	type: "number",
+	default: 0,
+	ui: {
+		label: "Max Retries",
+		description: "Number of automatic retries before the turn is abandoned",
+		tab: "model",
+		group: "Retry & Fallback",
+	},
+});
+
+export const retryMaxDelayMs = registerSetting({
+	key: "retry.maxDelayMs",
+	type: "number",
+	default: 0,
+	ui: {
+		label: "Max Retry Delay",
+		description: "Upper bound on the backoff between retries, in milliseconds",
+		tab: "model",
+		group: "Retry & Fallback",
+	},
+});
+
+export const retryModelFallback = registerSetting({
+	key: "retry.modelFallback",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Model Fallback",
+		description: "Route a failed turn to a healthy model instead of failing it",
+		tab: "model",
+		group: "Retry & Fallback",
+		control: "cycle",
+	},
+});
+
+
+export const retryFallbackRevertPolicy = registerSetting({
+	key: "retry.fallbackRevertPolicy",
+	type: "enum",
+	default: "cooldown-expiry",
+	values: ["never", "cooldown-expiry"],
+	parse: (raw) => (raw === "never" || raw === "cooldown-expiry" ? raw : undefined),
+	ui: {
+		label: "Fallback Revert Policy",
+		description: "When to return to the primary model once it recovers",
+		tab: "model",
+		group: "Retry & Fallback",
+		control: "submenu",
+	},
+});
+
 export const bankStoreAutoRecall = registerSetting({
 	key: "mnemopi.autoRecall",
 	type: "boolean",

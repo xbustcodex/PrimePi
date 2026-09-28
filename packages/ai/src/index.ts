@@ -41,11 +41,14 @@ export { AvailabilityCooldowns, type UnavailabilityEntry } from "./utils/availab
 export * from "./utils/diagnostics.ts";
 export * from "./utils/event-stream.ts";
 export {
+	type FailoverCandidateInput,
+	type FailoverDecision,
 	type FailoverPolicy,
 	failoverNotice,
 	policyAllowsPaid,
 	selectFailoverCandidate,
 	type TurnRequirements,
+	type UnavailableReason,
 } from "./utils/failover.ts";
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
 export * from "./utils/json-parse.ts";
