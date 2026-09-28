@@ -24,6 +24,7 @@
  */
 
 import type { MemoryBackend, MemoryBackendDescriptor } from "./backend.ts";
+import { type IaiAdapterOptions, IaiPersonalBackend } from "./iai-adapter.ts";
 
 /** A descriptor for a backend that is expected to be unavailable right now. */
 function pending(
@@ -176,8 +177,35 @@ export const MEMORY_BACKEND_DESCRIPTORS: readonly MemoryBackendDescriptor[] = [
 	),
 ];
 
-/** Registered PrimePi backends, appended after every OMP entry. */
-const PRIMEPI_DESCRIPTORS: MemoryBackendDescriptor[] = [];
+/**
+ * Registered PrimePi backends, appended after every OMP entry.
+ *
+ * IAI Personal is the extension the Memory selector gains without disturbing the
+ * reference ordering: it is registered after all five OMP backends, so a user who
+ * has learned the list still selects by position.
+ */
+const PRIMEPI_DESCRIPTORS: MemoryBackendDescriptor[] = [
+	{
+		id: "iai-personal",
+		label: "IAI Personal",
+		description: "Local encrypted personal memory engine (MCP over stdio)",
+		create: () => new IaiPersonalBackend(primePiOptions?.iai ?? {}),
+	},
+];
+
+/** Where the IAI engine lives, when the caller configures it. */
+let primePiOptions: { iai?: IaiAdapterOptions } | undefined;
+
+/**
+ * Points the IAI adapter at an engine.
+ *
+ * Configuration, not installation: this records where an already-present engine
+ * is. It never downloads a dependency, never edits PATH, and never writes outside
+ * the engine's own data directory.
+ */
+export function configurePrimePiBackends(options: { iai?: IaiAdapterOptions }): void {
+	primePiOptions = options;
+}
 
 /** The full selector: OMP's five in order, then any PrimePi additions. */
 export function memoryBackendDescriptors(): readonly MemoryBackendDescriptor[] {

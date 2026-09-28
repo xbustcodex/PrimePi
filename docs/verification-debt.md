@@ -271,3 +271,45 @@ disable one through Settings, then run a turn and confirm (a) it never routes to
  (c) re-enabling it restores both without restarting the session. Repeat with the
  disabled provider holding a free model, which is the case the credential-free
  clause used to let through.
+
+## PD-9: the IAI Personal engine is exercised only as far as its dependencies allow
+
+**Status:** partial verification. Adapter and interface are proven; the
+engine's own runtime is not.
+
+**What was verified against the built engine** (`iai_mcp` imported from its
+`build/lib.win-amd64-cpython-312` under the engine's own venv):
+
+- The native extension imports and exports `MemoryRecord`, `MemoryHit` and
+  `RecallResponse`.
+- The Python layer imports no network client (`requests`, `httpx`,
+  `urllib.request`, `aiohttp`) and no telemetry SDK (`opentelemetry`,
+  `sentry_sdk`). That is the mechanical evidence available for the "local only,
+  no telemetry" claim; it is not a traffic capture.
+- The engine ships `memory_capture`, `memory_recall`, `memory_contradict` and
+  `memory_consolidate` as MCP tools.
+
+**What could not be verified, and why:**
+
+- **Store lifecycle, capture, recall and supersession.** `iai_mcp.hippo` imports
+  `numpy` at module load. `numpy>=1.26` is a declared hard dependency in the
+  engine's `pyproject.toml` and is absent from its venv, which contains only
+  `pip`. Nothing was installed to change that.
+- **MCP over stdio.** The package has no `iai_mcp.__main__`; the server is
+  reached through `iai_mcp.cli`. The adapter spawns that entry, but the
+  handshake could not be exercised while `numpy` is missing.
+
+**What the adapter does about it.** `IaiPersonalBackend` is built to the
+documented protocol and every call is checked against the engine's own error
+contract. An unreachable engine reports unavailability with a reason; a recall
+yields nothing so an optional backend cannot break a session; a retain throws,
+because a silently dropped memory is worse than a visible failure. Those paths
+are tested with a command that cannot exist, so the degradation is proven
+deterministically rather than assumed.
+
+**How to close it:** install the engine's own declared dependencies in its venv
+(`pip install -e .` in the engine checkout, or `pip install "numpy>=1.26,<2.3.0"`
+`"scipy>=1.13.0"` `"numba>=0.59"`), then re-run the adapter against the live
+engine: open a store on a temporary directory, capture, recall, contradict, and
+assert the earlier record is archived rather than erased. Record encryption at
+rest by inspecting the store files, without reading or logging any key.
