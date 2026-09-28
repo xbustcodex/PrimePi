@@ -674,6 +674,32 @@ export const bankStoreScoping = registerSetting({
 	},
 });
 
+export const bankStoreAutoRecall = registerSetting({
+	key: "mnemopi.autoRecall",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Mnemopi Auto Recall",
+		description: "Recall local memories into the first turn of each session",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
+
+export const bankStoreAutoRetain = registerSetting({
+	key: "mnemopi.autoRetain",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Mnemopi Auto Retain",
+		description: "Retain completed conversation turns into local Mnemopi memory",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
+
 export const autolearnEnabled = registerSetting({
 	key: "autolearn.enabled",
 	type: "boolean",

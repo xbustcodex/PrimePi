@@ -276,6 +276,12 @@ export function configurePrimePiBackends(options: {
 		localStore: options.localStore
 			? { ...primePiOptions?.localStore, ...options.localStore }
 			: primePiOptions?.localStore,
+		// Merged the same way, for the same reason. Omitting this line looked like it
+		// worked - the descriptor still resolved - but every call without an
+		// explicit `agentDir` silently produced a store with no root, and the
+		// backend reported itself unavailable for a reason that named neither the
+		// missing field nor the caller that omitted it.
+		bankStore: options.bankStore ? { ...primePiOptions?.bankStore, ...options.bankStore } : primePiOptions?.bankStore,
 	} as typeof primePiOptions;
 }
 

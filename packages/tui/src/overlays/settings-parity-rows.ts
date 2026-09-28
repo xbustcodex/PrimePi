@@ -1559,8 +1559,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "boolean",
 		default: "true",
 		condition: "mnemopiActive",
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "mnemopi.autoRecall",
+		note: "consumed by AutoMemoryLifecycle; recall runs at most once per user turn",
 	},
 	{
 		id: "mnemopi.autoRetain",
@@ -1571,8 +1572,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "boolean",
 		default: "true",
 		condition: "mnemopiActive",
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "mnemopi.autoRetain",
+		note: "consumed by AutoMemoryLifecycle; retention advances a cursor so a turn is stored once",
 	},
 	{
 		id: "mnemopi.polyphonicRecall",

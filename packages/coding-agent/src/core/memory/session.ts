@@ -95,7 +95,15 @@ export interface MemorySessionOptions {
 
 /** The resolved bank-store settings a caller supplies. */
 export interface BankStoreConfig {
+	/**
+	 * Where the banks live. Absent means the agent directory, and an absent agent
+	 * directory makes the backend report itself unavailable rather than guessing a
+	 * path - a memory store that writes into the working directory will eventually
+	 * write into a repository.
+	 */
 	readonly root?: string;
+	/** The project identity. Defaults to the process working directory. */
+	readonly cwd?: string;
 	readonly bank?: string;
 	readonly scoping?: BankScoping;
 }
