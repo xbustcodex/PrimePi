@@ -39,6 +39,7 @@
  *   leave without discarding the panel.
  */
 
+import { visibleWidth } from "../utils.ts";
 import {
 	ALL_TABS,
 	type AnySettingTab,
@@ -54,7 +55,43 @@ import type { ParityRow } from "./settings-parity-rows.ts";
 /** A value the panel can display. */
 export type DisplayValue = boolean | string;
 
-/** Everything the panel needs from the settings layer. */
+// Box-drawing glyphs, matching the reference's rounded box set. Pinned here
+// rather than imported from a theme, because the installed-build proof
+// compares the rendered frame and a theme lookup would make the glyphs depend on
+// a colour configuration the proof does not control.
+const BOX = {
+	topLeft: "╭",
+	topRight: "╮",
+	bottomLeft: "╰",
+	bottomRight: "╯",
+	horizontal: "─",
+	vertical: "│",
+	teeRight: "├",
+	teeLeft: "┤",
+} as const;
+
+function topBorder(width: number, title: string): string {
+	const inner = Math.max(0, width - 2);
+	if (!title) return BOX.topLeft + BOX.horizontal.repeat(inner) + BOX.topRight;
+	// The title is inset into the rule, as the reference does.
+	const shown = ` ${title} `;
+	const fill = Math.max(0, inner - 1 - visibleWidth(shown));
+	return BOX.topLeft + BOX.horizontal + shown + BOX.horizontal.repeat(fill) + BOX.topRight;
+}
+
+function divider(width: number): string {
+	return BOX.teeRight + BOX.horizontal.repeat(Math.max(0, width - 2)) + BOX.teeLeft;
+}
+
+function bottomBorder(width: number): string {
+	return BOX.bottomLeft + BOX.horizontal.repeat(Math.max(0, width - 2)) + BOX.bottomRight;
+}
+
+function row(content: string, width: number): string {
+	// Content is inset by one space on each side, as the reference's row() does.
+	const padded = width > 4 ? content.padEnd(Math.max(0, width - 4)) : "";
+	return `${BOX.vertical} ${padded} ${BOX.vertical}`;
+}
 export interface SettingsHost {
 	/** Every row the panel may show, in the reference's order. */
 	rows(): readonly ParityRow[];
@@ -174,18 +211,40 @@ export class SettingsPanel {
 		return this.#tab;
 	}
 
-	/** Groups of the current tab, filtered to those with visible rows. */
+	/**
+	 * Groups of the current tab, filtered to those with visible rows.
+	 *
+	 * Empty while searching: a cross-tab result list has no single tab's group
+	 * structure, and OMP's flat layout has no group column to populate.
+	 */
 	#groups(): string[] {
+		if (this.#searching || this.#search.length > 0) {
+			return [
+				...new Set(
+					this.#filteredRows()
+						.map((row) => row.group)
+						.filter((group): group is string => Boolean(group)),
+				),
+			];
+		}
 		const rows = this.#filteredRows();
 		return TAB_GROUPS[this.#tab].filter((group) => rows.some((row) => (row.group ?? null) === group));
 	}
 
-	/** Rows of the current tab, after condition and search filtering. */
+	/**
+	 * Rows for the current view, after condition and search filtering.
+	 *
+	 * A search deliberately spans *every* tab, not the current one: with 383 rows
+	 * across ten tabs, a search that only saw the visible tab would miss a setting
+	 * the user could see on another tab. OMP's `#setSearchQuery` iterates
+	 * `SETTING_TABS` and renders one flat list with a heading per tab, and this
+	 * matches that.
+	 */
 	#filteredRows(): ParityRow[] {
 		const needle = this.#search.trim().toLowerCase();
 		return this.#host
 			.rows()
-			.filter((row) => row.tab === this.#tab)
+			.filter((row) => (needle.length === 0 ? row.tab === this.#tab : true))
 			.filter((row) => this.#host.visible(row))
 			.filter((row) => {
 				if (needle.length === 0) return true;
@@ -243,7 +302,16 @@ export class SettingsPanel {
 				this.#moveTab(-1);
 				return;
 			case "\t":
-				// Two columns, so Tab moves between them rather than through rows.
+				// Tab moves between the section column and the rows only when the
+				// column is present. OMP's rule is the same: a tab with no section
+				// targets keeps Tab switching tabs, because there is nothing to move
+				// focus to.
+				// The column must be *rendered*, not merely non-empty: while
+				// searching it is absent, so there is no focus target to move to.
+				if (!this.#columnVisible()) {
+					this.#moveTab(1);
+					return;
+				}
 				this.#focus = this.#focus === "rows" ? "groups" : "rows";
 				return;
 			case "\x1b[A": // up
@@ -275,6 +343,19 @@ export class SettingsPanel {
 			this.#search += data;
 			this.#resetRowIndex();
 		}
+	}
+
+	/**
+	 * Whether the group column is rendered right now.
+	 *
+	 * Two independent reasons it is not, and both must gate focus as well as
+	 * drawing: a narrow terminal compacts it away, and a search renders a flat
+	 * list with no section column at all. Key handling and rendering must ask
+	 * the same question, or Tab would move focus to a column nothing draws.
+	 */
+	#columnVisible(width = this.#options.width?.() ?? 80): boolean {
+		if (this.#searching || this.#search.length > 0) return false;
+		return width >= NARROW_WIDTH;
 	}
 
 	#handleSelectorInput(data: string): void {
@@ -408,10 +489,11 @@ export class SettingsPanel {
 		}
 
 		const groups = this.#groups();
-		// Below the reference's compaction width the left column is dropped and
-		// the rows are shown alone, rather than being squeezed into an unreadable
-		// two-column layout.
-		const showGroups = width >= NARROW_WIDTH;
+		// The group column is dropped when the terminal is too narrow, and while
+		// searching — OMP renders one flat list with a heading per tab and no
+		// section column. One predicate serves drawing and key handling, or Tab
+		// would move focus to a column nothing draws.
+		const showGroups = this.#columnVisible(width);
 
 		if (showGroups) {
 			for (const [index, group] of groups.entries()) {
@@ -498,13 +580,54 @@ export class SettingsPanel {
 		return `${left}${body}  ${theme.rowValue(value, selected)}`;
 	}
 
+	/**
+	 * The full frame, matching the reference's box layout.
+	 *
+	 * Top border with an inset title, tab rows, divider, content, divider, hint,
+	 * bottom border. A panel without the border is not the reference's panel, so
+	 * the glyphs are pinned here rather than left to a host that may not draw
+	 * them.
+	 */
+	#frame(width: number, title: string, body: readonly string[], hint: string, showSearch: boolean): string[] {
+		const out: string[] = [topBorder(width, title)];
+		for (const line of this.#tabBarLines(width)) out.push(row(line, width));
+		out.push(divider(width));
+		if (showSearch) out.push(row("", width));
+		for (const line of body) out.push(row(line, width));
+		out.push(divider(width));
+		out.push(row(hint, width));
+		out.push(bottomBorder(width));
+		return out;
+	}
+
+	/** The tab bar as the reference draws it: labels first, then icons. */
+	#tabBarLines(width: number): string[] {
+		const labelled: string[] = [];
+		const icons: string[] = [];
+		for (const tab of ALL_TABS) {
+			// A label for the first LABELLED_TAB_COUNT tabs and an icon for the
+			// rest, which is why the bar shows eight names and two symbols. The split
+			// is asserted by the parity test.
+			if (tabIsLabelled(tab)) labelled.push(TAB_METADATA[tab].label);
+			else icons.push(TAB_METADATA[tab].icon);
+		}
+		// One line when it fits; otherwise the labelled tabs wrap above the icons,
+		// so neither is truncated away at a narrow width.
+		const joined = [...labelled, ...icons].join("  ");
+		if (visibleWidth(joined) + 4 <= width) return [joined];
+		return labelled.length > 0 ? [labelled.join("  "), icons.join("  ")] : [icons.join("  ")];
+	}
+
 	/** Rendered output, for the installed-build proof. */
 	render(width?: number): string[] {
 		const resolved = width ?? this.#options.width?.() ?? 80;
-		return this.describeLines(resolved).map((line) => line.text);
+		const lines = this.describeLines(resolved);
+		const body = lines.filter((line) => line.kind !== "tab" && line.kind !== "hint").map((line) => line.text);
+		const hint = lines.find((line) => line.kind === "hint")?.text ?? "";
+		const searching = this.#searching || this.#search.length > 0;
+		return this.#frame(resolved, "Settings", body, hint, searching);
 	}
 
-	/** Tabs the panel offers, in order. Used by the parity test. */
 	static tabs(): readonly AnySettingTab[] {
 		return SETTING_TABS;
 	}
