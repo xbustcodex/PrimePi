@@ -27,7 +27,8 @@ import { Type } from "typebox";
 import type { ToolDefinition } from "../extensions/types.js";
 import type { AgentRef } from "../orchestration/agent-registry.js";
 import type { JobHandle, JobRecord } from "../orchestration/job-manager.js";
-import type { TaskRunRequest, TaskRunResult, TaskRunner } from "../orchestration/task-runner.js";
+import type { TaskRunner, TaskRunRequest, TaskRunResult } from "../orchestration/task-runner.js";
+import type { WorktreeManager } from "../orchestration/worktree-manager.js";
 import { wrapToolDefinition } from "./tool-definition-wrapper.js";
 
 /** What the tool needs from its session. Injected, so no global state. */
@@ -48,7 +49,8 @@ export interface TaskOperations {
 		/** Starts background work and returns a handle. */
 		start(label: string, run: (input: { signal: AbortSignal; jobId: string }) => Promise<string>): JobHandle;
 	};
-	/** Runs one child to completion. Used for the background path. */
+	/** Workspace provisioning. */
+	worktrees?: WorktreeManager;
 	runChild(request: TaskRunRequest): Promise<TaskRunResult>;
 	/** Tool names the parent currently has, the ceiling for any child. */
 	parentTools(): readonly string[];
@@ -88,6 +90,9 @@ const taskSchema = Type.Object({
 			description:
 				"Preferred model role for the child, e.g. 'smol'. A preference only: it is resolved through your own access, credential and spending rules.",
 		}),
+	),
+	isolated: Type.Optional(
+		Type.Boolean({ description: "Give the child its own git worktree so its changes cannot land in your checkout." }),
 	),
 	background: Type.Optional(
 		Type.Boolean({ description: "Return immediately with a job id instead of waiting for the child." }),
@@ -132,11 +137,13 @@ export function createTaskToolDefinition(ops: TaskOperations): ToolDefinition<ty
 		label: "Task",
 		description:
 			"Delegate work to a child agent. The child starts with no history, so put anything it must know in `context`. " +
+			"Set `isolated: true` to give a coding child its own git worktree — its changes are reported, never merged into your checkout. " +
 			"Set `background: true` to get a job id back immediately, then use `status`, `wait`, `result`, or `cancel` with it. " +
 			"A child can only use tools you already have, and every tool it calls is approved by your own policy.",
 		promptSnippet: "Delegate work to a child agent",
 		promptGuidelines: [
 			"Children start blank; pass the context they need in `context`, never the transcript.",
+			"Use `isolated: true` for any child that edits files, so its changes cannot land in your checkout.",
 			"A child's tools are narrowed to a subset of yours, and its model choice still goes through your own policy.",
 			"Use `background: true` for work you do not need to wait on, and collect it later with `wait`.",
 		],
@@ -179,7 +186,8 @@ export function createTaskToolDefinition(ops: TaskOperations): ToolDefinition<ty
 						content: [
 							{
 								type: "text",
-								text: result.length > 0 ? result : `Job ${params.jobId} finished as ${job?.state ?? "unknown"}.`,
+								text:
+									result.length > 0 ? result : `Job ${params.jobId} finished as ${job?.state ?? "unknown"}.`,
 							},
 						],
 						details: { jobs: describeJobs(ops.jobs.list()) ?? [] },
@@ -286,6 +294,7 @@ function buildRequest(params: TaskParams): TaskRunRequest {
 		...(params.context ? { context: params.context } : {}),
 		...(params.tools ? { tools: params.tools } : {}),
 		...(params.modelRole ? { modelRole: params.modelRole } : {}),
+		...(params.isolated ? { isolation: "worktree" as const } : {}),
 		...(params.background ? { background: true } : {}),
 	};
 }

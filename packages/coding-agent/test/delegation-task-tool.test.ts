@@ -1,10 +1,12 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JobManager } from "../src/core/orchestration/job-manager.ts";
 import { TaskRunner, type TaskRunRequest } from "../src/core/orchestration/task-runner.ts";
+import { WorktreeManager } from "../src/core/orchestration/worktree-manager.ts";
 import { createTaskTool, type TaskOperations } from "../src/core/tools/task.ts";
 
 function model(id: string, extra: Partial<Model<Api>> = {}): Model<Api> {
@@ -24,8 +26,9 @@ interface Harness {
 	ops: TaskOperations;
 	runner: TaskRunner;
 	jobs: JobManager;
+	worktrees: WorktreeManager;
 	/** Every call the host received, in order. */
-	calls: { request: TaskRunRequest; tools: readonly string[]; model?: Model<Api> }[];
+	calls: { request: TaskRunRequest; tools: readonly string[]; model?: Model<Api>; workspace?: { path: string } }[];
 	/** Names the parent holds. */
 	parentTools: string[];
 	cleanup: () => void;
@@ -40,12 +43,14 @@ function harness(
 		}) => Promise<{ model?: Model<Api>; rejectedReason?: string }>;
 		/** Fails a gate decision for this tool, to exercise the refusal path. */
 		deny?: (toolName: string) => boolean;
+		worktrees?: boolean;
 	} = {},
 ): Harness {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-delegation-"));
 	const parentTools = options.parentTools ?? ["read", "write", "bash"];
 	const calls: Harness["calls"] = [];
 
+	const worktrees = new WorktreeManager({ baseDir: WorktreeManager.tempBaseDir(), cwd });
 	const runner = new TaskRunner({
 		gate: {
 			parentTools,
@@ -54,8 +59,9 @@ function harness(
 		},
 		getSessionModel: () => PAID,
 		resolveModel: options.resolve ?? (async () => ({ model: PAID })),
+		...(options.worktrees === false ? {} : { worktrees }),
 		run: async (input) => {
-			calls.push({ request: input.definition, tools: input.tools, model: input.model });
+			calls.push({ request: input.definition, tools: input.tools, model: input.model, workspace: input.workspace });
 			if (input.signal.aborted) throw new Error("aborted");
 			return `done: ${input.definition.task}`;
 		},
@@ -71,6 +77,7 @@ function harness(
 			cancel: (id) => jobs.cancel(id),
 			start: (label, run) => jobs.start(label, run),
 		},
+		worktrees,
 		runChild: (request) => runner.run(request),
 		parentTools: () => parentTools,
 	};
@@ -79,6 +86,7 @@ function harness(
 		ops,
 		runner,
 		jobs,
+		worktrees,
 		calls,
 		parentTools,
 		cleanup: () => rmSync(cwd, { recursive: true, force: true }),
@@ -102,6 +110,10 @@ async function call(h: Harness, params: Record<string, unknown>) {
 afterEach(() => {
 	vi.restoreAllMocks();
 });
+
+// Real `git worktree add` is milliseconds when idle but can exceed the 5s default
+// under a parallel full-suite run, so the isolation cases get an explicit budget.
+const GIT_TIMEOUT = 60_000;
 
 describe("delegation through the task tool", () => {
 	it("runs a child in the foreground and returns its result", async () => {
@@ -233,4 +245,67 @@ describe("delegation through the task tool", () => {
 			h.cleanup();
 		}
 	});
+
+	it("refuses to spawn an isolated child when no workspace manager exists", async () => {
+		const h = harness({ worktrees: false });
+		try {
+			// Handing a coding child the parent checkout because provisioning failed
+			// would be worse than not running it at all.
+			const out = await call(h, { op: "run", agent: "coder", task: "t", isolated: true });
+			expect(out.content[0].text).toMatch(/not started|workspace/i);
+			expect(h.calls).toHaveLength(0);
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it("refuses to fall back to the parent checkout when isolation is requested", async () => {
+		const h = harness();
+		try {
+			// The harness cwd is not a git repository, so provisioning cannot
+			// succeed. What matters is that the refusal is explicit rather than the
+			// child quietly receiving the parent's working directory.
+			const out = await call(h, { op: "run", agent: "coder", task: "t", isolated: true });
+			expect(out.content[0].text).toMatch(/not started|workspace|git|repository/i);
+			expect(h.calls[0]?.workspace).toBeUndefined();
+		} finally {
+			h.cleanup();
+		}
+	});
+
+	it(
+		"releases a started workspace even when the child throws",
+		async () => {
+			const cwd = mkdtempSync(join(tmpdir(), "pi-wt-cleanup-"));
+			try {
+				// A throw must not leak a worktree, so cleanup is asserted on the
+				// failure path rather than only on success.
+				execFileSync("git", ["init", "-q"], { cwd });
+				execFileSync(
+					"git",
+					["-c", "user.email=a@b", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "base"],
+					{
+						cwd,
+					},
+				);
+				writeFileSync(join(cwd, "f.txt"), "x");
+
+				const worktrees = new WorktreeManager({ baseDir: WorktreeManager.tempBaseDir(), cwd });
+				const runner = new TaskRunner({
+					gate: { parentTools: ["read"], beforeToolCall: async () => undefined },
+					getSessionModel: () => PAID,
+					resolveModel: async () => ({ model: PAID }),
+					run: async () => {
+						throw new Error("child exploded");
+					},
+				});
+				const result = await runner.run({ agent: "coder", task: "t", isolation: "worktree" });
+				expect(result.ok).toBe(false);
+				expect(worktrees.liveCount).toBe(0);
+			} finally {
+				rmSync(cwd, { recursive: true, force: true });
+			}
+		},
+		GIT_TIMEOUT,
+	);
 });

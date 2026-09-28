@@ -43,6 +43,7 @@ import {
 	evaluateSpawn,
 	RequestBudget,
 } from "./delegation-budgets.ts";
+import type { WorktreeHandle, WorktreeManager } from "./worktree-manager.js";
 
 /** What a caller supplies to run a child. */
 export interface TaskRunRequest {
@@ -66,6 +67,15 @@ export interface TaskRunRequest {
 	 * background child from a foreground one.
 	 */
 	background?: boolean;
+	/**
+	 * Whether the child gets its own worktree.
+	 *
+	 * Opt-in per call: `shared` for a read-only research child, `worktree`
+	 * for a coding child whose changes must not land inline. A child that asks
+	 * for a worktree never has one merged back automatically — the workspace is
+	 * reported so the operator can inspect or merge it deliberately.
+	 */
+	isolation?: "shared" | "worktree";
 }
 
 /**
@@ -128,6 +138,8 @@ export interface TaskRunnerOptions {
 	getSessionModel: () => Model<Api> | undefined;
 	/** Redactor applied to a child's provider-bound context. */
 	redactor?: SecretRedactor;
+	/** Workspace provisioning, for a child that asked for its own worktree. */
+	worktrees?: WorktreeManager;
 	/**
 	 * Runs the child. Supplied by the host, because constructing a child means
 	 * constructing an Agent, which needs a stream function and a tool set.
@@ -139,6 +151,8 @@ export interface TaskRunnerOptions {
 		model?: Model<Api>;
 		signal: AbortSignal;
 		budget: RequestBudget;
+		/** The workspace the child was given, when it asked for one. */
+		workspace?: WorktreeHandle;
 		/** Redact before anything becomes provider-bound. */
 		redact: (messages: unknown[]) => unknown[];
 		gate: ChildGate;
@@ -219,7 +233,7 @@ export class TaskRunner {
 		// permit, exactly like a budget refusal above.
 		const admission = await this.#options.gate.beforeToolCall({
 			toolName: "task",
-			args: { agent: request.agent, task: request.task },
+			args: { agent: request.agent, task: request.task, isolated: request.isolation === "worktree" },
 		});
 		if (admission?.block) {
 			return {
@@ -258,6 +272,35 @@ export class TaskRunner {
 		// normalized here rather than guarded at the call site.
 		const runtimeLimit = request.maxRuntimeMs ?? this.#budgets.maxRuntimeMs;
 		const timer = runtimeLimit > 0 ? setTimeout(() => controller.abort(RUNTIME_TIMEOUT), runtimeLimit) : undefined;
+		// Provisioned before the child runs and released on every exit path below, so
+		// a failure or a cancellation cannot leak a workspace.
+		let workspace: WorktreeHandle | undefined;
+		if (request.isolation === "worktree") {
+			const refused = (detail: string) => {
+				release();
+				this.registry.finish(ref.id, {
+					state: "failed",
+					reason: "preflight-rejected",
+					message: detail,
+					at: Date.now(),
+				});
+				return {
+					ok: false,
+					id: ref.id,
+					state: "failed",
+					reason: detail,
+					code: "spawns-not-allowed",
+				} as const;
+			};
+			if (!this.#options.worktrees) {
+				return refused("Isolation was requested but no workspace manager is configured.");
+			}
+			const outcome = await this.#options.worktrees.ensure(ref.id, "worktree");
+			// A refusal to provision is a refusal to spawn, not a silent fallback.
+			if (!outcome.ok) return refused(outcome.refusal.detail);
+			workspace = outcome.handle;
+		}
+
 		try {
 			// Model resolution goes through the same chain every role uses, so a
 			// child's request cannot outrank the parent's policy.
@@ -293,6 +336,7 @@ export class TaskRunner {
 				id: ref.id,
 				definition: request,
 				tools: granted,
+				...(workspace ? { workspace } : {}),
 				model: resolution.model,
 				signal: controller.signal,
 				budget: new RequestBudget(this.#budgets.maxRequestsPerChild),
@@ -366,6 +410,10 @@ export class TaskRunner {
 			clearTimeout(timer);
 			this.#running.delete(ref.id);
 			release();
+			// Released last, so a child that ignored its signal still had the chance
+			// to finish writing before its workspace is removed. Ownership is checked
+			// again inside, so a path belonging to another task is never touched.
+			if (workspace && this.#options.worktrees) this.#options.worktrees.release(ref.id);
 		}
 	}
 

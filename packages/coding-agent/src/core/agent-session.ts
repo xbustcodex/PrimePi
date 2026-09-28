@@ -122,6 +122,7 @@ import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import { JobManager } from "./orchestration/job-manager.js";
 import { Orchestration } from "./orchestration/orchestration.ts";
 import {
 	planRoleEligibility,
@@ -130,6 +131,7 @@ import {
 } from "./orchestration/plan-model-transition.ts";
 import { extractWriteTargetPath, planningApprovalDeclaration } from "./orchestration/planning-barrier.ts";
 import { TaskRunner } from "./orchestration/task-runner.js";
+import { WorktreeManager } from "./orchestration/worktree-manager.js";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
@@ -157,7 +159,6 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
-import { JobManager } from "./orchestration/job-manager.js";
 import { createTaskTool, createTaskToolDefinition, type TaskOperations } from "./tools/task.ts";
 import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
@@ -479,6 +480,7 @@ export class AgentSession {
 	 * one's children and a disposed session's jobs cannot outlive it.
 	 */
 	private _taskJobs?: JobManager;
+	private _worktrees?: WorktreeManager;
 	/**
 	 * Where plan artifacts are written while planning.
 	 *
@@ -828,10 +830,23 @@ export class AgentSession {
 					return { model: selected as never };
 				},
 				redactor: this._secretRedactor,
+				worktrees: this.taskWorktrees,
 				run: (input) => this._runDelegatedChild(input),
 			});
 		}
 		return this._taskRunner;
+	}
+
+	/** Workspace provisioning for delegated coding children. */
+	get taskWorktrees(): WorktreeManager {
+		if (!this._worktrees) {
+			this._worktrees = new WorktreeManager({
+				baseDir: WorktreeManager.tempBaseDir(),
+				cwd: this._cwd,
+				ownsBaseDir: true,
+			});
+		}
+		return this._worktrees;
 	}
 
 	/** Background jobs for this session. */
@@ -861,6 +876,7 @@ export class AgentSession {
 		tools: readonly string[];
 		signal: AbortSignal;
 		budget: { exhausted: boolean; consume(): boolean };
+		workspace?: { path: string };
 		redact: (messages: unknown[]) => unknown[];
 		gate: {
 			beforeToolCall: (input: {
@@ -871,6 +887,7 @@ export class AgentSession {
 	}): Promise<string> {
 		const systemPrompt = [
 			"You are a delegated subagent handling one task for a parent agent.",
+			input.workspace ? `Your working directory is ${input.workspace.path}.` : undefined,
 			input.definition.context ? `Context from the parent:\n${input.definition.context}` : undefined,
 			input.tools.length > 0 ? `Tools available to you: ${input.tools.join(", ")}.` : undefined,
 			"Report the result as plain text once the task is done.",
@@ -994,6 +1011,7 @@ export class AgentSession {
 				cancel: (id) => this.taskJobs.cancel(id),
 				start: (label, run) => this.taskJobs.start(label, run),
 			},
+			worktrees: this.taskWorktrees,
 			runChild: (request) => this.taskRunner.run(request),
 			parentTools: () => this.getActiveToolNames(),
 		};
@@ -1801,6 +1819,13 @@ export class AgentSession {
 			this._taskRunner?.registry.cancelDescendants(this.taskRunner.parentId, "cancelled-by-parent");
 		} catch {
 			// A registry that is already torn down has nothing left to cancel.
+		}
+		try {
+			// Last, so a child that ignored its signal still had its workspace when
+			// it finished writing.
+			this._worktrees?.dispose();
+		} catch {
+			// A stranded temp directory is recoverable; a failed dispose is not.
 		}
 
 		this._extensionRunner.invalidate(
