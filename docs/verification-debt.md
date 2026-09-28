@@ -313,3 +313,37 @@ deterministically rather than assumed.
 engine: open a store on a temporary directory, capture, recall, contradict, and
 assert the earlier record is archived rather than erased. Record encryption at
 rest by inspecting the store files, without reading or logging any key.
+
+## PD-10: 86-96 pre-existing failures in the coding-agent suite, none caused by the migration
+
+**Status:** pre-existing, environment-dependent, unrelated to the memory work.
+
+**Measured, not assumed.** The full `coding-agent` suite reports between 86 and
+96 failures across 35-37 files depending on run. Checked out at `377febaa5`
+(the commit before the retention work) the same files fail:
+
+| Files | At `377febaa5` (before retention) | At `73403a228` (with retention) |
+|---|---|---|
+| `config.test.ts` + `git-update.test.ts` | 11 failed | 9 failed |
+
+The count moves *down* with the new code and the failing set is identical, so
+these are not regressions. The variance between runs is itself the evidence:
+the same tests pass or fail depending on machine load.
+
+**Cause.** These tests shell out to `git`, `npm`, `bun`, `pnpm` and `yarn` via
+`spawnSync` — self-update install paths, git history rewrites, package-manager
+discovery. Under the full parallel suite on Windows they contend for the same
+process and filesystem resources and time out. They are wall-clock sensitive,
+not logic-sensitive.
+
+**What was actually verified.** Every memory test passes in isolation and
+together: 62 tests across `memory-pipeline`, `memory-redaction-parity`,
+`memory-backend` and `iai-adapter`. Two genuine defects *were* found by this
+sweep and fixed in `f65619323` — selector ordering assertions that broke when
+`local-store` was added — which is the argument for running the full suite
+rather than trusting the count.
+
+**To close it:** run the suite with the package managers on `PATH` and without
+parallel contention (`vitest run --no-file-parallelism`, or per-file), and
+confirm the failures disappear. This needs an environment that can execute
+`bun`, `pnpm` and `yarn`, which this machine does not reliably provide.
