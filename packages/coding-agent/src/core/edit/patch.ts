@@ -68,7 +68,9 @@ export type PatchParseError =
 	| { readonly kind: "no-hunks" }
 	| { readonly kind: "too-large"; readonly bytes: number; readonly limit: number };
 
-export type PatchParseResult = { readonly ok: true; readonly patch: ParsedPatch } | { readonly ok: false; readonly error: PatchParseError };
+export type PatchParseResult =
+	| { readonly ok: true; readonly patch: ParsedPatch }
+	| { readonly ok: false; readonly error: PatchParseError };
 
 /**
  * Cap on patch size.
@@ -200,6 +202,11 @@ const HUNK_SEARCH_RADIUS = 200;
  * is how it happens.
  */
 export function applyPatch(content: string, patch: ParsedPatch): HunkApplyResult {
+	// Line endings are detected before normalization and restored on the way out.
+	// Without this a patch to a CRLF file silently rewrites the whole file to LF,
+	// showing up as a diff touching every line — the most confusing possible
+	// outcome for a change meant to touch one.
+	const lineEnding = content.includes("\r\n") ? "\r\n" : "\n";
 	const hadTrailingNewline = content.endsWith("\n");
 	const originalLines = content.replace(/\r\n/g, "\n").split("\n");
 	if (hadTrailingNewline) originalLines.pop();
@@ -229,7 +236,14 @@ export function applyPatch(content: string, patch: ParsedPatch): HunkApplyResult
 		result.splice(at, consumed, ...replacement);
 	}
 
-	return { ok: true, content: result.join("\n") + (hadTrailingNewline ? "\n" : ""), applied: placed.length };
+	const body = result.join("\n") + (hadTrailingNewline ? "\n" : "");
+	return {
+		ok: true,
+		// Restore the file's own line ending, so a one-line patch to a CRLF file
+		// does not rewrite every line.
+		content: lineEnding === "\r\n" ? body.replace(/\n/g, "\r\n") : body,
+		applied: placed.length,
+	};
 }
 
 type HunkLocation = { at: number; consumed: number; candidates?: readonly number[] };

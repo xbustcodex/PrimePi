@@ -157,6 +157,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import { createApplyPatchTool, createApplyPatchToolDefinition } from "./tools/apply-patch.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createGitToolDefinitions, createGitTools, type GitToolOperations } from "./tools/git.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
@@ -390,6 +391,7 @@ const SESSION_SCOPED_TOOL_NAMES = new Set<string>([
 	"git_stage",
 	"git_commit",
 	"checkpoint",
+	"apply_patch",
 ]);
 
 /**
@@ -4110,6 +4112,12 @@ ${context}`
 				sourceInfo: createSyntheticSourceInfo("<builtin:task>", { source: "builtin" }),
 			});
 		}
+		if (isAllowedTool("apply_patch") && isSelected("apply_patch")) {
+			definitionRegistry.set("apply_patch", {
+				definition: createApplyPatchToolDefinition({ root: this._cwd }) as never,
+				sourceInfo: createSyntheticSourceInfo("<builtin:apply_patch>", { source: "builtin" }),
+			});
+		}
 		for (const [name, definition] of Object.entries(createGitToolDefinitions(this._gitOperations()))) {
 			if (isAllowedTool(name) && isSelected(name)) {
 				definitionRegistry.set(name, {
@@ -4173,6 +4181,10 @@ ${context}`
 		if (isAllowedTool("task") && isSelected("task")) {
 			const taskTool = createTaskTool(this._taskOperations());
 			toolRegistry.set(taskTool.name, taskTool);
+		}
+		if (isAllowedTool("apply_patch") && isSelected("apply_patch")) {
+			const applyPatchTool = createApplyPatchTool({ root: this._cwd });
+			toolRegistry.set(applyPatchTool.name, applyPatchTool);
 		}
 		for (const gitTool of Object.values(createGitTools(this._gitOperations()))) {
 			if (isAllowedTool(gitTool.name) && isSelected(gitTool.name)) {

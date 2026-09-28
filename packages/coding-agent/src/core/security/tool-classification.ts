@@ -108,6 +108,10 @@ export const BUILT_IN_TOOL_TIERS: Readonly<Record<string, ToolRiskTier>> = Objec
 	// splitting the tier per operation would let the dangerous half be reached
 	// through the safe half's classification.
 	checkpoint: "write",
+	// A patch writes file content, so it is the same class as `edit`. The patch
+	// layer validates the target and the hunks before any write, and the tool
+	// itself stages nothing and moves nothing.
+	apply_patch: "write",
 });
 
 /** A tool classification entry, kept as a declaration so policy and tier stay together. */

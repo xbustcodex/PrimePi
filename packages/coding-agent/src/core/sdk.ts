@@ -279,6 +279,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		"git_stage",
 		"git_commit",
 		"checkpoint",
+		"apply_patch",
 	];
 	const configuredDefaultToolNames = settingsManager.getDefaultTools();
 	const allowedToolNames = options.tools ?? (options.noTools === "all" ? [] : undefined);
