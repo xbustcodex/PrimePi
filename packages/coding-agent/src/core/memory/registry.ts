@@ -23,8 +23,10 @@
  * change to this file rather than to the panel.
  */
 
+import path from "node:path";
 import type { MemoryBackend, MemoryBackendDescriptor } from "./backend.ts";
 import { type IaiAdapterOptions, IaiPersonalBackend } from "./iai-adapter.ts";
+import { LocalStoreBackend } from "./local-store.ts";
 
 /** A descriptor for a backend that is expected to be unavailable right now. */
 function pending(
@@ -180,30 +182,55 @@ export const MEMORY_BACKEND_DESCRIPTORS: readonly MemoryBackendDescriptor[] = [
 /**
  * Registered PrimePi backends, appended after every OMP entry.
  *
- * IAI Personal is the extension the Memory selector gains without disturbing the
- * reference ordering: it is registered after all five OMP backends, so a user who
- * has learned the list still selects by position.
+ * Both sit after all five reference backends, so a user who has learned the
+ * list still selects by position.
+ *
+ * `local-store` is the backend the retention pipeline is proven against: unlike
+ * the IAI adapter, every one of its behaviours can be exercised today, because
+ * its dependencies are this repository. `iai-personal` follows it and is
+ * provisional - its engine has not been run, so its presence in the selector
+ * says nothing about whether storage works.
  */
 const PRIMEPI_DESCRIPTORS: MemoryBackendDescriptor[] = [
 	{
+		id: "local-store",
+		label: "Local Store",
+		description: "Persistent local memory store, one file per project",
+		create: () =>
+			new LocalStoreBackend({
+				root: primePiOptions?.localStore?.root ?? path.join(primePiOptions?.agentDir ?? process.cwd(), "memory"),
+				...(primePiOptions?.localStore?.project ? { project: primePiOptions.localStore.project } : {}),
+			}),
+	},
+	{
 		id: "iai-personal",
 		label: "IAI Personal",
-		description: "Local encrypted personal memory engine (MCP over stdio)",
+		description: "Local encrypted personal memory engine (MCP over stdio) - adapter only, engine unverified",
 		create: () => new IaiPersonalBackend(primePiOptions?.iai ?? {}),
 	},
 ];
 
-/** Where the IAI engine lives, when the caller configures it. */
-let primePiOptions: { iai?: IaiAdapterOptions } | undefined;
+/** Where backends live, when the caller configures them. */
+let primePiOptions:
+	| {
+			iai?: IaiAdapterOptions;
+			agentDir?: string;
+			localStore?: { root?: string; project?: string };
+	  }
+	| undefined;
 
 /**
- * Points the IAI adapter at an engine.
+ * Points the PrimePi backends at their storage.
  *
- * Configuration, not installation: this records where an already-present engine
- * is. It never downloads a dependency, never edits PATH, and never writes outside
- * the engine's own data directory.
+ * Configuration, not installation: this records where files are written and
+ * where an already-present engine is. It never downloads a dependency, never
+ * edits PATH, and never writes outside the paths given here.
  */
-export function configurePrimePiBackends(options: { iai?: IaiAdapterOptions }): void {
+export function configurePrimePiBackends(options: {
+	iai?: IaiAdapterOptions;
+	agentDir?: string;
+	localStore?: { root?: string; project?: string };
+}): void {
 	primePiOptions = options;
 }
 
