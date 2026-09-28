@@ -231,7 +231,17 @@ export function configurePrimePiBackends(options: {
 	agentDir?: string;
 	localStore?: { root?: string; project?: string };
 }): void {
-	primePiOptions = options;
+	// Merged, not replaced. Two callers configuring different backends - a session
+	// supplying `agentDir` while startup already configured the IAI engine - must
+	// not silently discard each other's settings, because the visible symptom is a
+	// backend that stopped finding its own files.
+	primePiOptions = {
+		...primePiOptions,
+		...Object.fromEntries(Object.entries(options).filter(([, value]) => value !== undefined)),
+		localStore: options.localStore
+			? { ...primePiOptions?.localStore, ...options.localStore }
+			: primePiOptions?.localStore,
+	} as typeof primePiOptions;
 }
 
 /** The full selector: OMP's five in order, then any PrimePi additions. */
