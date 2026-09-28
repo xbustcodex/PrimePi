@@ -108,6 +108,24 @@ const FINDINGS: readonly Finding[] = [
 		evidence: "registry.ts local-store reports unavailable when no agent directory is configured; a memory/ directory appeared in the repository root during testing",
 		source: "registry",
 	},
+	{
+		type: "root-cause",
+		text: "Memory deduplication must check for conflicts before any similarity score, because similarity is exactly what misleads when a corrected entry point or setting key differs from the stale one by a single token",
+		evidence: "retention.ts conflictsWith runs before the containment score; iai_mcp.core:main against iai_mcp.cli:main scored a 0.9 word match",
+		source: "dedup-adversarial",
+	},
+	{
+		type: "root-cause",
+		text: "A process-wide backend configuration merge that silently omits one backend key produces a store with no root, and the symptom names neither the missing field nor the caller that omitted it",
+		evidence: "registry.ts configurePrimePiBackends omitted the bankStore merge line; the descriptor still resolved so inspection found nothing",
+		source: "registry",
+	},
+	{
+		type: "review",
+		text: "Antonym and route-name lists in memory deduplication must stay short and closed, because a large table reports near-antonyms as contradictions and a store that never deduplicates accumulates the same fact forever",
+		evidence: "retention.ts ANTONYMS and ROUTE_NAMES are closed lists; the three merge-still-works cases are the guard against over-splitting",
+		source: "dedup-adversarial",
+	},
 ];
 
 const backendId = "bank-store";
