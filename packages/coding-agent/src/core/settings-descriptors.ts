@@ -2958,6 +2958,48 @@ export const vaultEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const providersOpenaiCodexCodeMode = registerSetting({
+	key: "providers.openai-codex.codeMode",
+	type: "enum",
+	default: "off",
+	values: ["off", "on", "auto"],
+	parse: (raw) => (raw === "off" || raw === "on" || raw === "auto" ? raw : undefined),
+	ui: {
+		label: "Codex Code Mode",
+		description:
+			"Collapse the direct tool surface for code_mode_only models to a small keep-set, reaching every other tool through the eval bridge. auto follows the model catalog flag.",
+		tab: "providers",
+		group: "Services",
+		control: "submenu",
+	},
+});
+
+export const providersOpenaiCodexCodeModeDirectTools = registerSetting({
+	key: "providers.openai-codex.codeModeDirectTools",
+	type: "stringList",
+	default: [],
+	parse: (raw) => (Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === "string") : undefined),
+	ui: {
+		label: "Codex Code Mode Direct Tools",
+		description:
+			"Extra tools to keep on the direct surface under Code Mode. checkpoint, rewind and new_context are always kept, because the machinery that acts on them reads the direct tool result.",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const providersWebSearchTimeoutSeconds = registerSetting({
+	key: "providers.webSearchTimeoutSeconds",
+	type: "number",
+	default: 30,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Web Search Timeout",
+		description: "Seconds to wait for a provider web search before falling back to the next route",
+		tab: "providers",
+		group: "Services",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

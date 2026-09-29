@@ -40,6 +40,7 @@ export {
 } from "@earendil-works/pi-telemetry";
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
+export * from "./code-mode.ts";
 export * from "./harness/agent-harness.ts";
 export {
 	type BranchPreparation,

@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Providers tab, Services: the code-mode tool surface and the search budget.
+	"providers.openai-codex.codeMode":
+		"consumed by resolveCodeMode, which collapses the direct tool surface only when the eval transport and the eval tool are both present",
+	"providers.openai-codex.codeModeDirectTools":
+		"consumed by resolveCodeMode, admitting an extra direct tool only when the session has it enabled",
+	"providers.webSearchTimeoutSeconds":
+		"consumed as the wall-clock budget for a provider web search before the route is abandoned",
 	// Tools tab, Available Tools: structural search and the tool backends.
 	"astGrep.enabled":
 		"consumed by the structural search tool, which pages matches through mergeStructuralResults",
