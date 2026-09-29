@@ -57,6 +57,23 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Memory tab, Hindsight: bank scoping for a remote service.
+	"hindsight.apiUrl":
+		"consumed by the Hindsight client as the service base URL",
+	"hindsight.apiToken":
+		"consumed as the bearer token; masked in the panel because it is a credential",
+	"hindsight.bankId":
+		"consumed by resolveBankScope, taking precedence over the bankIdPrefix",
+	"hindsight.scoping":
+		"consumed by resolveBankScope, choosing hard bank isolation or tag filtering",
+	"hindsight.autoRecall":
+		"consumed by the Hindsight lifecycle, recalling on the first turn of each session",
+	"hindsight.autoRetain":
+		"consumed by the Hindsight lifecycle, retaining conversation content as it accumulates",
+	"hindsight.retainMode":
+		"consumed when retaining, choosing one document per session or chunked turns",
+	"hindsight.mentalModelsEnabled":
+		"consumed when bootstrapping, letting the service derive models over retained memories",
 	// Interaction tab, Share: what leaves the machine.
 	"share.redactSecrets":
 		"consumed by decideShare, resolved against the session own project rather than the invoking directory",

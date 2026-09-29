@@ -1717,6 +1717,113 @@ export const shareStore = registerSetting({
 		group: "Share",
 	},
 });
+export const hindsightApiUrl = registerSetting({
+	key: "hindsight.apiUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Hindsight API URL",
+		description: "Base URL of the Hindsight service",
+		tab: "memory",
+		group: "Hindsight",
+	},
+});
+
+export const hindsightApiToken = registerSetting({
+	key: "hindsight.apiToken",
+	type: "string",
+	default: "",
+	// Masked in the panel: this is a bearer credential.
+	revealLength: true,
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Hindsight API Token",
+		description: "Bearer token for the Hindsight service",
+		tab: "memory",
+		group: "Hindsight",
+	},
+});
+
+export const hindsightBankId = registerSetting({
+	key: "hindsight.bankId",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Hindsight Bank ID",
+		description: "Bank to use; defaults to the bankIdPrefix",
+		tab: "memory",
+		group: "Hindsight",
+	},
+});
+
+export const hindsightScoping = registerSetting({
+	key: "hindsight.scoping",
+	type: "enum",
+	default: "global",
+	values: ["global", "per-project", "per-project-tagged"],
+	parse: (raw) => (raw === "global" || raw === "per-project" || raw === "per-project-tagged" ? raw : undefined),
+	ui: {
+		label: "Hindsight Scoping",
+		description:
+			"global = one shared bank; per-project = a bank per project; per-project-tagged = one bank filtered by a project tag",
+		tab: "memory",
+		group: "Hindsight",
+	},
+});
+
+export const hindsightAutoRecall = registerSetting({
+	key: "hindsight.autoRecall",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Hindsight Auto Recall",
+		description: "Recall from Hindsight on the first turn of each session",
+		tab: "memory",
+		group: "Hindsight",
+		control: "cycle",
+	},
+});
+
+export const hindsightAutoRetain = registerSetting({
+	key: "hindsight.autoRetain",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Hindsight Auto Retain",
+		description: "Retain conversation content to Hindsight as it accumulates",
+		tab: "memory",
+		group: "Hindsight",
+		control: "cycle",
+	},
+});
+
+export const hindsightRetainMode = registerSetting({
+	key: "hindsight.retainMode",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Hindsight Retain Mode",
+		description: "full-session = upsert one document per session; last-turn = chunked",
+		tab: "memory",
+		group: "Hindsight",
+	},
+});
+
+export const hindsightMentalModelsEnabled = registerSetting({
+	key: "hindsight.mentalModelsEnabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Hindsight Mental Models",
+		description: "Let the service maintain derived models over retained memories",
+		tab: "memory",
+		group: "Hindsight",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
