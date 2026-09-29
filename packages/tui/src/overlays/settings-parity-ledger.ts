@@ -65,81 +65,56 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Tools tab, Grep and extension handlers.
 	"grep.contextBefore":
 		"consumed by mergeContextRegions, which merges overlapping regions so shared context is emitted once",
-	"grep.contextAfter":
-		"consumed by mergeContextRegions and clamped at the end of a file so no absent line is claimed",
-	"grep.enabled":
-		"consumed when the tool set is assembled, gating whether grep is offered",
-	"glob.enabled":
-		"consumed when the tool set is assembled, gating whether glob is offered",
+	"grep.contextAfter": "consumed by mergeContextRegions and clamped at the end of a file so no absent line is claimed",
+	"grep.enabled": "consumed when the tool set is assembled, gating whether grep is offered",
+	"glob.enabled": "consumed when the tool set is assembled, gating whether glob is offered",
 	"extensionHandlers.toolCallTimeoutMs":
 		"consumed as the deadline for an extension tool-call handler before it is abandoned",
 	// Context tab, Compaction: when maintenance runs.
-	"compaction.enabled":
-		"consumed by decideCompaction, gating whether maintenance may run at all",
-	"compaction.thresholdPercent":
-		"consumed by resolveCompactionThreshold, which falls back to the reserve at -1",
+	"compaction.enabled": "consumed by decideCompaction, gating whether maintenance may run at all",
+	"compaction.thresholdPercent": "consumed by resolveCompactionThreshold, which falls back to the reserve at -1",
 	"compaction.thresholdTokens":
 		"consumed by resolveCompactionThreshold, where it overrides the percentage because it is the more specific statement",
-	"compaction.idleThresholdTokens":
-		"consumed by decideIdleCompaction as the context size an idle session must reach",
-	"compaction.idleTimeoutSeconds":
-		"consumed by decideIdleCompaction, which waits for the delay before the threshold",
-	"compaction.idleEnabled":
-		"consumed by decideIdleCompaction, which produces no action at all when this is off",
+	"compaction.idleThresholdTokens": "consumed by decideIdleCompaction as the context size an idle session must reach",
+	"compaction.idleTimeoutSeconds": "consumed by decideIdleCompaction, which waits for the delay before the threshold",
+	"compaction.idleEnabled": "consumed by decideIdleCompaction, which produces no action at all when this is off",
 	// Tasks tab, Subagents.
-	"task.maxConcurrency":
-		"consumed when a subagent is spawned, bounding how many run at once",
-	"task.maxRecursionDepth":
-		"consumed when a subagent spawns another, bounding how deep delegation may go",
+	"task.maxConcurrency": "consumed when a subagent is spawned, bounding how many run at once",
+	"task.maxRecursionDepth": "consumed when a subagent spawns another, bounding how deep delegation may go",
 	"task.softRequestBudget":
 		"consumed by resolveSoftRequestBudget, where it can only lower an agent bundled ceiling and never raise it",
-	"task.maxEffort":
-		"consumed when a spawn applies its effort, bounding what a subagent may be asked for",
-	"task.eager":
-		"consumed when work is classified, choosing whether a self-contained piece is delegated",
-	"task.batch":
-		"consumed when several task calls are issued in one turn, choosing batching over one at a time",
+	"task.maxEffort": "consumed when a spawn applies its effort, bounding what a subagent may be asked for",
+	"task.eager": "consumed when work is classified, choosing whether a self-contained piece is delegated",
+	"task.batch": "consumed when several task calls are issued in one turn, choosing batching over one at a time",
 	"task.enableLsp":
 		"consumed when a subagent is assembled, giving it language-server context for the files it works on",
-	"task.enableEffort":
-		"consumed when a task request is read, allowing a specific effort for its subagent",
+	"task.enableEffort": "consumed when a task request is read, allowing a specific effort for its subagent",
 	// Model tab, Sampling: -1 means the provider default, and absence is not zero.
-	"temperature":
-		"consumed by resolveParameter, which omits it entirely at the -1 sentinel rather than defaulting it",
-	"topP":
-		"consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
-	"topK":
-		"consumed by resolveParameter, which omits it at the -1 sentinel",
-	"minP":
-		"consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
-	"presencePenalty":
+	temperature: "consumed by resolveParameter, which omits it entirely at the -1 sentinel rather than defaulting it",
+	topP: "consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
+	topK: "consumed by resolveParameter, which omits it at the -1 sentinel",
+	minP: "consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
+	presencePenalty:
 		"consumed by resolveParameter, which omits it at the -1 sentinel and accepts a provider's negative range",
-	"repetitionPenalty":
+	repetitionPenalty:
 		"consumed by resolveParameter, which omits it at the -1 sentinel and accepts a provider's negative range",
 	// Appearance tab, Display.
-	"display.smoothStreaming":
-		"consumed when a streamed chunk is drawn, choosing a smooth redraw over a per-chunk one",
+	"display.smoothStreaming": "consumed when a streamed chunk is drawn, choosing a smooth redraw over a per-chunk one",
 	"display.hideToolActivity":
 		"consumed by toolActivityMode, which chooses how much of a turn's tool activity is drawn",
 	"display.showTokenUsage":
 		"consumed by renderUsage; a display preference that changes what is drawn and not what was spent",
-	"display.showTurnTime":
-		"consumed by renderUsage when the caller measured a duration",
-	"display.cacheMissMarker":
-		"consumed by isCacheMiss, which marks only a lost cache and not a write or a hit",
+	"display.showTurnTime": "consumed by renderUsage when the caller measured a duration",
+	"display.cacheMissMarker": "consumed by isCacheMiss, which marks only a lost cache and not a write or a hit",
 	"display.collapseCompacted":
 		"consumed by layoutCompacted, which emits one divider when collapsing and one per point when expanded",
-	"showHardwareCursor":
-		"consumed when the cursor is hidden or restored while drawing",
-	"tui.imeSafeCursor":
-		"consumed when the prompt is laid out, reserving room for an IME candidate window",
-	"tui.hyperlinks":
-		"consumed when a path is drawn, choosing an OSC 8 hyperlink or plain text",
-	"tui.tight":
-		"consumed when the layout is built, choosing compact padding",
-	"autoResume":
+	showHardwareCursor: "consumed when the cursor is hidden or restored while drawing",
+	"tui.imeSafeCursor": "consumed when the prompt is laid out, reserving room for an IME candidate window",
+	"tui.hyperlinks": "consumed when a path is drawn, choosing an OSC 8 hyperlink or plain text",
+	"tui.tight": "consumed when the layout is built, choosing compact padding",
+	autoResume:
 		"consumed by chooseSessionToResume; a resumed session restores its own model instead of taking a CLI default",
-	"defaultThinkingLevel":
+	defaultThinkingLevel:
 		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	// Tools tab, Discovery & MCP.
 	"mcp.enableProjectConfig": "consumed when servers are assembled, gating whether a project may declare its own",

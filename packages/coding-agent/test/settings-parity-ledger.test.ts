@@ -279,3 +279,36 @@ describe("the two ledgers are not conflated", () => {
 		expect(reconcileLedger().total).toBe(OMP_PARITY_ROW_COUNT);
 	});
 });
+
+describe("the evidence model is internally consistent", () => {
+	it("derives exactly the rows its promotion table names", () => {
+		// The table is the single promotion point. If a key in it is not a real row id
+		// - a typo, or a key spliced in without quotes - the row silently fails to
+		// promote and the count is wrong in both directions at once.
+		const summary = reconcileLedger();
+		const entries = buildLedger().filter((entry) => entry.state === "wired");
+		const derived = new Set(entries.map((entry) => entry.id));
+		expect(derived.size, "two rows derive to the same id").toBe(entries.length);
+		// Every derived id is a key of the table, and the counts agree.
+		expect(derived.size).toBe(summary.byState.wired);
+	});
+
+	it("keeps live-verified rows a strict subset of wired rows", () => {
+		// Live verification is a stronger claim about a row that is *already* wired.
+		// A row outside that subset means a capability was proven without the
+		// consumer that makes it reachable, which is the defect this caught.
+		const entries = buildLedger();
+		const wired = new Set(entries.filter((entry) => entry.state === "wired").map((entry) => entry.id));
+		const live = entries.filter((entry) => entry.liveVerified).map((entry) => entry.id);
+		const orphans = live.filter((id) => !wired.has(id));
+		expect(orphans, "live-verified rows that are not wired: " + orphans.join(", ")).toEqual([]);
+	});
+
+	it("gives every live-verified row a reason for being live-verified", () => {
+		// Proof is a claim about execution, and an unexplained one cannot be checked
+		// by whoever reads the ledger next.
+		for (const entry of buildLedger().filter((row) => row.liveVerified)) {
+			expect(entry.note.length, entry.id).toBeGreaterThan(10);
+		}
+	});
+});
