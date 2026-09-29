@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Interaction tab, Startup & Updates: checking is not updating.
+	"startup.checkUpdate":
+		"consumed by evaluateUpdateCheck, which returns a notice and never a download or an install",
+	"update.channel":
+		"consumed by evaluateUpdateCheck to choose which stream to compare against",
+	"startup.quiet":
+		"consumed at session start, suppressing the splash and the changelog",
+	"startup.changelogMode":
+		"consumed at session start, showing what changed since the last run",
 	// Appearance tab, Display: terminal state the renderer owns.
 	"terminal.showProgress":
 		"consumed by TerminalProgress, which only ever clears an indicator it set itself",

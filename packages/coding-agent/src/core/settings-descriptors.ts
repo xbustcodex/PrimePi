@@ -2499,6 +2499,60 @@ export const taskShowResolvedModelBadge = registerSetting({
 		control: "cycle",
 	},
 });
+export const startupCheckUpdate = registerSetting({
+	key: "startup.checkUpdate",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Check for Updates",
+		description:
+			"Check on startup whether a newer version is published. Nothing is downloaded or installed either way",
+		tab: "interaction",
+		group: "Startup & Updates",
+		control: "cycle",
+	},
+});
+
+export const updateChannel = registerSetting({
+	key: "update.channel",
+	type: "enum",
+	default: "stable",
+	values: ["stable", "canary"],
+	parse: (raw) => (raw === "stable" || raw === "canary" ? raw : undefined),
+	ui: {
+		label: "Update Channel",
+		description: "Which stream to compare against: stable, or canary, which is expected to break",
+		tab: "interaction",
+		group: "Startup & Updates",
+		control: "submenu",
+	},
+});
+
+export const startupQuiet = registerSetting({
+	key: "startup.quiet",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Quiet Startup",
+		description: "Start without the splash or the changelog",
+		tab: "interaction",
+		group: "Startup & Updates",
+		control: "cycle",
+	},
+});
+
+export const startupChangelogEnabled = registerSetting({
+	key: "startup.changelogMode",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Startup Changelog",
+		description: "Show what changed since the version you last ran",
+		tab: "interaction",
+		group: "Startup & Updates",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
