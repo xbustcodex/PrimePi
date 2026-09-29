@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tasks tab, Isolation: the copy-on-write backend and subagent lifetime bounds.
+	"isolation.backend":
+		"consumed by candidateOrder and resolveIsolationBackend, which fall back within a behaviour class before crossing classes and report the downgrade",
+	"worktree.base":
+		"consumed when a worktree is created, deciding where it is rooted",
+	"task.maxRuntimeMs":
+		"consumed as the wall-clock budget for a subagent before it is stopped",
+	"task.agentIdleTtlMs":
+		"consumed as the idle window before a subagent process is released",
 	// Shell tab, Eval & Runtimes: the kernel and the tools it may hand to a subagent.
 	"eval.py":
 		"consumed when an eval cell selects its kernel; the Python kernel participates in the cross-kernel name check",

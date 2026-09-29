@@ -3215,6 +3215,70 @@ export const evalAutoBackground = registerSetting({
 		control: "cycle",
 	},
 });
+export const isolationBackend = registerSetting({
+	key: "isolation.backend",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "apfs", "btrfs", "zfs", "reflink", "overlayfs", "projfs", "block-clone", "rcopy"],
+	parse: (raw) =>
+		raw === "auto" ||
+		raw === "apfs" ||
+		raw === "btrfs" ||
+		raw === "zfs" ||
+		raw === "reflink" ||
+		raw === "overlayfs" ||
+		raw === "projfs" ||
+		raw === "block-clone" ||
+		raw === "rcopy"
+			? raw
+			: undefined,
+	ui: {
+		label: "Isolation Backend",
+		description:
+			"Backend used for subagent isolation and worktree cloning. An unavailable choice falls back within its class first, and the result reports that it did.",
+		tab: "tasks",
+		group: "Isolation",
+		control: "submenu",
+	},
+});
+
+export const worktreeBase = registerSetting({
+	key: "worktree.base",
+	type: "string",
+	default: "",
+	ui: {
+		label: "Worktree Base Directory",
+		description: "Where worktrees are created; empty places them beside the repository",
+		tab: "tasks",
+		group: "Isolation",
+	},
+});
+
+export const taskMaxRuntimeMs = registerSetting({
+	key: "task.maxRuntimeMs",
+	type: "number",
+	default: 1_800_000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Max Subagent Runtime",
+		description: "Milliseconds a subagent may run before it is stopped and its result returned",
+		tab: "tasks",
+		group: "Isolation",
+	},
+});
+
+export const taskAgentIdleTtlMs = registerSetting({
+	key: "task.agentIdleTtlMs",
+	type: "number",
+	default: 300_000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Agent Idle TTL",
+		description: "Milliseconds an idle subagent is kept before its process is released",
+		tab: "tasks",
+		group: "Isolation",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
