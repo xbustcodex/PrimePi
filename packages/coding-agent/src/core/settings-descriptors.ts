@@ -711,7 +711,6 @@ export const retryModelFallback = registerSetting({
 	},
 });
 
-
 export const retryFallbackRevertPolicy = registerSetting({
 	key: "retry.fallbackRevertPolicy",
 	type: "enum",
@@ -724,6 +723,32 @@ export const retryFallbackRevertPolicy = registerSetting({
 		tab: "model",
 		group: "Retry & Fallback",
 		control: "submenu",
+	},
+});
+
+export const compactionSupersedeReads = registerSetting({
+	key: "compaction.supersedeReads",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Supersede Stale Reads",
+		description: "Replace a tool result that a newer read of the same target has made redundant",
+		tab: "context",
+		group: "Compaction",
+		control: "cycle",
+	},
+});
+
+export const compactionDropUseless = registerSetting({
+	key: "compaction.dropUseless",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Elide Uneventful Results",
+		description: "Replace a tool result that carries no information with a short notice",
+		tab: "context",
+		group: "Compaction",
+		control: "cycle",
 	},
 });
 

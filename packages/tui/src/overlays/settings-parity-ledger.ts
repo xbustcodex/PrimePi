@@ -50,6 +50,11 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
+	"compaction.dropUseless":
+		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",
+	"compaction.supersedeReads":
+		"consumed by pruneToolOutputs, which replaces a result a newer read of the same target made redundant",
 };
 
 /** The states, kept distinct because collapsing them is how a panel lies. */
@@ -92,6 +97,8 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"retry.modelFallback",
 	"retry.fallbackChains",
 	"retry.fallbackRevertPolicy",
+	"compaction.dropUseless",
+	"compaction.supersedeReads",
 ]);
 
 function stateFor(row: ParityRow): LedgerState {

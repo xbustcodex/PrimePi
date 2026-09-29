@@ -3322,8 +3322,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Prune older read results when the same file is read again (cache-aware, runs every turn)",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "compaction.supersedeReads",
+		note: "consumed by pruneToolOutputs; see the parity ledger for the exact rule",
 	},
 	{
 		id: "compaction.dropUseless",
@@ -3334,8 +3335,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			"Prune tool results flagged contextually useless (no matches, timed-out waits) once consumed (cache-aware)",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "compaction.dropUseless",
+		note: "consumed by pruneToolOutputs; see the parity ledger for the exact rule",
 	},
 	{
 		id: "snapcompact.systemPrompt",
