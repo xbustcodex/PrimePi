@@ -670,8 +670,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"session"',
 		values: ["session", "per-call"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "python.kernelMode",
+		note: "consumed by decideKernel; per-call starts fresh so two calls cannot interfere, session reuses a matching kernel",
 	},
 	{
 		id: "python.interpreter",
@@ -682,8 +683,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.",
 		type: "string",
 		default: '""',
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "python.interpreter",
+		note: "consumed by resolveInterpreter, used exactly and skipping discovery so a version-dependent result is attributable",
 	},
 	{
 		id: "bash.enabled",

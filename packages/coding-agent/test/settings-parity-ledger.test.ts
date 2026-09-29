@@ -183,6 +183,8 @@ describe("the classifications are the ones the program claims", () => {
 			"providers.fetch",
 			"providers.streamFirstEventTimeoutSeconds",
 			"providers.streamIdleTimeoutSeconds",
+			"python.interpreter",
+			"python.kernelMode",
 			"repetitionPenalty",
 			"retry.fallbackChains",
 			"retry.fallbackRevertPolicy",

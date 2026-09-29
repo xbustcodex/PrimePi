@@ -2269,6 +2269,36 @@ export const goalStatusInFooter = registerSetting({
 		control: "cycle",
 	},
 });
+export const pythonKernelMode = registerSetting({
+	key: "python.kernelMode",
+	type: "enum",
+	// Session by default: a persistent kernel lets a models second snippet
+	// reference what its first one built. Per-call is the isolation choice.
+	default: "session",
+	values: ["session", "per-call"],
+	parse: (raw) => (raw === "session" || raw === "per-call" ? raw : undefined),
+	ui: {
+		label: "Python Kernel Mode",
+		description: "Keep the IPython kernel alive across eval calls, or start a fresh one each time",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "submenu",
+	},
+});
+
+export const pythonInterpreter = registerSetting({
+	key: "python.interpreter",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Python Interpreter",
+		description:
+			"Optional path to an exact Python executable. When set, automatic Python runtime discovery is skipped.",
+		tab: "shell",
+		group: "Eval & Runtimes",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

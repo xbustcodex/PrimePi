@@ -57,6 +57,11 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Shell tab, Eval & Runtimes: the persistent Python kernel.
+	"python.kernelMode":
+		"consumed by decideKernel; per-call starts fresh so two calls cannot interfere, session reuses a matching kernel",
+	"python.interpreter":
+		"consumed by resolveInterpreter, used exactly and skipping discovery so a version-dependent result is attributable",
 	// Tasks tab, Modes: the explicit plan lifecycle.
 	"plan.enabled":
 		"consumed by mayBeginExecution, gating execution while plan mode is active",
