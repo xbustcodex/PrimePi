@@ -18,8 +18,13 @@ type WorkEventType = (typeof WORK_EVENT_TYPES)[number];
 
 function parse(argument: string): { type: WorkEventType; text: string; evidence: string } | undefined {
 	// <type>:<text>|<evidence>
+	//
+	// Both separators are found in the *first* segment: a claim may legitimately
+	// contain a semicolon or a colon in its evidence, and treating the last pipe as
+	// authoritative meant ordinary prose silently failed to parse. The first pipe is
+	// the boundary because the type prefix never contains one.
 	const firstSeparator = argument.indexOf(":");
-	const lastPipe = argument.lastIndexOf("|");
+	const lastPipe = argument.indexOf("|", firstSeparator);
 	if (firstSeparator <= 0 || lastPipe <= firstSeparator) return undefined;
 	const type = argument.slice(0, firstSeparator);
 	const text = argument.slice(firstSeparator + 1, lastPipe).trim();
