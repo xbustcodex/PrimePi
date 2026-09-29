@@ -60,6 +60,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Appearance tab, Display.
+	"tui.resizeScrollback":
+		"consumed by planScrollbackResize; a resize that changed nothing never erases, and only a settled width refreshes history",
 	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
 	"compaction.dropUseless":
 		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",

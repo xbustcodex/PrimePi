@@ -98,6 +98,7 @@ describe("the classifications are the ones the program claims", () => {
 			"secrets.enabled",
 			"steeringMode",
 			"todo.enabled",
+			"tui.resizeScrollback",
 		]);
 	});
 

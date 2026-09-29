@@ -532,6 +532,24 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const resizeScrollback = registerSetting({
+	key: "tui.resizeScrollback",
+	type: "enum",
+	// Rebuild is the default because it is the only mode where every visible row is
+	// correct. Append leaves the user scrolling through two versions of the same
+	// conversation; preserve leaves them scrolling through text that no longer fits.
+	default: "rebuild",
+	values: ["append", "rebuild", "preserve"],
+	parse: (raw) => (raw === "append" || raw === "rebuild" || raw === "preserve" ? raw : undefined),
+	ui: {
+		label: "Resize Scrollback",
+		description: "How a settled terminal resize refreshes transcript rows retained in terminal scrollback",
+		tab: "appearance",
+		group: "Display",
+		control: "submenu",
+	},
+});
+
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

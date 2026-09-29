@@ -2073,8 +2073,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			},
 		],
 		values: ["append", "rebuild", "preserve"],
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "tui.resizeScrollback",
+		note: "consumed by planScrollbackResize; a resize that changed nothing never erases, and only a settled width refreshes history",
 	},
 	{
 		id: "terminal.showProgress",
