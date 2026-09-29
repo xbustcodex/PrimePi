@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Sampling: -1 means the provider default, and absence is not zero.
+	"temperature":
+		"consumed by resolveParameter, which omits it entirely at the -1 sentinel rather than defaulting it",
+	"topP":
+		"consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
+	"topK":
+		"consumed by resolveParameter, which omits it at the -1 sentinel",
+	"minP":
+		"consumed by resolveParameter; a value outside 0 to 1 is dropped rather than clamped",
+	"presencePenalty":
+		"consumed by resolveParameter, which omits it at the -1 sentinel and accepts a provider's negative range",
+	"repetitionPenalty":
+		"consumed by resolveParameter, which omits it at the -1 sentinel and accepts a provider's negative range",
 	// Appearance tab, Display.
 	"display.smoothStreaming":
 		"consumed when a streamed chunk is drawn, choosing a smooth redraw over a per-chunk one",

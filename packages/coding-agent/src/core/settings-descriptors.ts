@@ -1152,6 +1152,101 @@ export const tuiTightLayout = registerSetting({
 		control: "cycle",
 	},
 });
+export const samplingTemperature = registerSetting({
+	key: "temperature",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Temperature",
+		description: "Sampling temperature (0 = deterministic, 1 = creative, -1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
+
+export const samplingTopP = registerSetting({
+	key: "topP",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Top P",
+		description: "Nucleus sampling cutoff (0 to 1, -1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
+
+export const samplingTopK = registerSetting({
+	key: "topK",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Top K",
+		description: "Limit sampling to the K most likely tokens (-1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
+
+export const samplingMinP = registerSetting({
+	key: "minP",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Min P",
+		description: "Minimum probability relative to the most likely token (0 to 1, -1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
+
+export const samplingPresencePenalty = registerSetting({
+	key: "presencePenalty",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Presence Penalty",
+		description: "Penalise tokens already present (-1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
+
+export const samplingRepetitionPenalty = registerSetting({
+	key: "repetitionPenalty",
+	type: "number",
+	// -1 is the sentinel meaning "provider default". It is not a value: a zero here
+	// would make an unconfigured session deterministic, which is a change the user
+	// never asked for.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : undefined),
+	ui: {
+		label: "Repetition Penalty",
+		description: "Penalise repeated tokens (-1 = provider default)",
+		tab: "model",
+		group: "Sampling",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
