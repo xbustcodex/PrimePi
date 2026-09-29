@@ -1514,6 +1514,85 @@ export const contextPromotionEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const imagesUrlsEnabled = registerSetting({
+	key: "images.urls.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Serve Images as URLs",
+		description: "Publish images once and pass a link, rather than sending them inline with every turn",
+		tab: "model",
+		group: "Vision",
+		control: "cycle",
+	},
+});
+
+export const imagesDescribeForTextModels = registerSetting({
+	key: "images.describeForTextModels",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Describe Images for Text Models",
+		description: "Describe an image in text when the active model cannot accept image input",
+		tab: "model",
+		group: "Vision",
+		control: "cycle",
+	},
+});
+
+export const imagesUrlsTtlHours = registerSetting({
+	key: "images.urls.ttlHours",
+	type: "number",
+	default: 72,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Image URL Lifetime (hours)",
+		description:
+			"Serving window for locally hosted image URLs, measured from the last time a conversation sent them; resuming a conversation re-arms the window at the same link. 0 keeps links alive while the broker runs",
+		tab: "model",
+		group: "Vision",
+	},
+});
+
+export const imagesUrlsBindHost = registerSetting({
+	key: "images.urls.bindHost",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Image URL Bind Host",
+		description: "Host and port the image broker binds to, as host:port",
+		tab: "model",
+		group: "Vision",
+	},
+});
+
+export const imagesUrlsPublicBaseUrl = registerSetting({
+	key: "images.urls.publicBaseUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Image URL Public Base",
+		description:
+			"Public base URL for image links, when the broker is reachable through a different address than it binds",
+		tab: "model",
+		group: "Vision",
+	},
+});
+
+export const imagesUrlsCommand = registerSetting({
+	key: "images.urls.command",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Image Upload Command",
+		description: "Command that uploads an image and prints its URL, used instead of the local broker",
+		tab: "model",
+		group: "Vision",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

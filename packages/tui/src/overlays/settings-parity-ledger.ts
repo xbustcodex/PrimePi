@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Vision: image URL lifetime.
+	"images.urls.enabled":
+		"consumed when a model request is built, choosing a link over inline image bytes",
+	"images.describeForTextModels":
+		"consumed when the active model cannot accept image input, describing it in text instead",
+	"images.urls.ttlHours":
+		"consumed by isExpired; 0 keeps links alive while the broker runs, and dispose still reaps them",
+	"images.urls.bindHost":
+		"consumed by buildImageUrl as the host a link points at",
+	"images.urls.publicBaseUrl":
+		"consumed by buildImageUrl, taking precedence over the bind host for a reachable address",
+	"images.urls.command":
+		"consumed when publishing an image, replacing the local broker with an external uploader",
 	// Context tab, General.
 	"workspace.additionalDirectories":
 		"consumed by buildWorkspaceRoots, which resolves each path once and drops a root already inside another",
