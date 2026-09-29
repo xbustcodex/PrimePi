@@ -1423,6 +1423,70 @@ export const compactionIdleEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const grepContextBefore = registerSetting({
+	key: "grep.contextBefore",
+	type: "number",
+	default: 1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Grep Context Before",
+		description: "Lines of context before each grep match",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
+
+export const grepContextAfter = registerSetting({
+	key: "grep.contextAfter",
+	type: "number",
+	default: 1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Grep Context After",
+		description: "Lines of context after each grep match",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
+
+export const grepEnabled = registerSetting({
+	key: "grep.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Grep",
+		description: "Enable the grep tool for searching file contents",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const globEnabled = registerSetting({
+	key: "glob.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Glob",
+		description: "Enable the glob tool for matching file paths",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const extensionHandlersToolCallTimeoutMs = registerSetting({
+	key: "extensionHandlers.toolCallTimeoutMs",
+	type: "number",
+	default: 30000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Tool Call Handler Timeout (ms)",
+		description: "Milliseconds an extension tool-call handler may run before it is abandoned",
+		tab: "tools",
+		group: "Available Tools",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

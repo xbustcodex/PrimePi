@@ -57,6 +57,17 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Grep and extension handlers.
+	"grep.contextBefore":
+		"consumed by mergeContextRegions, which merges overlapping regions so shared context is emitted once",
+	"grep.contextAfter":
+		"consumed by mergeContextRegions and clamped at the end of a file so no absent line is claimed",
+	"grep.enabled":
+		"consumed when the tool set is assembled, gating whether grep is offered",
+	"glob.enabled":
+		"consumed when the tool set is assembled, gating whether glob is offered",
+	"extensionHandlers.toolCallTimeoutMs":
+		"consumed as the deadline for an extension tool-call handler before it is abandoned",
 	// Context tab, Compaction: when maintenance runs.
 	"compaction.enabled":
 		"consumed by decideCompaction, gating whether maintenance may run at all",
