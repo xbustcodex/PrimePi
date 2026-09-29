@@ -2165,6 +2165,46 @@ export const lspDiagnosticsDeduplicate = registerSetting({
 		control: "cycle",
 	},
 });
+
+export const proseOnlyThinking = registerSetting({
+	key: "proseOnlyThinking",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Prose Only Thinking",
+		description:
+			"Omit code blocks from thinking summaries and replace them with an ellipsis, keeping the surrounding reasoning",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
+
+export const omitThinking = registerSetting({
+	key: "omitThinking",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Omit Thinking summaries",
+		description: "Instruct upstream providers to completely omit thinking summaries from responses, where supported",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
+
+export const externalThinking = registerSetting({
+	key: "externalThinking",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "External Thinking",
+		description: "Private scratchpad, not shown to the user; disables supported reasoning on GPT, Claude and Gemini",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

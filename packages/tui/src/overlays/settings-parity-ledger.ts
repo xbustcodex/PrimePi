@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Thinking: how reasoning is presented.
+	"hideThinkingBlock":
+		"consumed by resolveThinkingDisplay; it changes the screen and not the request, so the reasoning still costs tokens",
+	"proseOnlyThinking":
+		"consumed by toProseOnly, replacing code blocks in a summary with a marker while keeping the surrounding reasoning",
+	"omitThinking":
+		"consumed by requestEffect, asking the provider to produce no summaries at all",
+	"externalThinking":
+		"consumed by requestEffect, treating reasoning as a scratchpad and disabling it where the provider supports that",
 	// Files tab, LSP: shared server identity and diagnostics.
 	"lsp.enabled":
 		"consumed when the tool set is assembled, gating language-server integration",
