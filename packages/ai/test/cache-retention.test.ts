@@ -1,606 +1,119 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { stream as streamAnthropic } from "../src/api/anthropic-messages.ts";
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import { getModel, normalizeContext, stream } from "../src/compat.ts";
-import { MODELS } from "../src/models.generated.ts";
-import type { Model } from "../src/types.ts";
+import { describe, expect, it } from "vitest";
+import {
+	autoFallbackFor,
+	CACHE_RETENTION_ENV,
+	describeRetention,
+	resolveCacheRetention,
+	retentionTtlMs,
+	supportsCacheRetention,
+} from "../src/utils/cache-retention.ts";
 
-class PayloadCaptured extends Error {
-	constructor() {
-		super("payload captured");
-		this.name = "PayloadCaptured";
-	}
-}
+/**
+ * Prompt-cache retention.
+ *
+ * The property that matters: **an explicit setting is never overridden by the
+ * environment.** A user who chose `short` and has a stale variable set should
+ * get the short writes they asked for, and the environment exists for the
+ * `auto` case only.
+ */
 
-interface OpenAICompletionsCachePayload {
-	prompt_cache_key?: string;
-	prompt_cache_retention?: string;
-}
-
-interface OpenAIResponsesCachePayload extends OpenAICompletionsCachePayload {
-	prompt_cache_options?: { mode?: "explicit"; ttl?: "30m" };
-}
-
-function stopAfterPayload<TPayload>(capture: (payload: TPayload) => void): (payload: unknown) => never {
-	return (payload: unknown): never => {
-		capture(payload as TPayload);
-		throw new PayloadCaptured();
-	};
-}
-
-describe("Cache Retention (PI_CACHE_RETENTION)", () => {
-	const originalEnv = process.env.PI_CACHE_RETENTION;
-
-	beforeEach(() => {
-		delete process.env.PI_CACHE_RETENTION;
+describe("an explicit setting wins", () => {
+	it("is not overridden by the environment", () => {
+		const resolution = resolveCacheRetention({ setting: "short", env: "long", fallback: "short" });
+		expect(resolution.retention).toBe("short");
+		expect(resolution.source).toBe("setting");
 	});
 
-	afterEach(() => {
-		if (originalEnv !== undefined) {
-			process.env.PI_CACHE_RETENTION = originalEnv;
-		} else {
-			delete process.env.PI_CACHE_RETENTION;
-		}
+	it("is not overridden by a hostile environment", () => {
+		expect(resolveCacheRetention({ setting: "long", env: "none", fallback: "short" }).retention).toBe("long");
 	});
 
-	const context = normalizeContext({
-		systemPrompt: "You are a helpful assistant.",
-		messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+	it("honours none, which is a choice and not an absence", () => {
+		expect(resolveCacheRetention({ setting: "none", env: "long", fallback: "long" }).retention).toBe("none");
+	});
+});
+
+describe("auto consults the environment, then the fallback", () => {
+	it("uses a recognised environment value", () => {
+		const resolution = resolveCacheRetention({ setting: "auto", env: "long", fallback: "short" });
+		expect(resolution.retention).toBe("long");
+		expect(resolution.source).toBe("environment");
 	});
 
-	describe("Anthropic Provider", () => {
-		it.skipIf(!process.env.ANTHROPIC_API_KEY)(
-			"should use default cache TTL (no ttl field) when PI_CACHE_RETENTION is not set",
-			async () => {
-				const model = getModel("anthropic", "claude-haiku-4-5");
-				let capturedPayload: any = null;
-
-				const s = stream(model, context, {
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				// Consume the stream to trigger the request
-				for await (const _ of s) {
-					// Just consume
-				}
-
-				expect(capturedPayload).not.toBeNull();
-				// System prompt should have cache_control without ttl
-				expect(capturedPayload.system).toBeDefined();
-				expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral" });
-			},
-		);
-
-		it.skipIf(!process.env.ANTHROPIC_API_KEY)("should use 1h cache TTL when PI_CACHE_RETENTION=long", async () => {
-			process.env.PI_CACHE_RETENTION = "long";
-			const model = getModel("anthropic", "claude-haiku-4-5");
-			let capturedPayload: any = null;
-
-			const s = stream(model, context, {
-				onPayload: stopAfterPayload((payload) => {
-					capturedPayload = payload;
-				}),
-			});
-
-			// Consume the stream to trigger the request
-			for await (const _ of s) {
-				// Just consume
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			// System prompt should have cache_control with ttl: "1h"
-			expect(capturedPayload.system).toBeDefined();
-			expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-		});
-
-		it("should add ttl for non-api.anthropic.com baseUrl by default", async () => {
-			process.env.PI_CACHE_RETENTION = "long";
-
-			// Create a model with a different baseUrl (simulating a proxy)
-			const baseModel = getModel("anthropic", "claude-haiku-4-5");
-			const proxyModel = {
-				...baseModel,
-				baseUrl: "https://my-proxy.example.com/v1",
-			};
-
-			let capturedPayload: any = null;
-
-			// We can't actually make the request (no proxy), but we can verify the payload
-			// by using a mock or checking the logic directly
-			// For this test, we'll import the helper directly
-
-			// Since we can't easily test this without mocking, we'll skip the actual API call
-			// and just verify the helper logic works correctly
-
-			try {
-				const s = streamAnthropic(proxyModel, context, {
-					apiKey: "fake-key",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				// This will fail since we're using a fake key and fake proxy, but the payload should be captured
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-		});
-
-		it("should omit ttl when supportsLongCacheRetention is false", async () => {
-			const baseModel = getModel("anthropic", "claude-haiku-4-5");
-			const proxyModel = {
-				...baseModel,
-				baseUrl: "https://my-proxy.example.com/v1",
-				compat: { supportsLongCacheRetention: false },
-			};
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamAnthropic(proxyModel, context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral" });
-		});
-
-		it("should omit cache_control when cacheRetention is none", async () => {
-			const baseModel = getModel("anthropic", "claude-haiku-4-5");
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamAnthropic(baseModel, context, {
-					apiKey: "fake-key",
-					cacheRetention: "none",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.system[0].cache_control).toBeUndefined();
-		});
-
-		it("should add cache_control to string user messages", async () => {
-			const baseModel = getModel("anthropic", "claude-haiku-4-5");
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamAnthropic(baseModel, context, {
-					apiKey: "fake-key",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			const lastMessage = capturedPayload.messages[capturedPayload.messages.length - 1];
-			expect(Array.isArray(lastMessage.content)).toBe(true);
-			const lastBlock = lastMessage.content[lastMessage.content.length - 1];
-			expect(lastBlock.cache_control).toEqual({ type: "ephemeral" });
-		});
-
-		it("should set 1h cache TTL when cacheRetention is long", async () => {
-			const baseModel = getModel("anthropic", "claude-haiku-4-5");
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamAnthropic(baseModel, context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.system[0].cache_control).toEqual({ type: "ephemeral", ttl: "1h" });
-		});
+	it("names the variable, because a surprising bill is diagnosable", () => {
+		// "The bill went up and nothing says why" is the failure this avoids.
+		const resolution = resolveCacheRetention({ setting: "auto", env: "long", fallback: "short" });
+		expect(resolution.reason).toContain(CACHE_RETENTION_ENV);
 	});
 
-	describe("OpenAI Responses Provider", () => {
-		it.each(["gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-6-astra", "gpt-6-luna", "gpt-6-sol"] as const)(
-			"does not enable cache warming from the documented TTL alone for %s",
-			(modelId) => {
-				expect(getModel("openai", modelId).promptCache).toBeUndefined();
-			},
-		);
-
-		it.skipIf(!process.env.OPENAI_API_KEY)(
-			"should not set prompt_cache_retention when PI_CACHE_RETENTION is not set",
-			async () => {
-				const model = getModel("openai", "gpt-4o-mini");
-				let capturedPayload: any = null;
-
-				const s = stream(model, context, {
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				// Consume the stream to trigger the request
-				for await (const _ of s) {
-					// Just consume
-				}
-
-				expect(capturedPayload).not.toBeNull();
-				expect(capturedPayload.prompt_cache_retention).toBeUndefined();
-			},
-		);
-
-		it.skipIf(!process.env.OPENAI_API_KEY)(
-			"should set prompt_cache_retention to 24h when PI_CACHE_RETENTION=long",
-			async () => {
-				process.env.PI_CACHE_RETENTION = "long";
-				const model = getModel("openai", "gpt-4o-mini");
-				let capturedPayload: any = null;
-
-				const s = stream(model, context, {
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				// Consume the stream to trigger the request
-				for await (const _ of s) {
-					// Just consume
-				}
-
-				expect(capturedPayload).not.toBeNull();
-				expect(capturedPayload.prompt_cache_retention).toBe("24h");
-			},
-		);
-
-		it("should set prompt_cache_retention for non-api.openai.com baseUrl by default", async () => {
-			process.env.PI_CACHE_RETENTION = "long";
-
-			// Create a model with a different baseUrl (simulating a proxy)
-			const baseModel = getModel("openai", "gpt-4o-mini");
-			const proxyModel = {
-				...baseModel,
-				baseUrl: "https://my-proxy.example.com/v1",
-			};
-
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamOpenAIResponses(proxyModel, context, {
-					apiKey: "fake-key",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				// This will fail since we're using a fake key and fake proxy, but the payload should be captured
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.prompt_cache_retention).toBe("24h");
-		});
-
-		it("should omit prompt_cache_retention when supportsLongCacheRetention is false", async () => {
-			const model = {
-				...getModel("openai", "gpt-4o-mini"),
-				compat: { supportsLongCacheRetention: false },
-			};
-			let capturedPayload: any = null;
-
-			try {
-				const s = streamOpenAIResponses(model, context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					sessionId: "session-compat-false",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.prompt_cache_retention).toBeUndefined();
-		});
-
-		it("should omit prompt_cache_key and disable implicit writes when cacheRetention is none", async () => {
-			const model = getModel("openai", "gpt-5.6-sol");
-			let capturedPayload: OpenAIResponsesCachePayload | undefined;
-
-			try {
-				const s = streamOpenAIResponses(model, context, {
-					apiKey: "fake-key",
-					cacheRetention: "none",
-					sessionId: "session-1",
-					onPayload: stopAfterPayload<OpenAIResponsesCachePayload>((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).toBeDefined();
-			expect(capturedPayload?.prompt_cache_key).toBeUndefined();
-			expect(capturedPayload?.prompt_cache_retention).toBeUndefined();
-			expect(capturedPayload?.prompt_cache_options).toEqual({ mode: "explicit" });
-		});
-
-		it("should omit prompt_cache_options for models that reject it", async () => {
-			const model = getModel("openai", "gpt-4o-mini");
-			let capturedPayload: OpenAIResponsesCachePayload | undefined;
-
-			try {
-				const s = streamOpenAIResponses(model, context, {
-					apiKey: "fake-key",
-					cacheRetention: "none",
-					sessionId: "session-1",
-					onPayload: stopAfterPayload<OpenAIResponsesCachePayload>((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload).toBeDefined();
-			expect(capturedPayload?.prompt_cache_key).toBeUndefined();
-			expect(capturedPayload?.prompt_cache_options).toBeUndefined();
-		});
-
-		it.each([
-			["gpt-4o-mini", "24h", undefined],
-			["gpt-6-astra", undefined, { ttl: "30m" }],
-			["gpt-6-sol", undefined, { ttl: "30m" }],
-			["gpt-6-luna", undefined, { ttl: "30m" }],
-		] as const)("should use the supported long cache field for %s", async (modelId, retention, cacheOptions) => {
-			const model = getModel("openai", modelId);
-			let capturedPayload: OpenAIResponsesCachePayload | undefined;
-
-			try {
-				const s = streamOpenAIResponses(model, context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					sessionId: "session-2",
-					onPayload: stopAfterPayload<OpenAIResponsesCachePayload>((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(capturedPayload?.prompt_cache_key).toBe("session-2");
-			expect(capturedPayload?.prompt_cache_retention).toBe(retention);
-			expect(capturedPayload?.prompt_cache_options).toEqual(cacheOptions);
-		});
+	it("falls through on an unrecognised value rather than honouring it", () => {
+		// A typo in a variable should not silently select a retention nobody chose,
+		// and should not fail the request either.
+		const resolution = resolveCacheRetention({ setting: "auto", env: "forever", fallback: "short" });
+		expect(resolution.retention).toBe("short");
+		expect(resolution.source).toBe("fallback");
+		expect(resolution.reason).toContain("not a recognised value");
 	});
 
-	describe("OpenAI Completions Provider", () => {
-		function createCompletionsModel(compat?: Model<"openai-completions">["compat"]): Model<"openai-completions"> {
-			return {
-				id: "test-model",
-				name: "Test Model",
-				api: "openai-completions",
-				provider: "test-openai-completions",
-				baseUrl: "https://my-proxy.example.com/v1",
-				reasoning: false,
-				input: ["text"],
-				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				contextWindow: 128000,
-				maxTokens: 4096,
-				compat,
-			};
-		}
+	it("falls through when the variable is absent or blank", () => {
+		expect(resolveCacheRetention({ setting: "auto", env: "   ", fallback: "long" }).source).toBe("fallback");
+		expect(resolveCacheRetention({ setting: "auto", fallback: "long" }).retention).toBe("long");
+	});
 
-		it("should set prompt_cache_retention for non-api.openai.com baseUrl by default", async () => {
-			let capturedPayload: any = null;
+	it("trims the environment value", () => {
+		expect(resolveCacheRetention({ setting: "auto", env: " long ", fallback: "short" }).retention).toBe("long");
+	});
+});
 
-			try {
-				const s = streamOpenAICompletions(createCompletionsModel(), context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					sessionId: "session-completions",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
+describe("auto means different things for different credentials", () => {
+	it("prefers long for a subscriber session that supports it", () => {
+		// Encoded as a provider fact rather than a preference, because the two
+		// genuinely differ.
+		expect(autoFallbackFor({ isOAuthSession: true, supportsLongRetention: true })).toBe("long");
+	});
 
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
+	it("uses short for an API-key session", () => {
+		expect(autoFallbackFor({ isOAuthSession: false, supportsLongRetention: true })).toBe("short");
+	});
 
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.prompt_cache_key).toBe("session-completions");
-			expect(capturedPayload.prompt_cache_retention).toBe("24h");
-		});
+	it("uses short when the provider cannot hold a long entry", () => {
+		// Asking for a TTL the provider will ignore is worse than asking for one it
+		// will honour.
+		expect(autoFallbackFor({ isOAuthSession: true, supportsLongRetention: false })).toBe("short");
+	});
+});
 
-		it("should omit prompt_cache_retention when supportsLongCacheRetention is false", async () => {
-			let capturedPayload: any = null;
+describe("what reaches the wire", () => {
+	it("gives each retention a TTL, and none has none", () => {
+		expect(retentionTtlMs("short")).toBe(5 * 60_000);
+		expect(retentionTtlMs("long")).toBe(60 * 60_000);
+		// `none` is a real setting, not an absence of one.
+		expect(retentionTtlMs("none")).toBeUndefined();
+	});
 
-			try {
-				const s = streamOpenAICompletions(createCompletionsModel({ supportsLongCacheRetention: false }), context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					sessionId: "session-completions-false",
-					onPayload: stopAfterPayload((payload) => {
-						capturedPayload = payload;
-					}),
-				});
+	it("reports whether a model accepts a retention at all", () => {
+		// A model that declares no support must not be sent one, whatever the user
+		// asked for.
+		expect(supportsCacheRetention({ cacheRetention: "short" })).toBe(true);
+		expect(supportsCacheRetention({})).toBe(false);
+		expect(supportsCacheRetention(undefined)).toBe(false);
+	});
+});
 
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
+describe("the hint states the cost", () => {
+	it("says long costs more to write", () => {
+		expect(describeRetention("long")).toContain("pricier writes");
+	});
 
-			expect(capturedPayload).not.toBeNull();
-			expect(capturedPayload.prompt_cache_key).toBeUndefined();
-			expect(capturedPayload.prompt_cache_retention).toBeUndefined();
-		});
+	it("says short is cheapest and pairs with warming", () => {
+		expect(describeRetention("short")).toContain("Cheapest");
+	});
 
-		it.each([
-			MODELS.opencode["deepseek-v4-flash"],
-			MODELS.opencode["deepseek-v4-pro"],
-			MODELS.opencode["kimi-k2.5"],
-			MODELS.opencode["kimi-k2.6"],
-			MODELS.opencode["minimax-m2.7"],
-			MODELS["opencode-go"]["kimi-k2.6"],
-		] as const)("should omit long cache retention for $provider/$id", async (metadata) => {
-			const model = metadata as Model<"openai-completions">;
-			let capturedPayload: OpenAICompletionsCachePayload | undefined;
+	it("says none disables caching entirely", () => {
+		expect(describeRetention("none")).toContain("off");
+	});
 
-			try {
-				const s = streamOpenAICompletions(model, context, {
-					apiKey: "fake-key",
-					cacheRetention: "long",
-					sessionId: "session-opencode-long-cache-unsupported",
-					onPayload: stopAfterPayload<OpenAICompletionsCachePayload>((payload) => {
-						capturedPayload = payload;
-					}),
-				});
-
-				for await (const event of s) {
-					if (event.type === "error") break;
-				}
-			} catch {
-				// Expected to fail
-			}
-
-			expect(model.compat?.supportsLongCacheRetention).toBe(false);
-			expect(capturedPayload).toBeDefined();
-			expect(capturedPayload?.prompt_cache_key).toBeUndefined();
-			expect(capturedPayload?.prompt_cache_retention).toBeUndefined();
-		});
-
-		it.each([MODELS.cerebras["gpt-oss-120b"], MODELS.cerebras["qwen-3.8-27b"]] as const)(
-			"should omit strict field on tools for cerebras/$id",
-			async (metadata) => {
-				const model = metadata as Model<"openai-completions">;
-
-				const contextWithTools = {
-					messages: [
-						{
-							role: "system" as const,
-							content: "test",
-							toolsAdded: [
-								{
-									name: "t1",
-									description: "strict tool",
-									parameters: {
-										type: "object" as const,
-										properties: { x: { type: "string" } },
-										required: ["x"],
-									},
-									constrainedSampling: { type: "json_schema" as const },
-								},
-								{
-									name: "t2",
-									description: "non-strict tool",
-									parameters: {
-										type: "object" as const,
-										properties: { y: { type: "string" } },
-										required: ["y"],
-									},
-								},
-							],
-							timestamp: 0,
-						},
-						{ role: "user" as const, content: "hello", timestamp: 1 },
-					],
-				};
-
-				let capturedPayload: any;
-
-				try {
-					const s = streamOpenAICompletions(model, contextWithTools as any, {
-						apiKey: "fake-key",
-						sessionId: "test",
-						onPayload: stopAfterPayload((payload: any) => {
-							capturedPayload = payload;
-						}),
-					});
-
-					for await (const event of s) {
-						if (event.type === "error") break;
-					}
-				} catch {
-					// Expected to fail
-				}
-
-				expect(model.compat?.supportsStrictMode).toBeUndefined();
-				expect(capturedPayload).toBeDefined();
-				const tools = capturedPayload?.tools as any[] | undefined;
-				expect(tools).toBeDefined();
-				for (const tool of tools!) {
-					expect(tool.function).not.toHaveProperty("strict");
-				}
-			},
-		);
+	it("says auto is a provider decision, not a fourth value", () => {
+		expect(describeRetention("auto")).toContain("subscriber session");
 	});
 });

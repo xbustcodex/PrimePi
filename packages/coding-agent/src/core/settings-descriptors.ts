@@ -2579,6 +2579,67 @@ export const securityEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const providersCacheRetention = registerSetting({
+	key: "providers.cacheRetention",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "short", "long", "none"],
+	parse: (raw) => (raw === "auto" || raw === "short" || raw === "long" || raw === "none" ? raw : undefined),
+	ui: {
+		label: "Prompt Cache Retention",
+		description:
+			"Prompt-cache retention forwarded to providers that support it. Long entries cost more to write; auto lets the provider and PI_CACHE_RETENTION decide",
+		tab: "providers",
+		group: "Protocol",
+		control: "submenu",
+	},
+});
+
+export const providersCacheWarming = registerSetting({
+	key: "providers.cacheWarming",
+	type: "enum",
+	default: "idle",
+	values: ["off", "streaming", "idle"],
+	parse: (raw) => (raw === "off" || raw === "streaming" || raw === "idle" ? raw : undefined),
+	ui: {
+		label: "Cache Warming",
+		description:
+			"Keep prompt-cache entries warm while the session is idle, so a long retention is not paid for on the next request",
+		tab: "providers",
+		group: "Protocol",
+		control: "submenu",
+	},
+});
+
+export const providersOpenaiWebsockets = registerSetting({
+	key: "providers.openaiWebsockets",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "off", "on"],
+	parse: (raw) => (raw === "auto" || raw === "off" || raw === "on" ? raw : undefined),
+	ui: {
+		label: "OpenAI WebSockets",
+		description: "Use the websocket transport for OpenAI where it is available",
+		tab: "providers",
+		group: "Protocol",
+		control: "submenu",
+	},
+});
+
+export const openrouterVariant = registerSetting({
+	key: "providers.openrouterVariant",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "strict", "flex"],
+	parse: (raw) => (raw === "auto" || raw === "strict" || raw === "flex" ? raw : undefined),
+	ui: {
+		label: "OpenRouter Routing",
+		description: "Which upstream providers OpenRouter may route a request to",
+		tab: "providers",
+		group: "Protocol",
+		control: "submenu",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

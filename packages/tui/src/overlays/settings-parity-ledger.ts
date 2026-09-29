@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Providers tab, Protocol: cache and transport policy.
+	"providers.cacheRetention":
+		"consumed by resolveCacheRetention; an explicit setting is never overridden by the environment",
+	"providers.cacheWarming":
+		"consumed when deciding whether to re-write a cache entry to keep it alive while idle",
+	"providers.openaiWebsockets":
+		"consumed when building a request, choosing the websocket transport where available",
+	"providers.openrouterVariant":
+		"consumed when routing a request, narrowing or widening the upstream provider set",
 	// Tools tab, Available Tools: the security namespace.
 	"security.enabled":
 		"consumed by securityAvailability, which resolves to off when the setting cannot be read",

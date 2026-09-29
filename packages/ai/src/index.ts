@@ -49,6 +49,16 @@ export {
 export * from "./utils/assistant-message-frame.ts";
 export { type AvailabilityFailure, classifyAvailabilityFailure, type FailureScope } from "./utils/availability.ts";
 export { AvailabilityCooldowns, type UnavailabilityEntry } from "./utils/availability-cooldowns.ts";
+export {
+	autoFallbackFor,
+	CACHE_RETENTION_ENV,
+	type CacheRetentionSetting,
+	describeRetention,
+	type RetentionResolution,
+	resolveCacheRetention,
+	retentionTtlMs,
+	supportsCacheRetention,
+} from "./utils/cache-retention.ts";
 export * from "./utils/diagnostics.ts";
 export * from "./utils/event-stream.ts";
 export {
