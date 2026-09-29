@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Thinking: the stream loop guard.
+	"model.loopGuard.enabled":
+		"consumed by ThinkingLoopDetector, which scans the stream at a bounded cadence rather than per delta",
+	"model.loopGuard.checkAssistantContent":
+		"consumed when the guard latches on visible assistant text, which is proof the reasoning stream is making progress",
+	"model.loopGuard.toolCallReminder":
+		"consumed when the guard trips, so the retry prompt names the tool-call that would have ended the loop",
 	// Model tab, Retry & Fallback: the usage reserve margin and what reaching it does.
 	"retry.waitForUsageReset":
 		"consumed when a rate limit reports a reset time, so the turn waits instead of failing",

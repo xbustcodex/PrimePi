@@ -176,6 +176,18 @@ export {
 	supportedThinkingLevels,
 } from "./utils/thinking-level.ts";
 export {
+	detectExactSuffixCycle,
+	EXACT_CHECK_STRIDE,
+	EXACT_LONG_MIN_REPEATED_CHARS,
+	EXACT_MAX_UNIT,
+	EXACT_SHORT_MAX_UNIT,
+	EXACT_SHORT_MIN_REPEATED_CHARS,
+	EXACT_TAIL_WINDOW,
+	isReasoningUnit,
+	THINKING_LOOP_ERROR_MARKER,
+	ThinkingLoopDetector,
+} from "./utils/thinking-loop.ts";
+export {
 	type RepeatedToolCallDetection,
 	ToolCallLoopGuard,
 	type ToolCallLoopGuardOptions,

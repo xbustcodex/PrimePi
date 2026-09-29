@@ -3058,6 +3058,45 @@ export const retryUsageReservePolicy = registerSetting({
 		control: "submenu",
 	},
 });
+export const modelLoopGuardEnabled = registerSetting({
+	key: "model.loopGuard.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Loop Guard",
+		description:
+			"Terminate a stream that repeats itself instead of answering, so a degenerate reasoning loop does not burn the whole output budget",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
+
+export const modelLoopGuardCheckAssistantContent = registerSetting({
+	key: "model.loopGuard.checkAssistantContent",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Loop Guard Scan Prose",
+		description: "Also scan visible assistant text for a repeated cycle, not only the reasoning stream",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
+
+export const modelLoopGuardToolCallReminder = registerSetting({
+	key: "model.loopGuard.toolCallReminder",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Loop Guard Tool-Call Reminder",
+		description: "Remind the model to call a tool or answer when its reasoning has stopped making progress",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
