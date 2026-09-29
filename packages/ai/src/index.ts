@@ -183,5 +183,20 @@ export {
 } from "./utils/tool-call-loop-guard.ts";
 export * from "./utils/transcript.ts";
 export * from "./utils/typebox-helpers.ts";
+export {
+	accountState,
+	type CandidateCheck,
+	classifyUsage,
+	decideReserveAction,
+	evaluateCandidate,
+	type RejectionReason,
+	type ReserveDecision,
+	type ReserveInput,
+	type ReservePolicy,
+	shouldReleaseAccountLease,
+	type UsageAccount,
+	type UsageHealth,
+	type UsageHealthState,
+} from "./utils/usage-reserve.ts";
 export { uuidv7 } from "./utils/uuid.ts";
 export * from "./utils/validation.ts";

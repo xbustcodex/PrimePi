@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Retry & Fallback: the usage reserve margin and what reaching it does.
+	"retry.waitForUsageReset":
+		"consumed when a rate limit reports a reset time, so the turn waits instead of failing",
+	"retry.usageAwareFallback":
+		"consumed as the gate on moving to another model when the current plan is nearly spent",
+	"retry.usageReservePct":
+		"consumed by classifyUsage as the remaining fraction below which an account is inside the margin; an unreported reading resolves to unknown and keeps the primary model",
+	"retry.usageReservePolicy":
+		"consumed by decideReserveAction; fail-closed refuses even when a healthy account exists, because switching would spend the margin while reporting a normal turn",
 	// Providers tab, Services: the code-mode tool surface and the search budget.
 	"providers.openai-codex.codeMode":
 		"consumed by resolveCodeMode, which collapses the direct tool surface only when the eval transport and the eval tool are both present",

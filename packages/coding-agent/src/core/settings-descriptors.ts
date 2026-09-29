@@ -3000,6 +3000,64 @@ export const providersWebSearchTimeoutSeconds = registerSetting({
 		group: "Services",
 	},
 });
+export const retryWaitForUsageReset = registerSetting({
+	key: "retry.waitForUsageReset",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Wait For Usage Reset",
+		description:
+			"Wait for a rate limit to reset instead of failing the turn, when the provider reports when the window resets",
+		tab: "model",
+		group: "Retry & Fallback",
+		control: "cycle",
+	},
+});
+
+export const retryUsageAwareFallback = registerSetting({
+	key: "retry.usageAwareFallback",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Usage-Aware Fallback",
+		description:
+			"Move to another model when the current coding plan is nearly spent, rather than waiting for it to reset",
+		tab: "model",
+		group: "Retry & Fallback",
+		control: "cycle",
+	},
+});
+
+export const retryUsageReservePct = registerSetting({
+	key: "retry.usageReservePct",
+	type: "number",
+	default: 10,
+	parse: (raw) =>
+		typeof raw === "number" && Number.isFinite(raw) && raw >= 0 && raw <= 100 ? Math.trunc(raw) : undefined,
+	ui: {
+		label: "Reserve Margin",
+		description:
+			"Treat a coding-plan model as near its limit below this remaining percentage. Unknown or unmapped usage keeps the primary model.",
+		tab: "model",
+		group: "Retry & Fallback",
+	},
+});
+
+export const retryUsageReservePolicy = registerSetting({
+	key: "retry.usageReservePolicy",
+	type: "enum",
+	default: "confirm",
+	values: ["confirm", "auto", "fail-closed"],
+	parse: (raw) => (raw === "confirm" || raw === "auto" || raw === "fail-closed" ? raw : undefined),
+	ui: {
+		label: "Reserve Policy",
+		description:
+			"What to do when every same-provider coding-plan account is inside the reserve margin. fail-closed refuses even when a healthy account exists, because switching would spend the margin while reporting a normal turn.",
+		tab: "model",
+		group: "Retry & Fallback",
+		control: "submenu",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
