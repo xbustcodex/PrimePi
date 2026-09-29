@@ -22,10 +22,12 @@ import type {
 	AgentMessage,
 	AgentState,
 	AgentTool,
+	AgentTurnContext,
 	PrepareNextTurnContext,
 	ThinkingLevel,
 	ToolApprovalDeclaration,
 } from "@earendil-works/pi-agent-core";
+import { CrossTurnLoopGuard, createCustomMessage, TOOL_CALL_LOOP_REDIRECT_TYPE } from "@earendil-works/pi-agent-core";
 import {
 	type Api,
 	AvailabilityCooldowns,
@@ -475,6 +477,8 @@ export class AgentSession {
 	private _lastAssistantMessage: AssistantMessage | undefined;
 	private _lastAssistantToolResults: AgentMessage[] = [];
 	private _lastActivityOutcome: AgentActivityOutcome = "completed";
+	/** Lazily built; the settings it reads can change after construction. */
+	private _toolCallLoopGuard: CrossTurnLoopGuard | undefined;
 	private _isBeforeSettle = false;
 	private _abortDuringBeforeSettle = false;
 	private _isEmittingAgentSettled = false;
@@ -1560,12 +1564,83 @@ ${context}`
 		const previousFinishTurn = this.agent.finishTurn;
 		this.agent.finishTurn = async (turn, signal) => {
 			this._boundaryDispatchedMessages.add(turn.message);
-			const extensionContinue = await this._dispatchTurnEndBoundary(turn.message, turn.toolResults);
+			const loopGuard = this._evaluateToolCallLoopGuard(turn);
+			const extensionContinue = loopGuard || (await this._dispatchTurnEndBoundary(turn.message, turn.toolResults));
 			const previousDecision = await previousFinishTurn?.(turn, signal);
 			if (previousDecision?.action === "end") return previousDecision;
 			if (extensionContinue || previousDecision?.action === "continue") return { action: "continue" };
 			return undefined;
 		};
+	}
+
+	/**
+	 * Applies the tool-call loop guard to one completed turn.
+	 *
+	 * The guard is a real consumer of the detector, and it is the difference
+	 * between a model that repeats one failing call forever and one that is told
+	 * what it already tried. Returns true when the turn should continue, which is
+	 * how the redirect re-enters the loop.
+	 *
+	 * Deliberately not a turn-failure bound: a turn that *succeeds* at the
+	 * transport level while burning dozens of identical failing calls never trips
+	 * a failure counter, and that is precisely the case this catches.
+	 */
+	private _evaluateToolCallLoopGuard(turn: AgentTurnContext): boolean {
+		if (turn.message.role !== "assistant") return false;
+		if (this.settingsManager.getSetting("model.toolCallLoopGuard.enabled")?.value !== true) return false;
+		// Built once and kept, because the detector holds a repetition count that has
+		// to survive across turns; rebuilding per turn would reset it every time.
+		this._toolCallLoopGuard ??= this._createToolCallLoopGuard();
+		const guard = this._toolCallLoopGuard;
+		const action = guard.recordTurn({ message: turn.message, toolResults: turn.toolResults });
+		if (action.action === "abort") {
+			// The model ignored the corrective. Stopping is the only remaining
+			// option; a second redirect would just be another full turn.
+			this.agent.abort();
+			return false;
+		}
+		if (action.action === "redirect") {
+			// Appended to stored history, not spliced into the live array: the next
+			// request reads the projection, so a message that is only pushed onto a
+			// detached array would be invisible and would correct nothing.
+			this.sessionManager.appendMessage(
+				createCustomMessage(
+					TOOL_CALL_LOOP_REDIRECT_TYPE,
+					String(action.message),
+					false,
+					action.details,
+					Date.now(),
+				),
+			);
+			return true;
+		}
+		return false;
+	}
+
+	private _createToolCallLoopGuard(): CrossTurnLoopGuard {
+		const settingsManager = this.settingsManager;
+		return new CrossTurnLoopGuard({
+			name: "session",
+			// Read through getters so a settings change is observed on the next turn
+			// rather than at construction, and so the guard can rebuild itself when
+			// the threshold or exemptions move.
+			settings: {
+				get enabled() {
+					return settingsManager.getSetting("model.toolCallLoopGuard.enabled")?.value === true;
+				},
+				get threshold() {
+					const value = settingsManager.getSetting("model.toolCallLoopGuard.threshold")?.value;
+					return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.trunc(value)) : 3;
+				},
+				get exemptTools() {
+					const value = settingsManager.getSetting("model.toolCallLoopGuard.exemptTools")?.value;
+					return Array.isArray(value) ? value.filter((tool): tool is string => typeof tool === "string") : [];
+				},
+			},
+			liveMessages: () => [],
+			appendMessage: () => {},
+			abort: () => {},
+		});
 	}
 
 	private _installAgentNextTurnRefresh(): void {

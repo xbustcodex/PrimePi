@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Model tab, Thinking: the cross-turn tool-call loop guard.
+	"model.toolCallLoopGuard.enabled":
+		"consumed by _evaluateToolCallLoopGuard, which injects a corrective on the first offence and aborts the turn when the model ignores it",
+	"model.toolCallLoopGuard.threshold":
+		"consumed as the identical-consecutive-turn bound the detector applies",
+	"model.toolCallLoopGuard.exemptTools":
+		"consumed as the set of tools a model may legitimately repeat without being bounded",
 	// Appearance tab, Theme: backgrounds, the colour-blind remap, and glyph selection.
 	"theme.dark":
 		"consumed when the terminal reports a dark background",
