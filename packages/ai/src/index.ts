@@ -35,6 +35,17 @@ export * from "./models-store.ts";
 export * from "./providers/faux.ts";
 export * from "./session-resources.ts";
 export * from "./types.ts";
+export {
+	type AutoRedeemPolicy,
+	creditsExpiringWithin,
+	decideRedeem,
+	isAnswered,
+	mintRedeemRequestId,
+	pickSoonestExpiringCredit,
+	type RedeemDecision,
+	type ResetCredit,
+	type StuckTurnEvidence,
+} from "./usage/reset-credits.ts";
 export * from "./utils/assistant-message-frame.ts";
 export { type AvailabilityFailure, classifyAvailabilityFailure, type FailureScope } from "./utils/availability.ts";
 export { AvailabilityCooldowns, type UnavailabilityEntry } from "./utils/availability-cooldowns.ts";

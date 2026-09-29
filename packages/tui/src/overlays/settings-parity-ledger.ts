@@ -37,16 +37,13 @@ import { OMP_PARITY_ROW_COUNT, OMP_PARITY_ROWS, type ParityRow } from "./setting
 /** A row whose runtime consumer is proven. Every entry is a deliberate claim. */
 const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Memory tab, General.
-	"followUpMode":
-		"consumed by takeBatch; a follow-up queue keeps draining under either mode while anything is left",
-	"interruptMode":
+	followUpMode: "consumed by takeBatch; a follow-up queue keeps draining under either mode while anything is left",
+	interruptMode:
 		"consumed by shouldInterrupt; wait spares side-effecting calls and still cuts short purely interruptible ones",
-	"steeringMode":
-		"consumed by takeBatch; one-at-a-time lets the model act on a redirect before seeing the next",
+	steeringMode: "consumed by takeBatch; one-at-a-time lets the model act on a redirect before seeing the next",
 	"loop.conditionTimeoutMs":
 		"consumed as the bound on one condition evaluation, and 0 disables the bound rather than defaulting",
-	"loop.mode":
-		"consumed between /loop iterations before re-submitting the prompt",
+	"loop.mode": "consumed between /loop iterations before re-submitting the prompt",
 	"memory.backend": "resolved by SessionMemory.create and consumed by the backend registry",
 	// Memory tab, Mnemopi. The bank store and its lifecycle.
 	"mnemopi.dbPath": "consumed by the bank store as its storage root; empty means the agent directory",
@@ -60,6 +57,16 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Providers tab, Services: saved rate-limit reset credits.
+	"codexResets.autoRedeem": "consumed by decideRedeem; unset asks before the first spend rather than being a boolean",
+	"codexResets.minBlockedMinutes": "consumed as the minimum block duration before a rescue is considered",
+	"codexResets.keepCredits": "consumed as a reserve never spent automatically",
+	"codexResets.salvageHorizonHours": "consumed by creditsExpiringWithin as the horizon for salvaging an unused credit",
+	"claudeResets.autoRedeem": "consumed by decideRedeem; unset asks before the first spend rather than being a boolean",
+	"claudeResets.minBlockedMinutes": "consumed as the minimum block duration before a rescue is considered",
+	"claudeResets.keepCredits": "consumed as a reserve never spent automatically",
+	"claudeResets.salvageHorizonHours":
+		"consumed by creditsExpiringWithin as the horizon for salvaging an unused credit",
 	// Appearance tab, Display.
 	"tui.resizeScrollback":
 		"consumed by planScrollbackResize; a resize that changed nothing never erases, and only a settled width refreshes history",
@@ -69,15 +76,14 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Providers tab, Timeouts.
 	"providers.streamFirstEventTimeoutSeconds":
 		"consumed by withStreamWatchdog; -1 inherits the provider default and 0 disables the watchdog",
-	"providers.streamIdleTimeoutSeconds":
-		"consumed by withStreamWatchdog as the per-gap budget",
+	"providers.streamIdleTimeoutSeconds": "consumed by withStreamWatchdog as the per-gap budget",
 	// Providers tab, Privacy.
 	"secrets.enabled":
 		"consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",
 	// Model tab, Thinking.
 	"composer.recallClearedDrafts":
 		"consumed by DraftHistory.clear; a composer holding an image is not empty, and the setting governs future clears only",
-	"defaultThinkingLevel":
+	defaultThinkingLevel:
 		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	"todo.enabled":
 		"consumed by the todo tool; the plan is read from the latest committed branch entry, so a resume or rewind cannot revert it",
@@ -85,13 +91,12 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
 	"model.toolCallLoopGuard.threshold":
 		"consumed as the number of identical consecutive turns before the guard intervenes",
-	"model.toolCallLoopGuard.exemptTools":
-		"consumed as the tools a turn may call without counting as a loop",
+	"model.toolCallLoopGuard.exemptTools": "consumed as the tools a turn may call without counting as a loop",
 	// Files tab, Editing.
 	"edit.recoverInlineEdits":
 		"consumed by recoverInlineSloppyEdit; a stray payload becomes a synthetic edit tool call so the approval pipeline still runs",
 	// Interaction tab, Startup & Updates.
-	"autoResume":
+	autoResume:
 		"consumed by chooseSessionToResume; a resumed session restores its own model instead of taking a CLI default",
 	"compaction.supersedeReads":
 		"consumed by pruneToolOutputs, which replaces a result a newer read of the same target made redundant",
@@ -143,6 +148,14 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"edit.recoverInlineEdits",
 	"compaction.dropUseless",
 	"compaction.supersedeReads",
+	"codexResets.autoRedeem",
+	"codexResets.keepCredits",
+	"codexResets.minBlockedMinutes",
+	"codexResets.salvageHorizonHours",
+	"claudeResets.autoRedeem",
+	"claudeResets.keepCredits",
+	"claudeResets.minBlockedMinutes",
+	"claudeResets.salvageHorizonHours",
 	"defaultThinkingLevel",
 	"model.toolCallLoopGuard.enabled",
 	"model.toolCallLoopGuard.exemptTools",

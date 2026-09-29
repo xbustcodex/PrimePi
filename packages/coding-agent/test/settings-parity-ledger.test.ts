@@ -70,6 +70,14 @@ describe("the classifications are the ones the program claims", () => {
 		// matches itself, and that is how a wrong number survives.
 		expect(wired).toEqual([
 			"autoResume",
+			"claudeResets.autoRedeem",
+			"claudeResets.keepCredits",
+			"claudeResets.minBlockedMinutes",
+			"claudeResets.salvageHorizonHours",
+			"codexResets.autoRedeem",
+			"codexResets.keepCredits",
+			"codexResets.minBlockedMinutes",
+			"codexResets.salvageHorizonHours",
 			"compaction.dropUseless",
 			"compaction.supersedeReads",
 			"composer.recallClearedDrafts",
@@ -115,6 +123,14 @@ describe("the classifications are the ones the program claims", () => {
 		// retry through them.
 		expect(live).toEqual([
 			"autoResume",
+			"claudeResets.autoRedeem",
+			"claudeResets.keepCredits",
+			"claudeResets.minBlockedMinutes",
+			"claudeResets.salvageHorizonHours",
+			"codexResets.autoRedeem",
+			"codexResets.keepCredits",
+			"codexResets.minBlockedMinutes",
+			"codexResets.salvageHorizonHours",
 			"compaction.dropUseless",
 			"compaction.supersedeReads",
 			"defaultThinkingLevel",

@@ -550,6 +550,121 @@ export const resizeScrollback = registerSetting({
 	},
 });
 
+export const codexResetsMinBlockedMinutes = registerSetting({
+	key: "codexResets.minBlockedMinutes",
+	type: "number",
+	default: 30,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Codex Auto-Redeem Min Block",
+		description: "Minimum minutes an account must have been blocked before a saved reset is spent on it",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const codexResetsKeepCredits = registerSetting({
+	key: "codexResets.keepCredits",
+	type: "number",
+	default: 1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Codex Auto-Redeem Reserve",
+		description: "Credits kept in reserve and never spent automatically",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const codexResetsSalvageHorizonHours = registerSetting({
+	key: "codexResets.salvageHorizonHours",
+	type: "number",
+	default: 24,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Codex Reset Salvage Horizon",
+		description: "Hours before expiry within which an unused credit is salvaged rather than left to lapse",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const codexResetsAutoRedeem = registerSetting({
+	key: "codexResets.autoRedeem",
+	type: "enum",
+	// `unset` is a deliberate third state: ask before the first spend, then
+	// remember. A boolean has nowhere to put "ask once", and asking on every
+	// spend makes the feature unusable.
+	default: "unset",
+	values: ["unset", "yes", "no"],
+	parse: (raw) => (raw === "unset" || raw === "yes" || raw === "no" ? raw : undefined),
+	ui: {
+		label: "Codex Auto-Redeem Saved Resets",
+		description:
+			"Spend saved Codex rate-limit resets automatically when a turn is stuck and no other account can take over",
+		tab: "providers",
+		group: "Services",
+		control: "submenu",
+	},
+});
+
+export const claudeResetsMinBlockedMinutes = registerSetting({
+	key: "claudeResets.minBlockedMinutes",
+	type: "number",
+	default: 30,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Claude Auto-Redeem Min Block",
+		description: "Minimum minutes an account must have been blocked before a saved reset is spent on it",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const claudeResetsKeepCredits = registerSetting({
+	key: "claudeResets.keepCredits",
+	type: "number",
+	default: 1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Claude Auto-Redeem Reserve",
+		description: "Credits kept in reserve and never spent automatically",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const claudeResetsSalvageHorizonHours = registerSetting({
+	key: "claudeResets.salvageHorizonHours",
+	type: "number",
+	default: 24,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Claude Reset Salvage Horizon",
+		description: "Hours before expiry within which an unused credit is salvaged rather than left to lapse",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const claudeResetsAutoRedeem = registerSetting({
+	key: "claudeResets.autoRedeem",
+	type: "enum",
+	// `unset` is a deliberate third state: ask before the first spend, then
+	// remember. A boolean has nowhere to put "ask once", and asking on every
+	// spend makes the feature unusable.
+	default: "unset",
+	values: ["unset", "yes", "no"],
+	parse: (raw) => (raw === "unset" || raw === "yes" || raw === "no" ? raw : undefined),
+	ui: {
+		label: "Claude Auto-Redeem Resets",
+		description:
+			"Spend saved Claude rate-limit resets automatically when a turn is stuck and no other account can take over",
+		tab: "providers",
+		group: "Services",
+		control: "submenu",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
