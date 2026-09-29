@@ -1643,8 +1643,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "boolean",
 		default: "false",
 		condition: "mnemopiActive",
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "mnemopi.polyphonicRecall",
+		note: "consumed by fuseByReciprocalRank, which fuses four voice rankings by rank rather than by score so a memory several voices agree on outranks one that leads a single voice",
 	},
 	{
 		id: "mnemopi.enhancedRecall",
@@ -1655,8 +1656,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "boolean",
 		default: "false",
 		condition: "mnemopiActive",
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "mnemopi.enhancedRecall",
+		note: "consumed as a per-voice candidate multiplier applied before the ranks are fused",
 	},
 	{
 		id: "mnemopi.proactiveLinking",
@@ -1668,8 +1670,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "boolean",
 		default: "false",
 		condition: "mnemopiActive",
-		status: "omp-present-unmigrated",
-		note: "the reference subsystem is not migrated into PrimePi; the row activates in place when it is",
+		status: "wired",
+		piKey: "mnemopi.proactiveLinking",
+		note: "consumed when memories are stored, writing edges instead of deferring them to recall",
 	},
 	{
 		id: "mnemopi.noEmbeddings",
@@ -2604,7 +2607,6 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		status: "wired",
 		piKey: "doubleEscapeAction",
 		note: "consumed by setupKeyHandlers, where the last rung of the Escape ladder runs a configured action on a second press inside 500ms; destructive rewind is deliberately not offered, only fork and tree",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{
 		id: "treeFilterMode",
@@ -2617,7 +2619,6 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		status: "wired",
 		piKey: "treeFilterMode",
 		note: "consumed by showTreeSelector as the initial filter applied when the session tree opens",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{
 		id: "autocompleteMaxVisible",
@@ -2656,7 +2657,6 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		status: "wired",
 		piKey: "autocompleteMaxVisible",
 		note: "consumed by the autocomplete component when it caps the visible candidate list",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{
 		id: "spelling.typoDetection",

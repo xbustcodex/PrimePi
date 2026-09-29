@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Memory tab, Mnemopi: rank fusion across four independent recall voices.
+	"mnemopi.polyphonicRecall":
+		"consumed by fuseByReciprocalRank, which fuses four voice rankings by rank rather than by score so a memory several voices agree on outranks one that leads a single voice",
+	"mnemopi.enhancedRecall":
+		"consumed as a per-voice candidate multiplier applied before the ranks are fused",
+	"mnemopi.proactiveLinking":
+		"consumed when memories are stored, writing edges instead of deferring them to recall",
 	// Interaction tab, Input: the Escape ladder, the session tree, and the editor.
 	"doubleEscapeAction":
 		"consumed by setupKeyHandlers, where the last rung of the Escape ladder runs a configured action on a second press inside 500ms; destructive rewind is deliberately not offered, only fork and tree",

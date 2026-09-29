@@ -106,6 +106,19 @@ export {
 } from "./utils/model-roles.ts";
 export * from "./utils/overflow.ts";
 export {
+	assembleContext,
+	DIVERSITY_THRESHOLD,
+	diversityRerank,
+	type FusedResult,
+	fuseByReciprocalRank,
+	POLYPHONIC_VOICES,
+	type PolyphonicVoice,
+	RRF_K,
+	type VoiceHit,
+	type VoiceRanking,
+	voiceSetSimilarity,
+} from "./utils/polyphonic-recall.ts";
+export {
 	type AdmitDecision,
 	admitRequest,
 	backoffMs,

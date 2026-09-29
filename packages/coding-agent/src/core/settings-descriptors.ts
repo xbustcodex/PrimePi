@@ -2842,6 +2842,45 @@ export const statusLineShowHookStatus = registerSetting({
 		control: "cycle",
 	},
 });
+export const mnemopiPolyphonicRecall = registerSetting({
+	key: "mnemopi.polyphonicRecall",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Mnemopi Polyphonic Recall",
+		description:
+			"Fuse four recall voices (vector, graph, fact, temporal) by reciprocal rank, so agreement across voices outweighs any single win",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
+
+export const mnemopiEnhancedRecall = registerSetting({
+	key: "mnemopi.enhancedRecall",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Mnemopi Enhanced Recall",
+		description: "Widen each voice's candidate pool before the ranks are fused",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
+
+export const mnemopiProactiveLinking = registerSetting({
+	key: "mnemopi.proactiveLinking",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Mnemopi Proactive Linking",
+		description: "Link related memories as they are stored rather than waiting for a recall to find the link",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
