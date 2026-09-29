@@ -198,6 +198,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.modelFallback",
 			"searxng.endpoint",
 			"secrets.enabled",
+			"security.enabled",
 			"share.redactSecrets",
 			"share.serverUrl",
 			"share.store",

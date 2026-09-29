@@ -6823,8 +6823,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			"Enable OMP-native security scan planning, execution, and the read-only security:// resource namespace",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "security.enabled",
+		note: "consumed by securityAvailability, which resolves to off when the setting cannot be read",
 	},
 	{
 		id: "ask.enabled",

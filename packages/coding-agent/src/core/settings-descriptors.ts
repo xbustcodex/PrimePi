@@ -2565,6 +2565,20 @@ export const askEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const securityEnabled = registerSetting({
+	key: "security.enabled",
+	type: "boolean",
+	// Off by default. A failure to read this setting resolves to off as well, so a
+	// broken settings read narrows access rather than widening it.
+	default: false,
+	ui: {
+		label: "Security",
+		description: "Enable the read-only security:// resource namespace and security scan planning",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
