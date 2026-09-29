@@ -1824,6 +1824,91 @@ export const hindsightMentalModelsEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const ttsrEnabled = registerSetting({
+	key: "ttsr.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "TTSR",
+		description: "Inject a rule when the agent output matches its condition",
+		tab: "context",
+		group: "Rules (TTSR)",
+		control: "cycle",
+	},
+});
+
+export const ttsrJudge = registerSetting({
+	key: "ttsr.judge",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "on", "off"],
+	parse: (raw) => (raw === "auto" || raw === "on" || raw === "off" ? raw : undefined),
+	ui: {
+		label: "Judged Rules",
+		description:
+			"Ask the judge model role about completed replies, reasoning and tool calls; a yes injects the rule as a warning",
+		tab: "context",
+		group: "Rules (TTSR)",
+		control: "submenu",
+	},
+});
+
+export const ttsrInterruptMode = registerSetting({
+	key: "ttsr.interruptMode",
+	type: "enum",
+	default: "always",
+	values: ["never", "prose-only", "tool-only", "always"],
+	parse: (raw) =>
+		raw === "never" || raw === "prose-only" || raw === "tool-only" || raw === "always" ? raw : undefined,
+	ui: {
+		label: "TTSR Interrupt Mode",
+		description: "When to interrupt mid-stream vs inject a warning after completion",
+		tab: "context",
+		group: "Rules (TTSR)",
+		control: "submenu",
+	},
+});
+
+export const ttsrRepeatMode = registerSetting({
+	key: "ttsr.repeatMode",
+	type: "enum",
+	default: "once",
+	values: ["once", "after-gap"],
+	parse: (raw) => (raw === "once" || raw === "after-gap" ? raw : undefined),
+	ui: {
+		label: "TTSR Repeat Mode",
+		description: "How rules can repeat: once per session or after a message gap",
+		tab: "context",
+		group: "Rules (TTSR)",
+		control: "submenu",
+	},
+});
+
+export const ttsrRepeatGap = registerSetting({
+	key: "ttsr.repeatGap",
+	type: "number",
+	default: 10,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "TTSR Repeat Gap",
+		description: "Messages before a rule can trigger again",
+		tab: "context",
+		group: "Rules (TTSR)",
+	},
+});
+
+export const ttsrBuiltinRules = registerSetting({
+	key: "ttsr.builtinRules",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Built-in Rules",
+		description: "Enable the rules shipped with the reference",
+		tab: "context",
+		group: "Rules (TTSR)",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

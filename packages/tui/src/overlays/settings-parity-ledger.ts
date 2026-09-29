@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Context tab, Rules (TTSR): mid-stream rule injection.
+	"ttsr.enabled":
+		"consumed by isRuleActive; a rule is inactive when this is off, whatever the others say",
+	"ttsr.judge":
+		"consumed by shouldJudge and decideJudgedRule; auto asks only when a judge role is available",
+	"ttsr.interruptMode":
+		"consumed by shouldInterrupt, deciding whether a live stream is aborted or warned about after",
+	"ttsr.repeatMode":
+		"consumed by RuleFireTracker; a rule that re-fires every turn is a loop, not a rule",
+	"ttsr.repeatGap":
+		"consumed by RuleFireTracker as the message count before a rule may fire again",
+	"ttsr.builtinRules":
+		"consumed by isRuleActive for rules the reference ships",
 	// Memory tab, Hindsight: bank scoping for a remote service.
 	"hindsight.apiUrl":
 		"consumed by the Hindsight client as the service base URL",
