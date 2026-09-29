@@ -1487,6 +1487,33 @@ export const extensionHandlersToolCallTimeoutMs = registerSetting({
 		group: "Available Tools",
 	},
 });
+export const workspaceAdditionalDirectories = registerSetting({
+	key: "workspace.additionalDirectories",
+	type: "stringList",
+	default: [],
+	ui: {
+		label: "Additional Workspace Dirs",
+		description:
+			"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended.",
+		tab: "context",
+		group: "General",
+	},
+});
+
+export const contextPromotionEnabled = registerSetting({
+	key: "contextPromotion.enabled",
+	type: "boolean",
+	// Off by default: promoting swaps the model mid-session, which changes the
+	// behaviour of a conversation the user believes is continuing.
+	default: false,
+	ui: {
+		label: "Auto-Promote Context",
+		description: "Promote to a larger-context model on context overflow instead of compacting",
+		tab: "context",
+		group: "General",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

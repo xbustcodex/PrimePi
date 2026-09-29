@@ -57,6 +57,11 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Context tab, General.
+	"workspace.additionalDirectories":
+		"consumed by buildWorkspaceRoots, which resolves each path once and drops a root already inside another",
+	"contextPromotion.enabled":
+		"consumed by decideOverflow, which promotes before compacting because promotion avoids losing history",
 	// Tools tab, Grep and extension handlers.
 	"grep.contextBefore":
 		"consumed by mergeContextRegions, which merges overlapping regions so shared context is emitted once",

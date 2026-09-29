@@ -3006,8 +3006,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			"Extra workspace directories added to every session as additional roots (multi-root workspace). Managed live via /add-dir and /remove-dir. Paths resolve relative to cwd; absolute paths recommended. The agent is told these roots exist and can read/grep/glob them.",
 		type: "array",
 		default: "EMPTY_STRING_ARRAY",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "workspace.additionalDirectories",
+		note: "consumed by buildWorkspaceRoots, which resolves each path once and drops a root already inside another",
 	},
 	{
 		id: "contextPromotion.enabled",
@@ -3017,8 +3018,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Promote to a larger-context model on context overflow instead of compacting",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "contextPromotion.enabled",
+		note: "consumed by decideOverflow, which promotes before compacting because promotion avoids losing history",
 	},
 	{
 		id: "extendedContext",

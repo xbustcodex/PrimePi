@@ -95,6 +95,7 @@ describe("the classifications are the ones the program claims", () => {
 			"compaction.thresholdPercent",
 			"compaction.thresholdTokens",
 			"composer.recallClearedDrafts",
+			"contextPromotion.enabled",
 			"defaultThinkingLevel",
 			"display.cacheMissMarker",
 			"display.collapseCompacted",
@@ -170,6 +171,7 @@ describe("the classifications are the ones the program claims", () => {
 			"tui.resizeScrollback",
 			"tui.tight",
 			"web_search.enabled",
+			"workspace.additionalDirectories",
 		]);
 	});
 
