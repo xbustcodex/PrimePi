@@ -83,6 +83,9 @@ describe("the classifications are the ones the program claims", () => {
 			"composer.recallClearedDrafts",
 			"defaultThinkingLevel",
 			"edit.recoverInlineEdits",
+			"exa.enabled",
+			"exa.searchDelayMs",
+			"fetch.enabled",
 			"followUpMode",
 			"interruptMode",
 			"loop.conditionTimeoutMs",
@@ -96,6 +99,7 @@ describe("the classifications are the ones the program claims", () => {
 			"model.toolCallLoopGuard.enabled",
 			"model.toolCallLoopGuard.exemptTools",
 			"model.toolCallLoopGuard.threshold",
+			"providers.fetch",
 			"providers.streamFirstEventTimeoutSeconds",
 			"providers.streamIdleTimeoutSeconds",
 			"retry.fallbackChains",
@@ -103,10 +107,12 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.maxDelayMs",
 			"retry.maxRetries",
 			"retry.modelFallback",
+			"searxng.endpoint",
 			"secrets.enabled",
 			"steeringMode",
 			"todo.enabled",
 			"tui.resizeScrollback",
+			"web_search.enabled",
 		]);
 	});
 

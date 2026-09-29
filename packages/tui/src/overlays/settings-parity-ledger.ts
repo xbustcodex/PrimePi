@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Providers and tools tabs: web search and URL fetching.
+	"web_search.enabled":
+		"consumed by resolveSearchProvider; a disabled search resolves to nothing even with credentials present",
+	"fetch.enabled":
+		"consumed when the fetch tool runs, gating whether a URL can be read at all",
+	"providers.fetch":
+		"consumed when the fetch tool runs, selecting how a URL is retrieved",
+	"exa.enabled":
+		"consumed by isUsable; Exa needs an API key and is not usable without one",
+	"exa.searchDelayMs":
+		"consumed by pacingDelayMs as the minimum gap between requests, and 0 disables pacing",
+	"searxng.endpoint":
+		"consumed as the self-hosted endpoint; a blank value means the provider is not usable",
 	// Providers tab, Services: saved rate-limit reset credits.
 	"codexResets.autoRedeem": "consumed by decideRedeem; unset asks before the first spend rather than being a boolean",
 	"codexResets.minBlockedMinutes": "consumed as the minimum block duration before a rescue is considered",

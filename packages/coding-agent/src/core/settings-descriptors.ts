@@ -665,6 +665,87 @@ export const claudeResetsAutoRedeem = registerSetting({
 		control: "submenu",
 	},
 });
+export const webSearchEnabled = registerSetting({
+	key: "web_search.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Web Search",
+		description: "Enable the web_search tool for live web results",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const fetchEnabled = registerSetting({
+	key: "fetch.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Read URLs",
+		description: "Enable the fetch tool for reading URLs",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const fetchProvider = registerSetting({
+	key: "providers.fetch",
+	type: "enum",
+	default: "auto",
+	values: ["auto", "direct", "jina", "firecrawl"],
+	parse: (raw) => (raw === "auto" || raw === "direct" || raw === "jina" || raw === "firecrawl" ? raw : undefined),
+	ui: {
+		label: "Fetch Provider",
+		description: "How a URL is retrieved when the fetch tool runs",
+		tab: "providers",
+		group: "Services",
+		control: "submenu",
+	},
+});
+
+export const exaEnabled = registerSetting({
+	key: "exa.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Exa",
+		description: "Enable the Exa web search provider",
+		tab: "providers",
+		group: "Services",
+		control: "cycle",
+	},
+});
+
+export const exaSearchDelayMs = registerSetting({
+	key: "exa.searchDelayMs",
+	type: "number",
+	// 0 disables pacing, which is a deliberate choice: a user who has decided their
+	// provider tolerates a burst should not be paced.
+	default: 1000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Exa Search Delay",
+		description: "Minimum delay between Exa web search requests in milliseconds; set 0 to disable pacing",
+		tab: "providers",
+		group: "Services",
+	},
+});
+
+export const searxngEndpoint = registerSetting({
+	key: "searxng.endpoint",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "SearXNG Endpoint",
+		description: "Base URL of a self-hosted SearXNG instance used for web search",
+		tab: "providers",
+		group: "Services",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
