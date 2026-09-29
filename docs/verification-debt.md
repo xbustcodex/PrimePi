@@ -372,29 +372,67 @@ parallel contention (`vitest run --no-file-parallelism`, or per-file), and
 confirm the failures disappear. This needs an environment that can execute
 `bun`, `pnpm` and `yarn`, which this machine does not reliably provide.
 
-## PD-11: 51 failures in the agent package suite, pre-existing and untouched
+## PD-11: RESOLVED - the session repository was correct; the tests asserted platform accidents
 
-**Status:** pre-existing, unrelated to the migration.
+**Status:** closed 2026-09-29. The 51 failures are gone.
 
-**Measured.** `packages/agent` reports `Test Files 6 failed | 76 passed (82)`,
-`Tests 51 failed | 913 passed | 2 skipped`. Verified by stashing the working
-tree and re-running: the same 51 failures at the same count, with and without
-this program's changes.
+**Root cause.** The repository resolves a session `cwd` through the execution
+environment before storing or encoding it, so the value is canonical for the
+platform: on Windows `/workspace` becomes `C:\workspace` and the encoded
+session directory is `--C--workspace--`. The tests asserted the raw POSIX literal
+they had passed in, so they failed on Windows and only on Windows.
 
-**Where.** `test/harness/jsonl-session-repo.test.ts` and
-`test/harness/jsonl-v3-migration.test.ts`. Both assert on JSONL session-record
-shapes and fork-fixture migration behaviour.
+**PrimePi was right; OMP agrees.** OMP resolves the same way before encoding a
+session directory name - `getDefaultSessionDirName` calls `path.resolve(cwd)` and
+then canonicalises symlinks and aliases before classifying the scope. A fixture
+that stores a raw literal is describing a file the repository would never have
+written, which is why discovery correctly refused to find it.
 
-**Why it is not ours.** `git log b296459b3..HEAD --name-only` returns zero
-matches for either file or for `jsonl-session-repo.ts`. No commit in this
-program has touched the session repo or the v3 migration.
+**What was changed.** Tests only. Four assertions in
+`jsonl-session-repo.test.ts` and the fixture in `jsonl-v3-migration.test.ts` now
+derive the canonical form and the encoded directory from the same rules the
+implementation uses, instead of hardcoding POSIX literals. No production code
+was touched - it was already correct.
 
-**Distinct from PD-10.** These are not wall-clock-sensitive: they are
-`AssertionError`s on object shape, not timeouts, and they reproduce in
-isolation as well as under load. So whatever is wrong is a real behavioural
-difference in the JSONL session layer, not a machine-load artefact.
+**The two rules the tests now state explicitly:**
 
-**To close it:** the failures predate this program and sit in the session
-persistence layer, which no migrated subsystem depends on yet. Investigate
-when session persistence is next on the dependency path, or sooner if the
-owner wants the agent suite green independent of migration work.
+1. A session stores the **canonical** cwd, so two spellings of one directory
+   resolve to one stored header rather than two.
+2. A legacy v3 session is discovered by its **encoded directory name**, not by
+   scanning every directory, so a fixture must place the file where the
+   repository will look.
+
+This matters beyond the tests: PD-11 was blocking exactly because session
+lifecycle, recovery and resume all sit on this contract. The behaviour is now
+pinned on the platform that runs it.
+
+
+## PD-12: 8 remaining agent-suite failures are two distinct environmental limits
+
+**Status:** environmental, not behavioural. Distinct from PD-10 and PD-11, both
+of which are now resolved or separately classified.
+
+**Class A - `/tmp` path assumption (6 failures).** `nodejs-env.test.ts` and
+`tools.test.ts` assert a command's printed working directory equals
+`os.tmpdir()`. On this machine `os.tmpdir()` is
+`C:\Users\xkali\AppData\Local\Temp`, but a shell invoked through the test's
+environment reports `/tmp/...`. The test compares two values that are only
+equal under a POSIX-conventional shell.
+
+**Class B - symlink creation is `EPERM` (2 failures).** `nodejs-env.test.ts`
+creates symlinks with `fs.symlink`. On Windows that requires either Developer
+Mode or SeCreateSymbolicLinkPrivilege; this machine has neither, so the call
+fails before any assertion runs.
+
+**Not normalized.** Neither is hidden by a timeout increase or a fixture
+rewrite. Class A needs a shell that reports the Windows temp path, or an
+assertion on the resolved path rather than the raw string. Class B needs the
+privilege, which is an owner-controlled machine setting and therefore not
+something to change unilaterally.
+
+**To close it:** enable Windows Developer Mode, or skip the symlink cases when
+`fs.symlink` is unavailable; and make the cwd assertions compare resolved paths.
+
+**Why it does not block migration.** Neither concerns session persistence,
+recovery, context durability or any migrated capability. PD-11, which did, is
+resolved.

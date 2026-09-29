@@ -1,3 +1,4 @@
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { BACKGROUND_CONTEXT, type Context } from "../../src/harness/context.ts";
 import { NodeExecutionEnv } from "../../src/harness/env/nodejs.ts";
@@ -5,6 +6,19 @@ import { JSONL_STORAGE_VERSION, JsonlSessionRepo } from "../../src/harness/sessi
 import { sessionName, setValue } from "../../src/harness/session/values.ts";
 import { getOrThrow } from "../../src/harness/types.ts";
 import { createTempDir } from "./session-test-utils.ts";
+
+/**
+ * What the repository will actually store for a cwd.
+ *
+ * The repo resolves the value through the execution environment, so it is
+ * canonicalised: on Windows `/workspace` becomes `C:\workspace`, and a test
+ * that asserts the literal it passed in is asserting a platform-specific
+ * accident rather than the contract. OMP resolves the same way before
+ * encoding a session directory name.
+ */
+function resolvedCwd(cwd: string): string {
+	return path.resolve(cwd);
+}
 
 const NOW = 1_700_000_000_000;
 
@@ -42,10 +56,18 @@ describe("JsonlSessionRepo cwd-scoped lifecycle", () => {
 			id: "child",
 			createdAt: NOW,
 			storageVersion: JSONL_STORAGE_VERSION,
-			cwd: "/workspace",
+			// The canonical form, not the literal that was passed in.
+			cwd: resolvedCwd("/workspace"),
 			parentSessionId: "parent",
 		});
-		expect(metadata.path).toContain("/sessions/--workspace--/");
+		// The directory name is the canonical cwd with its separators and drive colon
+		// replaced by `-`, so it is derived rather than hardcoded: on Windows the
+		// canonical `/workspace` is `C:\workspace` and the directory is
+		// `--C--workspace--`.
+		const encoded = `--${resolvedCwd("/workspace")
+			.replace(/^[/\\]/, "")
+			.replace(/[/\\:]/g, "-")}--`;
+		expect(metadata.path).toContain(`${path.sep}sessions${path.sep}${encoded}${path.sep}`);
 		expect(metadata.path.endsWith("_child.jsonl")).toBe(true);
 		expect(Number.isFinite(metadata.modifiedAt)).toBe(true);
 		await session.close(BACKGROUND_CONTEXT);
@@ -61,7 +83,9 @@ describe("JsonlSessionRepo cwd-scoped lifecycle", () => {
 			id: "child",
 			storageVersion: JSONL_STORAGE_VERSION,
 			createdAt: NOW,
-			cwd: "/workspace",
+			// Canonicalised on write, so a session created from two spellings of the
+			// same directory resolves to one stored header rather than two.
+			cwd: resolvedCwd("/workspace"),
 			parentSessionId: "parent",
 		});
 		await repo.close(BACKGROUND_CONTEXT);
@@ -184,8 +208,8 @@ describe("JsonlSessionRepo cwd-scoped lifecycle", () => {
 			"already exists",
 		);
 		expect((await repo.list(undefined, BACKGROUND_CONTEXT)).map(({ cwd, id }) => ({ cwd, id }))).toEqual([
-			{ cwd: "/workspace-a", id: "shared" },
-			{ cwd: "/workspace-b", id: "shared" },
+			{ cwd: resolvedCwd("/workspace-a"), id: "shared" },
+			{ cwd: resolvedCwd("/workspace-b"), id: "shared" },
 		]);
 
 		await Promise.all([first.close(BACKGROUND_CONTEXT), second.close(BACKGROUND_CONTEXT)]);
