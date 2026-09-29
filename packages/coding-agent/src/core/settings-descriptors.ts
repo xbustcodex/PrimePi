@@ -2299,6 +2299,57 @@ export const pythonInterpreter = registerSetting({
 		group: "Eval & Runtimes",
 	},
 });
+export const commandsEnableClaudeUser = registerSetting({
+	key: "commands.enableClaudeUser",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Claude User Commands",
+		description: "Load commands from ~/.claude/commands/",
+		tab: "tasks",
+		group: "Commands & Skills",
+		control: "cycle",
+	},
+});
+
+export const commandsEnableClaudeProject = registerSetting({
+	key: "commands.enableClaudeProject",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Claude Project Commands",
+		description: "Load commands from the projects .claude/commands/ directory",
+		tab: "tasks",
+		group: "Commands & Skills",
+		control: "cycle",
+	},
+});
+
+export const commandsEnableOpencodeUser = registerSetting({
+	key: "commands.enableOpencodeUser",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "OpenCode User Commands",
+		description: "Load commands from your own user-level OpenCode commands directory",
+		tab: "tasks",
+		group: "Commands & Skills",
+		control: "cycle",
+	},
+});
+
+export const commandsEnableOpencodeProject = registerSetting({
+	key: "commands.enableOpencodeProject",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "OpenCode Project Commands",
+		description: "Load commands from the projects OpenCode commands directory",
+		tab: "tasks",
+		group: "Commands & Skills",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

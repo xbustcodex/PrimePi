@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tasks tab, Commands & Skills: a trust boundary, not a feature list.
+	"commands.enableClaudeUser":
+		"consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
+	"commands.enableClaudeProject":
+		"consumed by isSourceAdmitted with no fallback, because a repository directory is under the control of whoever last committed",
+	"commands.enableOpencodeUser":
+		"consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
+	"commands.enableOpencodeProject":
+		"consumed by isSourceAdmitted with no fallback, because a repository directory is under the control of whoever last committed",
 	// Shell tab, Eval & Runtimes: the persistent Python kernel.
 	"python.kernelMode":
 		"consumed by decideKernel; per-call starts fresh so two calls cannot interfere, session reuses a matching kernel",
