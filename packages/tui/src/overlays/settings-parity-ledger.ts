@@ -53,6 +53,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
 	"compaction.dropUseless":
 		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",
+	// Files tab, Editing.
+	"edit.recoverInlineEdits":
+		"consumed by recoverInlineSloppyEdit; a stray payload becomes a synthetic edit tool call so the approval pipeline still runs",
 	// Interaction tab, Startup & Updates.
 	"autoResume":
 		"consumed by chooseSessionToResume; a resumed session restores its own model instead of taking a CLI default",
@@ -101,6 +104,7 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"retry.fallbackChains",
 	"retry.fallbackRevertPolicy",
 	"autoResume",
+	"edit.recoverInlineEdits",
 	"compaction.dropUseless",
 	"compaction.supersedeReads",
 ]);

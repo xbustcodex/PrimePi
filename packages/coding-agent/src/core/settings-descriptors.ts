@@ -726,6 +726,19 @@ export const retryFallbackRevertPolicy = registerSetting({
 	},
 });
 
+export const editRecoverInlineEdits = registerSetting({
+	key: "edit.recoverInlineEdits",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Recover Inline Edits",
+		description: "Re-materialise an edit payload the model emitted as plain text as an edit tool call",
+		tab: "files",
+		group: "Editing",
+		control: "cycle",
+	},
+});
+
 export const autoResume = registerSetting({
 	key: "autoResume",
 	type: "boolean",
