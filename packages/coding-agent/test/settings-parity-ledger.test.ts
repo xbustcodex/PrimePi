@@ -69,6 +69,7 @@ describe("the classifications are the ones the program claims", () => {
 		// Listed rather than counted: a count in a test only proves the count
 		// matches itself, and that is how a wrong number survives.
 		expect(wired).toEqual([
+			"autoResume",
 			"compaction.dropUseless",
 			"compaction.supersedeReads",
 			"memory.backend",
@@ -97,6 +98,7 @@ describe("the classifications are the ones the program claims", () => {
 		// are declared and consumed by the retry policy, but no test drives a
 		// retry through them.
 		expect(live).toEqual([
+			"autoResume",
 			"compaction.dropUseless",
 			"compaction.supersedeReads",
 			"memory.backend",

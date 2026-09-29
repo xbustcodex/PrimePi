@@ -726,6 +726,21 @@ export const retryFallbackRevertPolicy = registerSetting({
 	},
 });
 
+export const autoResume = registerSetting({
+	key: "autoResume",
+	type: "boolean",
+	// Off by default, as in the reference. Auto-resume changes which conversation
+	// a launch opens, and a user who has not asked for that should never get it.
+	default: false,
+	ui: {
+		label: "Auto Resume",
+		description: "Automatically resume the most recent session in the current directory",
+		tab: "interaction",
+		group: "Startup & Updates",
+		control: "cycle",
+	},
+});
+
 export const compactionSupersedeReads = registerSetting({
 	key: "compaction.supersedeReads",
 	type: "boolean",

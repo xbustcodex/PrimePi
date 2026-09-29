@@ -1737,8 +1737,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Automatically resume the most recent session in the current directory",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "autoResume",
+		note: "consumed by chooseSessionToResume, which restores the session model rather than letting CLI defaults override it",
 	},
 	{
 		id: "git.enabled",
