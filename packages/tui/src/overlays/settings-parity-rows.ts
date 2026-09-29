@@ -2369,8 +2369,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"one-at-a-time"',
 		values: ["all", "one-at-a-time"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "steeringMode",
+		note: "consumed by takeBatch; one-at-a-time lets the model act on a redirect before seeing the next",
 	},
 	{
 		id: "followUpMode",
@@ -2381,8 +2382,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"one-at-a-time"',
 		values: ["all", "one-at-a-time"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "followUpMode",
+		note: "consumed by takeBatch; a follow-up queue keeps draining under either mode while anything is left",
 	},
 	{
 		id: "interruptMode",

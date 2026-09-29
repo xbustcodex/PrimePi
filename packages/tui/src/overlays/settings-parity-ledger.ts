@@ -37,8 +37,12 @@ import { OMP_PARITY_ROW_COUNT, OMP_PARITY_ROWS, type ParityRow } from "./setting
 /** A row whose runtime consumer is proven. Every entry is a deliberate claim. */
 const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Memory tab, General.
+	"followUpMode":
+		"consumed by takeBatch; a follow-up queue keeps draining under either mode while anything is left",
 	"interruptMode":
 		"consumed by shouldInterrupt; wait spares side-effecting calls and still cuts short purely interruptible ones",
+	"steeringMode":
+		"consumed by takeBatch; one-at-a-time lets the model act on a redirect before seeing the next",
 	"memory.backend": "resolved by SessionMemory.create and consumed by the backend registry",
 	// Memory tab, Mnemopi. The bank store and its lifecycle.
 	"mnemopi.dbPath": "consumed by the bank store as its storage root; empty means the agent directory",
@@ -134,6 +138,9 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"model.toolCallLoopGuard.enabled",
 	"model.toolCallLoopGuard.exemptTools",
 	"model.toolCallLoopGuard.threshold",
+	"followUpMode",
+	"interruptMode",
+	"steeringMode",
 ]);
 
 function stateFor(row: ParityRow): LedgerState {

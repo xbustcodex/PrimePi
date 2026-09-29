@@ -74,6 +74,7 @@ describe("the classifications are the ones the program claims", () => {
 			"compaction.supersedeReads",
 			"defaultThinkingLevel",
 			"edit.recoverInlineEdits",
+			"followUpMode",
 			"interruptMode",
 			"memory.backend",
 			"mnemopi.autoRecall",
@@ -92,6 +93,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.maxRetries",
 			"retry.modelFallback",
 			"secrets.enabled",
+			"steeringMode",
 			"todo.enabled",
 		]);
 	});
@@ -113,6 +115,8 @@ describe("the classifications are the ones the program claims", () => {
 			"compaction.supersedeReads",
 			"defaultThinkingLevel",
 			"edit.recoverInlineEdits",
+			"followUpMode",
+			"interruptMode",
 			"memory.backend",
 			"mnemopi.autoRecall",
 			"mnemopi.autoRetain",
@@ -126,6 +130,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.fallbackRevertPolicy",
 			"retry.modelFallback",
 			"secrets.enabled",
+			"steeringMode",
 			"todo.enabled",
 		]);
 	});
