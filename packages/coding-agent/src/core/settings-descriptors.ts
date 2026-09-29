@@ -1679,6 +1679,44 @@ export const checkpointEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const shareRedactSecrets = registerSetting({
+	key: "share.redactSecrets",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Share Secret Redaction",
+		description: "Redact configured secrets from a session before it is published",
+		tab: "interaction",
+		group: "Share",
+		control: "cycle",
+	},
+});
+
+export const shareServerUrl = registerSetting({
+	key: "share.serverUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Share Server",
+		description: "Base URL of the server a session is published to",
+		tab: "interaction",
+		group: "Share",
+	},
+});
+
+export const shareStore = registerSetting({
+	key: "share.store",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Share Store",
+		description: "Where a published session is stored",
+		tab: "interaction",
+		group: "Share",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

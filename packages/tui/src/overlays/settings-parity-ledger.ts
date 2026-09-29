@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Interaction tab, Share: what leaves the machine.
+	"share.redactSecrets":
+		"consumed by decideShare, resolved against the session own project rather than the invoking directory",
+	"share.serverUrl":
+		"consumed when a session is published, naming the destination",
+	"share.store":
+		"consumed when a session is published, selecting where it is stored",
 	// Tools tab, Available Tools: bounded exploration.
 	"checkpoint.enabled":
 		"consumed when the tool set is assembled, gating the checkpoint and rewind tools",
