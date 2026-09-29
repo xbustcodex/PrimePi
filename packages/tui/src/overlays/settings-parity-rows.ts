@@ -681,8 +681,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Enable the bash tool for shell command execution",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "bash.enabled",
+		note: "consumed when the tool set is assembled, gating whether bash is offered at all",
 	},
 	{
 		id: "bash.allowCompoundCommands",
@@ -693,8 +694,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			"Evaluate literal && chains per command; unmatched commands use normal bash approval policy and mode",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "bash.allowCompoundCommands",
+		note: "consumed by decideChain, which judges a literal && chain per segment and treats an unsegmentable one as a single opaque command",
 	},
 	{
 		id: "bash.autoBackground.enabled",

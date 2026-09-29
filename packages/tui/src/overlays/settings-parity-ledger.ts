@@ -57,6 +57,11 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Shell tab, Bash: per-segment approval for a literal && chain.
+	"bash.enabled":
+		"consumed when the tool set is assembled, gating whether bash is offered at all",
+	"bash.allowCompoundCommands":
+		"consumed by decideChain, which judges a literal && chain per segment and treats an unsegmentable one as a single opaque command",
 	// Memory tab, Mnemopi: retrieval mode and endpoint precedence.
 	"mnemopi.noEmbeddings":
 		"consumed by resolveRetrievalMode, selecting deterministic full-text recall rather than a cheaper vector one",

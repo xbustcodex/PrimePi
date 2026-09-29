@@ -1635,6 +1635,35 @@ export const mnemopiLlmBaseUrl = registerSetting({
 		group: "Mnemopi",
 	},
 });
+export const bashEnabled = registerSetting({
+	key: "bash.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Bash",
+		description: "Enable the bash tool",
+		tab: "shell",
+		group: "Bash",
+		control: "cycle",
+	},
+});
+
+export const bashAllowCompoundCommands = registerSetting({
+	key: "bash.allowCompoundCommands",
+	type: "boolean",
+	// Off by default. Turning it on lets a && chain be judged segment by segment,
+	// which is more accurate - and only safe because an unsegmentable chain falls
+	// back to one opaque command rather than being waved through.
+	default: false,
+	ui: {
+		label: "Allow Compound Commands",
+		description:
+			"Evaluate literal && chains per command; unmatched commands use normal bash approval policy and mode",
+		tab: "shell",
+		group: "Bash",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

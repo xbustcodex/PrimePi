@@ -70,6 +70,8 @@ describe("the classifications are the ones the program claims", () => {
 		// matches itself, and that is how a wrong number survives.
 		expect(wired).toEqual([
 			"autoResume",
+			"bash.allowCompoundCommands",
+			"bash.enabled",
 			"browser.cdpUrl",
 			"browser.enabled",
 			"browser.freezeOnTurnEnd",
