@@ -10,7 +10,7 @@
  * the registry does not reorder the interface.
  */
 
-import { parseConfiguredThinkingLevel } from "@earendil-works/pi-ai";
+import { DEFAULT_COMPACTION_METHOD_ORDER, parseConfiguredThinkingLevel } from "@earendil-works/pi-ai";
 import { registerSetting } from "./settings-registry.ts";
 
 /**
@@ -3094,6 +3094,46 @@ export const modelLoopGuardToolCallReminder = registerSetting({
 		description: "Remind the model to call a tool or answer when its reasoning has stopped making progress",
 		tab: "model",
 		group: "Thinking",
+		control: "cycle",
+	},
+});
+export const compactionMethodOrder = registerSetting({
+	key: "compaction.methodOrder",
+	type: "stringList",
+	default: [...DEFAULT_COMPACTION_METHOD_ORDER],
+	parse: (raw) => (Array.isArray(raw) ? raw.filter((entry): entry is string => typeof entry === "string") : undefined),
+	ui: {
+		label: "Compaction Method Order",
+		description:
+			"Preferred fallback order for automatic context maintenance; unavailable or failed methods advance to the next choice",
+		tab: "context",
+		group: "Compaction",
+	},
+});
+
+export const compactionMidTurnEnabled = registerSetting({
+	key: "compaction.midTurnEnabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Mid-Turn Compaction",
+		description: "Compact between tool calls when the context fills, rather than only before a user turn",
+		tab: "context",
+		group: "Compaction",
+		control: "cycle",
+	},
+});
+
+export const compactionHandoffSaveToDisk = registerSetting({
+	key: "compaction.handoffSaveToDisk",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Save Handoff Docs",
+		description:
+			"Write the handoff document to disk when handoff compaction runs, so the pre-compaction state stays recoverable",
+		tab: "context",
+		group: "Compaction",
 		control: "cycle",
 	},
 });

@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Context tab, Compaction: the method preference order and its fallbacks.
+	"compaction.methodOrder":
+		"consumed by selectCompactionMethod, which walks the order and reports exhaustion rather than assuming a pass succeeded",
+	"compaction.midTurnEnabled":
+		"consumed when a turn's context crosses the threshold between tool calls",
+	"compaction.handoffSaveToDisk":
+		"consumed by the handoff method, writing the document before replacing the history it summarises",
 	// Model tab, Thinking: the stream loop guard.
 	"model.loopGuard.enabled":
 		"consumed by ThinkingLoopDetector, which scans the stream at a bounded cadence rather than per delta",

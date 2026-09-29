@@ -59,6 +59,21 @@ export {
 	retentionTtlMs,
 	supportsCacheRetention,
 } from "./utils/cache-retention.ts";
+export {
+	COMPACTION_METHOD_CHOICES,
+	type CompactionMethod,
+	DEFAULT_COMPACTION_METHOD_ORDER,
+	isCompactionMethod,
+	isMethodAvailable,
+	LOCAL_COMPACTION_METHODS,
+	type MethodAttempt,
+	type MethodAvailability,
+	type MethodResolution,
+	resolveCompactionMethodOrder,
+	resolveSpeculationMethod,
+	type SpeculationMethod,
+	selectCompactionMethod,
+} from "./utils/compaction-methods.ts";
 export * from "./utils/diagnostics.ts";
 export * from "./utils/event-stream.ts";
 export {
