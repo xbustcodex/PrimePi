@@ -71,7 +71,11 @@ describe("the classifications are the ones the program claims", () => {
 		expect(wired).toEqual([
 			"autoResume",
 			"bash.allowCompoundCommands",
+			"bash.autoBackground.enabled",
+			"bash.direnv",
 			"bash.enabled",
+			"bash.patterns",
+			"bashInterceptor.enabled",
 			"browser.cdpUrl",
 			"browser.enabled",
 			"browser.freezeOnTurnEnd",

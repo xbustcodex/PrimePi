@@ -1909,6 +1909,60 @@ export const ttsrBuiltinRules = registerSetting({
 		control: "cycle",
 	},
 });
+export const bashPatterns = registerSetting({
+	key: "bash.patterns",
+	type: "record",
+	default: {},
+	parse: (raw) => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : undefined),
+	ui: {
+		label: "Bash Approval Patterns",
+		description:
+			"Ordered bash command approval rules. Each item has match and approval fields; only * wildcards are supported.",
+		tab: "shell",
+		group: "Bash",
+	},
+});
+
+export const bashAutoBackgroundEnabled = registerSetting({
+	key: "bash.autoBackground.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Bash Auto-Background",
+		description: "Move a long-running shell command to the background automatically",
+		tab: "shell",
+		group: "Bash",
+		control: "cycle",
+	},
+});
+
+export const bashDirenv = registerSetting({
+	key: "bash.direnv",
+	type: "enum",
+	default: "off",
+	values: ["off", "load", "strict"],
+	parse: (raw) => (raw === "off" || raw === "load" || raw === "strict" ? raw : undefined),
+	ui: {
+		label: "direnv Auto-Load",
+		description: "Load a .envrc through direnv before running a shell command",
+		tab: "shell",
+		group: "Bash",
+		control: "submenu",
+	},
+});
+
+export const bashInterceptorEnabled = registerSetting({
+	key: "bashInterceptor.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Bash Interceptor",
+		description: "Rewrite shell commands through an interceptor before approval",
+		tab: "shell",
+		group: "Bash",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

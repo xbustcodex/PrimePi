@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Shell tab, Bash: the ordered approval rules and command preparation.
+	"bash.patterns":
+		"consumed by decideChain and firstMatchingRule as the ordered approval rules, glob-matched and anchored",
+	"bash.autoBackground.enabled":
+		"consumed when a shell command runs long enough to background on its own",
+	"bash.direnv":
+		"consumed before a command runs, deciding whether a .envrc is loaded",
+	"bashInterceptor.enabled":
+		"consumed when a command is prepared, rewriting it before approval rather than after",
 	// Context tab, Rules (TTSR): mid-stream rule injection.
 	"ttsr.enabled":
 		"consumed by isRuleActive; a rule is inactive when this is off, whatever the others say",
