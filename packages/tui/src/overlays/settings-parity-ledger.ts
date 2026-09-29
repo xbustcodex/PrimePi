@@ -57,6 +57,17 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Discovery & MCP.
+	"mcp.enableProjectConfig":
+		"consumed when servers are assembled, gating whether a project may declare its own",
+	"mcp.startupTimeoutMs":
+		"consumed by isStartupComplete; 0 waits until connections settle rather than not waiting",
+	"mcp.renderMarkdownResults":
+		"consumed when an MCP result is rendered, choosing markdown over plain text",
+	"mcp.notifications":
+		"consumed by injectionEnabled; disabled means nothing from a server reaches the conversation at all",
+	"mcp.notificationDebounceMs":
+		"consumed by NotificationDebouncer, which waits for quiet and injects the newest state",
 	// Tools tab, Grep & Browser: ownership decides the lifecycle.
 	"browser.enabled":
 		"consumed when the browser tool is assembled, gating whether it is offered at all",

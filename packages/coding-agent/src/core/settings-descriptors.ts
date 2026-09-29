@@ -970,6 +970,71 @@ export const browserScreenshotDir = registerSetting({
 		group: "Grep & Browser",
 	},
 });
+export const mcpEnableProjectConfig = registerSetting({
+	key: "mcp.enableProjectConfig",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "MCP Project Config",
+		description: "Allow a project to declare its own MCP servers",
+		tab: "tools",
+		group: "Discovery & MCP",
+		control: "cycle",
+	},
+});
+
+export const mcpStartupTimeoutMs = registerSetting({
+	key: "mcp.startupTimeoutMs",
+	type: "number",
+	default: 250,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "MCP Startup Window",
+		description: "Milliseconds to wait for initial MCP tool discovery; 0 waits until connections settle",
+		tab: "tools",
+		group: "Discovery & MCP",
+	},
+});
+
+export const mcpRenderMarkdownResults = registerSetting({
+	key: "mcp.renderMarkdownResults",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "MCP Markdown Results",
+		description: "Render MCP results as markdown when the content is markdown",
+		tab: "tools",
+		group: "Discovery & MCP",
+		control: "cycle",
+	},
+});
+
+export const mcpNotifications = registerSetting({
+	key: "mcp.notifications",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "MCP Update Injection",
+		description: "Inject MCP resource updates into the conversation",
+		tab: "tools",
+		group: "Discovery & MCP",
+		control: "cycle",
+	},
+});
+
+export const mcpNotificationDebounceMs = registerSetting({
+	key: "mcp.notificationDebounceMs",
+	type: "number",
+	default: 500,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "MCP Notification Debounce",
+		description:
+			"Debounce window in milliseconds for MCP resource updates before injecting them into the conversation",
+		tab: "tools",
+		group: "Discovery & MCP",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
