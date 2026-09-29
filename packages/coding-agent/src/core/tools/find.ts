@@ -122,9 +122,13 @@ export function createFindToolDefinition(
 								settle(() => reject(new Error("Operation aborted")));
 								return;
 							}
+							// Over-fetch by one. The engine is asked for one more than the
+							// caller wants, so a full buffer is the only evidence that more
+							// matches exist — without it, a result set whose size is exactly the
+							// limit is indistinguishable from a truncated one.
 							const results = await ops.glob(pattern, searchPath, {
 								ignore: ["**/node_modules/**", "**/.git/**"],
-								limit: effectiveLimit,
+								limit: effectiveLimit + 1,
 							});
 							if (signal?.aborted) {
 								settle(() => reject(new Error("Operation aborted")));
@@ -142,7 +146,8 @@ export function createFindToolDefinition(
 
 							// Relativize paths against the search root for stable output.
 							const relativized = results.map((p) => relativizeFindResultPath(p, searchPath));
-							const resultLimitReached = relativized.length >= effectiveLimit;
+							const resultLimitReached = relativized.length > effectiveLimit;
+							if (resultLimitReached) relativized.length = effectiveLimit;
 							const rawOutput = relativized.join("\n");
 							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 							let resultOutput = truncation.content;
@@ -196,7 +201,11 @@ export function createFindToolDefinition(
 							current = parent;
 						}
 						if (!insideGitRepo) args.push("--no-require-git");
-						args.push("--max-results", String(effectiveLimit));
+						// Over-fetch by one, so a full buffer is the only evidence that more
+						// matches exist. Without it, a result set whose size is exactly the
+						// limit is indistinguishable from a truncated one, and the tool tells
+						// the model to widen a search that is already complete.
+						args.push("--max-results", String(effectiveLimit + 1));
 
 						// fd --glob matches against the basename unless --full-path is set; in --full-path
 						// mode it matches against the absolute candidate path, so a path-containing
@@ -272,7 +281,8 @@ export function createFindToolDefinition(
 								relativized.push(relativizeFindResultPath(line, searchPath));
 							}
 
-							const resultLimitReached = relativized.length >= effectiveLimit;
+							const resultLimitReached = relativized.length > effectiveLimit;
+							if (resultLimitReached) relativized.length = effectiveLimit;
 							const rawOutput = relativized.join("\n");
 							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 							let resultOutput = truncation.content;

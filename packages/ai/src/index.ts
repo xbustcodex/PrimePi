@@ -152,6 +152,16 @@ export {
 	type WatchdogOptions,
 	withStreamWatchdog,
 } from "./utils/stream-watchdog.ts";
+export {
+	compareMatches,
+	isLastPage,
+	MatchRetainer,
+	mergeStructuralResults,
+	perTargetFetch,
+	type StructuralMatch,
+	type StructuralPage,
+	type TargetResult,
+} from "./utils/structural-search.ts";
 export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";
 export {
 	AUTO_THINKING,

@@ -2881,6 +2881,83 @@ export const mnemopiProactiveLinking = registerSetting({
 		control: "cycle",
 	},
 });
+export const astGrepEnabled = registerSetting({
+	key: "astGrep.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "AST Grep",
+		description: "Search by AST pattern rather than by text, so a match is a construct and not a substring",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const astEditEnabled = registerSetting({
+	key: "astEdit.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "AST Edit",
+		description: "Apply an edit as an AST transform, so a rename or signature change rewrites every call site",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const idaEnabled = registerSetting({
+	key: "ida.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "IDA Pro",
+		description: "Query a running IDA instance for decompiled structure",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const debugEnabled = registerSetting({
+	key: "debug.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Debug",
+		description: "Attach to a running process over DAP and inspect its frames",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const launchEnabled = registerSetting({
+	key: "launch.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Services",
+		description: "Start and stop the background services a session needs",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
+export const vaultEnabled = registerSetting({
+	key: "vault.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Obsidian Vault",
+		description: "Search and write an Obsidian vault as a notes store",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

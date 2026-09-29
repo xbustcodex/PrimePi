@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Available Tools: structural search and the tool backends.
+	"astGrep.enabled":
+		"consumed by the structural search tool, which pages matches through mergeStructuralResults",
+	"astEdit.enabled":
+		"consumed by the AST transform tool, which rewrites a construct rather than a text span",
+	"ida.enabled":
+		"consumed by the decompiler tool when it queries a running IDA instance",
+	"debug.enabled":
+		"consumed by the DAP adapter, which attaches to a running process for frame inspection",
+	"launch.enabled":
+		"consumed when a session starts the background services it needs",
+	"vault.enabled":
+		"consumed by the vault tools when they read and write a notes store",
 	// Memory tab, Mnemopi: rank fusion across four independent recall voices.
 	"mnemopi.polyphonicRecall":
 		"consumed by fuseByReciprocalRank, which fuses four voice rankings by rank rather than by score so a memory several voices agree on outranks one that leads a single voice",
