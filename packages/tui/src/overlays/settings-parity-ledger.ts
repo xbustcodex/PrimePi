@@ -57,6 +57,17 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tasks tab, Modes: the explicit plan lifecycle.
+	"plan.enabled":
+		"consumed by mayBeginExecution, gating execution while plan mode is active",
+	"plan.defaultOnStartup":
+		"consumed when a session starts, entering plan mode read-only by default",
+	"plan.autosave":
+		"consumed when plan mode completes, writing the approved plan to disk",
+	"goal.enabled":
+		"consumed for the session goal, tracked and reported against",
+	"goal.statusInFooter":
+		"consumed by the status footer, showing the current goal",
 	// Model tab, Thinking: how reasoning is presented.
 	"hideThinkingBlock":
 		"consumed by resolveThinkingDisplay; it changes the screen and not the request, so the reasoning still costs tokens",

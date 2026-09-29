@@ -2205,6 +2205,70 @@ export const externalThinking = registerSetting({
 		control: "cycle",
 	},
 });
+export const planEnabled = registerSetting({
+	key: "plan.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Plan Mode",
+		description: "Enable plan mode for read-only exploration and planning before execution",
+		tab: "tasks",
+		group: "Modes",
+		control: "cycle",
+	},
+});
+
+export const planDefaultOnStartup = registerSetting({
+	key: "plan.defaultOnStartup",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Start in Plan Mode",
+		description: "Automatically enter plan mode at the start of every new session",
+		tab: "tasks",
+		group: "Modes",
+		control: "cycle",
+	},
+});
+
+export const planAutosave = registerSetting({
+	key: "plan.autosave",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Autosave Plans",
+		description: "Automatically save approved plans to disk when plan mode completes",
+		tab: "tasks",
+		group: "Modes",
+		control: "cycle",
+	},
+});
+
+export const goalEnabled = registerSetting({
+	key: "goal.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Goal Mode",
+		description: "Track an explicit goal for the session and report progress against it",
+		tab: "tasks",
+		group: "Modes",
+		control: "cycle",
+	},
+});
+
+export const goalStatusInFooter = registerSetting({
+	key: "goal.statusInFooter",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Goal Status in Footer",
+		description: "Show the current goal in the status footer",
+		tab: "tasks",
+		group: "Modes",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
