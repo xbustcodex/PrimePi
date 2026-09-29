@@ -1351,6 +1351,78 @@ export const taskEnableEffort = registerSetting({
 		control: "cycle",
 	},
 });
+export const compactionThresholdPercent = registerSetting({
+	key: "compaction.thresholdPercent",
+	type: "number",
+	// -1 is the sentinel meaning "not set", which is what makes a percentage and a
+	// token limit independently optional and the token limit able to win.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Compaction Threshold",
+		description: "Percent threshold for context maintenance; -1 uses the legacy reserve-based behaviour",
+		tab: "context",
+		group: "Compaction",
+	},
+});
+
+export const compactionThresholdTokens = registerSetting({
+	key: "compaction.thresholdTokens",
+	type: "number",
+	// -1 is the sentinel meaning "not set", which is what makes a percentage and a
+	// token limit independently optional and the token limit able to win.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Compaction Token Limit",
+		description: "Fixed token limit for context maintenance; overrides the percentage when set",
+		tab: "context",
+		group: "Compaction",
+	},
+});
+
+export const compactionIdleThresholdTokens = registerSetting({
+	key: "compaction.idleThresholdTokens",
+	type: "number",
+	// -1 is the sentinel meaning "not set", which is what makes a percentage and a
+	// token limit independently optional and the token limit able to win.
+	default: 50000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Idle Compaction Threshold",
+		description: "Context size at which an idle session becomes eligible for compaction",
+		tab: "context",
+		group: "Compaction",
+	},
+});
+
+export const compactionIdleTimeoutSeconds = registerSetting({
+	key: "compaction.idleTimeoutSeconds",
+	type: "number",
+	// -1 is the sentinel meaning "not set", which is what makes a percentage and a
+	// token limit independently optional and the token limit able to win.
+	default: 300,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Idle Compaction Delay",
+		description: "Seconds a session must be idle before it is compacted",
+		tab: "context",
+		group: "Compaction",
+	},
+});
+
+export const compactionIdleEnabled = registerSetting({
+	key: "compaction.idleEnabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Idle Compaction",
+		description: "Compact a session that has been idle long enough, at no cost to a running turn",
+		tab: "context",
+		group: "Compaction",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

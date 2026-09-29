@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Context tab, Compaction: when maintenance runs.
+	"compaction.enabled":
+		"consumed by decideCompaction, gating whether maintenance may run at all",
+	"compaction.thresholdPercent":
+		"consumed by resolveCompactionThreshold, which falls back to the reserve at -1",
+	"compaction.thresholdTokens":
+		"consumed by resolveCompactionThreshold, where it overrides the percentage because it is the more specific statement",
+	"compaction.idleThresholdTokens":
+		"consumed by decideIdleCompaction as the context size an idle session must reach",
+	"compaction.idleTimeoutSeconds":
+		"consumed by decideIdleCompaction, which waits for the delay before the threshold",
+	"compaction.idleEnabled":
+		"consumed by decideIdleCompaction, which produces no action at all when this is off",
 	// Tasks tab, Subagents.
 	"task.maxConcurrency":
 		"consumed when a subagent is spawned, bounding how many run at once",
