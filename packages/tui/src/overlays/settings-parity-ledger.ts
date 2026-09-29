@@ -57,6 +57,21 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Appearance tab, Status Line: a closed segment catalog and a computed gauge.
+	"statusLine.preset":
+		"consumed when the line is assembled, choosing which segments appear",
+	"statusLine.separator":
+		"consumed when the line is rendered, between segments",
+	"statusLine.contextLine":
+		"consumed by resolveContextGauge, which places ticks at the session own speculative and compaction boundaries",
+	"statusLine.sessionAccent":
+		"consumed when the line and editor border are styled",
+	"statusLine.transparent":
+		"consumed when the line background is painted",
+	"statusLine.compactThinkingLevel":
+		"consumed when the thinking level segment renders",
+	"statusLine.showHookStatus":
+		"consumed when the line assembles, adding hook state",
 	// Files tab, Read Summaries: progressive disclosure for a large file.
 	"read.summarize.enabled":
 		"consumed by decideReadSummary; a small file is read verbatim because summarising it costs tokens to save tokens",

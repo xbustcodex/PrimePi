@@ -2744,6 +2744,104 @@ export const readSummarizeUnfoldLimit = registerSetting({
 		group: "Read Summaries",
 	},
 });
+export const statusLinePreset = registerSetting({
+	key: "statusLine.preset",
+	type: "enum",
+	default: "default",
+	values: ["default", "compact", "custom"],
+	parse: (raw) => (raw === "default" || raw === "compact" || raw === "custom" ? raw : undefined),
+	ui: {
+		label: "Status Line Preset",
+		description: "Which set of segments the status line shows",
+		tab: "appearance",
+		group: "Status Line",
+		control: "submenu",
+	},
+});
+
+export const statusLineSeparator = registerSetting({
+	key: "statusLine.separator",
+	type: "enum",
+	default: "pipe",
+	values: ["pipe", "dot", "none"],
+	parse: (raw) => (raw === "pipe" || raw === "dot" || raw === "none" ? raw : undefined),
+	ui: {
+		label: "Status Line Separator",
+		description: "The glyph between status line segments",
+		tab: "appearance",
+		group: "Status Line",
+		control: "submenu",
+	},
+});
+
+export const statusLineContextLine = registerSetting({
+	key: "statusLine.contextLine",
+	type: "enum",
+	default: "embedded",
+	values: ["off", "percentage", "annotated", "embedded"],
+	parse: (raw) =>
+		raw === "off" || raw === "percentage" || raw === "annotated" || raw === "embedded" ? raw : undefined,
+	ui: {
+		label: "Context-Reactive Line",
+		description:
+			"How the line reflects context usage: off, a filled percentage, ticks at the speculative and auto-compaction boundaries, or the numbers embedded in the gauge",
+		tab: "appearance",
+		group: "Status Line",
+		control: "submenu",
+	},
+});
+
+export const statusLineSessionAccent = registerSetting({
+	key: "statusLine.sessionAccent",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Session Accent",
+		description: "Use the session name color for the editor border and status line gap",
+		tab: "appearance",
+		group: "Status Line",
+		control: "cycle",
+	},
+});
+
+export const statusLineTransparent = registerSetting({
+	key: "statusLine.transparent",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Transparent Status Line",
+		description: "Let the terminal background show through the status line",
+		tab: "appearance",
+		group: "Status Line",
+		control: "cycle",
+	},
+});
+
+export const statusLineCompactThinkingLevel = registerSetting({
+	key: "statusLine.compactThinkingLevel",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Compact Thinking Level",
+		description: "Show the thinking level as a single glyph rather than a word",
+		tab: "appearance",
+		group: "Status Line",
+		control: "cycle",
+	},
+});
+
+export const statusLineShowHookStatus = registerSetting({
+	key: "statusLine.showHookStatus",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Show Hook Status",
+		description: "Show whether a hook is installed and active",
+		tab: "appearance",
+		group: "Status Line",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
