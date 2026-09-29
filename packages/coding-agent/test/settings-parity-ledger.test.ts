@@ -206,6 +206,10 @@ describe("the classifications are the ones the program claims", () => {
 			"task.eager",
 			"task.enableEffort",
 			"task.enableLsp",
+			"task.isolation.apply",
+			"task.isolation.commits",
+			"task.isolation.enabled",
+			"task.isolation.merge",
 			"task.maxConcurrency",
 			"task.maxEffort",
 			"task.maxRecursionDepth",
@@ -235,6 +239,8 @@ describe("the classifications are the ones the program claims", () => {
 			"tui.tight",
 			"web_search.enabled",
 			"workspace.additionalDirectories",
+			"worktree.cleanSource",
+			"worktree.clone",
 		]);
 	});
 

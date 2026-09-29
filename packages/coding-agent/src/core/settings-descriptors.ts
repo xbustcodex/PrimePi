@@ -2350,6 +2350,89 @@ export const commandsEnableOpencodeProject = registerSetting({
 		control: "cycle",
 	},
 });
+export const taskIsolationEnabled = registerSetting({
+	key: "task.isolation.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Isolate Subagents",
+		description: "Give a delegated task its own worktree so it cannot dirty the working tree you are looking at",
+		tab: "tasks",
+		group: "Isolation",
+		control: "cycle",
+	},
+});
+
+export const taskIsolationMerge = registerSetting({
+	key: "task.isolation.merge",
+	type: "enum",
+	default: "patch",
+	values: ["patch", "branch"],
+	parse: (raw) => (raw === "patch" || raw === "branch" ? raw : undefined),
+	ui: {
+		label: "Isolation Merge Strategy",
+		description:
+			"How isolated task changes are integrated: combine diffs and git apply, or commit per task and merge with --no-ff",
+		tab: "tasks",
+		group: "Isolation",
+		control: "submenu",
+	},
+});
+
+export const taskIsolationCommits = registerSetting({
+	key: "task.isolation.commits",
+	type: "enum",
+	default: "generic",
+	values: ["generic", "ai"],
+	parse: (raw) => (raw === "generic" || raw === "ai" ? raw : undefined),
+	ui: {
+		label: "Isolation Commit Style",
+		description: "Commit message style for nested repo changes: a static message, or one generated from the diff",
+		tab: "tasks",
+		group: "Isolation",
+		control: "submenu",
+	},
+});
+
+export const taskIsolationApply = registerSetting({
+	key: "task.isolation.apply",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Apply Isolated Changes",
+		description:
+			"Integrate a finished task's changes; off means they are discarded and the working tree is left untouched",
+		tab: "tasks",
+		group: "Isolation",
+		control: "cycle",
+	},
+});
+
+export const worktreeClone = registerSetting({
+	key: "worktree.clone",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Clone Checkout into Worktrees",
+		description: "Clone the checkout into each worktree rather than adding one from the repository",
+		tab: "tasks",
+		group: "Isolation",
+		control: "cycle",
+	},
+});
+
+export const worktreeCleanSource = registerSetting({
+	key: "worktree.cleanSource",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Clean Source Checkout on /wt",
+		description: "Clean the source checkout when a worktree is removed",
+		tab: "tasks",
+		group: "Isolation",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

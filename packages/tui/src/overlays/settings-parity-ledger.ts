@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tasks tab, Isolation: bounded delegated work.
+	"task.isolation.enabled":
+		"consumed by decideIntegration; isolation isolates changes in progress and is not a sandbox",
+	"task.isolation.merge":
+		"consumed by decideIntegration, choosing diffs plus git apply or a per-task commit merged with --no-ff",
+	"task.isolation.commits":
+		"consumed when a commit is made for an isolated task",
+	"task.isolation.apply":
+		"consumed by decideIntegration; off discards a finished tasks changes, which is what makes a speculative delegation safe",
+	"worktree.clone":
+		"consumed when a worktree is created, cloning the checkout instead of adding one",
+	"worktree.cleanSource":
+		"consumed when a worktree is removed, cleaning the source checkout",
 	// Tasks tab, Commands & Skills: a trust boundary, not a feature list.
 	"commands.enableClaudeUser":
 		"consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
