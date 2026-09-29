@@ -2601,7 +2601,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"rewind"',
 		values: ["rewind", "tree", "none"],
-		status: "deferred",
+		status: "wired",
+		piKey: "doubleEscapeAction",
+		note: "consumed by setupKeyHandlers, where the last rung of the Escape ladder runs a configured action on a second press inside 500ms; destructive rewind is deliberately not offered, only fork and tree",
 		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{
@@ -2612,7 +2614,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Default filter mode when opening the session tree",
 		type: "enum",
 		default: '"default"',
-		status: "deferred",
+		status: "wired",
+		piKey: "treeFilterMode",
+		note: "consumed by showTreeSelector as the initial filter applied when the session tree opens",
 		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{
@@ -2649,7 +2653,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 				label: "20 items",
 			},
 		],
-		status: "deferred",
+		status: "wired",
+		piKey: "autocompleteMaxVisible",
+		note: "consumed by the autocomplete component when it caps the visible candidate list",
 		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
 	},
 	{

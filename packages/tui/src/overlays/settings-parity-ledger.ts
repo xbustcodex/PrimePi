@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Interaction tab, Input: the Escape ladder, the session tree, and the editor.
+	"doubleEscapeAction":
+		"consumed by setupKeyHandlers, where the last rung of the Escape ladder runs a configured action on a second press inside 500ms; destructive rewind is deliberately not offered, only fork and tree",
+	"treeFilterMode":
+		"consumed by showTreeSelector as the initial filter applied when the session tree opens",
+	"autocompleteMaxVisible":
+		"consumed by the autocomplete component when it caps the visible candidate list",
 	// Appearance tab, Status Line: a closed segment catalog and a computed gauge.
 	"statusLine.preset":
 		"consumed when the line is assembled, choosing which segments appear",
