@@ -91,6 +91,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.maxRetries",
 			"retry.modelFallback",
 			"secrets.enabled",
+			"todo.enabled",
 		]);
 	});
 
@@ -124,6 +125,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.fallbackRevertPolicy",
 			"retry.modelFallback",
 			"secrets.enabled",
+			"todo.enabled",
 		]);
 	});
 

@@ -6186,8 +6186,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Enable the todo tool for task tracking",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "todo.enabled",
+		note: "consumed by the todo tool; the plan is read from the latest committed branch entry, so a resume or rewind cannot revert it",
 	},
 	{
 		id: "todo.reminders",

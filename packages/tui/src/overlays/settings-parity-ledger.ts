@@ -64,6 +64,8 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Model tab, Thinking.
 	"defaultThinkingLevel":
 		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
+	"todo.enabled":
+		"consumed by the todo tool; the plan is read from the latest committed branch entry, so a resume or rewind cannot revert it",
 	"model.toolCallLoopGuard.enabled":
 		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
 	"model.toolCallLoopGuard.threshold":
@@ -118,6 +120,7 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"mnemopi.autoRecall",
 	"mnemopi.autoRetain",
 	"retry.modelFallback",
+	"todo.enabled",
 	"retry.fallbackChains",
 	"retry.fallbackRevertPolicy",
 	"secrets.enabled",

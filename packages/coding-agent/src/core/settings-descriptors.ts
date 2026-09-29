@@ -532,6 +532,19 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const todoEnabled = registerSetting({
+	key: "todo.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Todos",
+		description: "Track multi-step work as durable phases that survive a resume, rewind or fork",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
+
 export const defaultThinkingLevel = registerSetting({
 	key: "defaultThinkingLevel",
 	type: "enum",
