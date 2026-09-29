@@ -97,16 +97,16 @@ export function resolveRequestedTools(
 	if (!enabled) {
 		// Named explicitly rather than returning empty: "the feature is off" and
 		// "your tool is missing" need different fixes.
-		throw new EvalToolError("Eval-defined tools are disabled; set eval.tools.enabled=true to expose them to subagents.");
+		throw new EvalToolError(
+			"Eval-defined tools are disabled; set eval.tools.enabled=true to expose them to subagents.",
+		);
 	}
 	const byName = new Map(available.map((tool) => [tool.name, tool]));
 	const missing = wanted.filter((name) => !byName.has(name));
 	if (missing.length > 0) {
 		// Sorted so the message is stable between runs, which matters because this
 		// text is read by a model choosing what to do next.
-		const names = available
-			.map((tool) => tool.name)
-			.sort((left, right) => left.localeCompare(right));
+		const names = available.map((tool) => tool.name).sort((left, right) => left.localeCompare(right));
 		throw new EvalToolError(
 			`Unknown eval tool(s): ${missing.join(", ")}. Define them with @tool (Python) or tool(fn, {…}) (JS) in an eval cell first. Available: ${names.join(", ") || "none"}`,
 		);
