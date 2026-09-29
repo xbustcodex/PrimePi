@@ -152,9 +152,7 @@ function canonicalTodoPhases(entry: TodoSnapshotEntry): TodoPhase[] | undefined 
  * because "nothing was committed" and "the plan is empty" are different facts
  * and only one of them is true.
  */
-export function getLatestTodoSnapshotIdentity(
-	entries: readonly TodoSnapshotEntry[],
-): TodoSnapshotIdentity | undefined {
+export function getLatestTodoSnapshotIdentity(entries: readonly TodoSnapshotEntry[]): TodoSnapshotIdentity | undefined {
 	for (let index = entries.length - 1; index >= 0; index--) {
 		const entry = entries[index]!;
 		const phases = canonicalTodoPhases(entry);
@@ -196,7 +194,10 @@ export function nextActionableTask(phases: readonly TodoPhase[]): TodoItem | und
 }
 
 /** Whether two snapshots are the same plan. */
-export function sameTodoState(left: TodoSnapshotIdentity | undefined, right: TodoSnapshotIdentity | undefined): boolean {
+export function sameTodoState(
+	left: TodoSnapshotIdentity | undefined,
+	right: TodoSnapshotIdentity | undefined,
+): boolean {
 	if (!left || !right) return left === right;
 	return left.fingerprint === right.fingerprint;
 }

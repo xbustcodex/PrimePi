@@ -126,7 +126,24 @@ const FINDINGS: readonly Finding[] = [
 		evidence: "retention.ts ANTONYMS and ROUTE_NAMES are closed lists; the three merge-still-works cases are the guard against over-splitting",
 		source: "dedup-adversarial",
 	},
-];
+	{
+		type: "root-cause",
+		text: "A configured compaction request budget may only lower an agent bundled ceiling and never raise it, because a settings screen that could raise a subagent above its designed cap would run it in a mode nobody tested",
+		evidence: "task/budget.ts resolveSoftRequestBudget takes the tighter of the two; scout and sonic cap at 100 while default caps at 200",
+		source: "migration",
+	},
+	{
+		type: "decision",
+		text: "Context maintenance advances past an unavailable method rather than failing the turn, because a maintenance method that cannot run must not take the session down with it",
+		evidence: "compaction/trigger.ts selectCompactionMethod walks the order and reports every failure rather than continuing with a full context",
+		source: "migration",
+	},
+	{
+		type: "root-cause",
+		text: "A compaction token limit overrides a percentage threshold, because a percentage that would have fired later must not override an absolute limit the user typed",
+		evidence: "compaction/trigger.ts resolveCompactionThreshold prefers the token source, and falls back to the reserve when neither is set",
+		source: "migration",
+	},];
 
 const backendId = "bank-store";
 const memory = await SessionMemory.create({
