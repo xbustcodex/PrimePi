@@ -810,6 +810,61 @@ export const toolsOutputMaxColumns = registerSetting({
 		group: "Output Limits",
 	},
 });
+export const todoReminders = registerSetting({
+	key: "todo.reminders",
+	type: "boolean",
+	// On by default: a plan left unfinished is invisible once the turn ends, and the
+	// user has to notice it themselves.
+	default: true,
+	ui: {
+		label: "Todo Reminders",
+		description: "Remind the agent to complete todos before stopping",
+		tab: "tools",
+		group: "Todos",
+		control: "cycle",
+	},
+});
+
+export const todoRemindersMax = registerSetting({
+	key: "todo.remindersMax",
+	type: "number",
+	default: 5,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Todo Reminder Limit",
+		description: "Largest plan the reminder will nag about; above this it stays quiet",
+		tab: "tools",
+		group: "Todos",
+	},
+});
+
+export const todoEager = registerSetting({
+	key: "todo.eager",
+	type: "enum",
+	default: "off",
+	values: ["off", "prompt", "auto"],
+	parse: (raw) => (raw === "off" || raw === "prompt" || raw === "auto" ? raw : undefined),
+	ui: {
+		label: "Create Todos Automatically",
+		description: "Whether a multi-step request is turned into a todo plan without being asked",
+		tab: "tools",
+		group: "Todos",
+		control: "submenu",
+	},
+});
+
+export const tasksTodoClearDelay = registerSetting({
+	key: "tasks.todoClearDelay",
+	type: "number",
+	default: 0,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Todo Auto-Clear Delay",
+		description: "Milliseconds a completed plan stays before it is cleared from the panel",
+		tab: "tools",
+		group: "Todos",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

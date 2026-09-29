@@ -57,6 +57,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Todos.
+	"todo.reminders":
+		"consumed by decideNudge; a nudge is suppressed while the user is mid-question, because a model answering is working",
+	"todo.remindersMax":
+		"consumed by decideNudge as the largest plan the reminder will nag about",
+	"todo.eager":
+		"consumed when a request is classified, choosing whether a multi-step request is turned into a plan without being asked",
+	"tasks.todoClearDelay":
+		"consumed when a plan completes, as the delay before it is cleared from the panel",
 	// Tools tab, Output Limits: bounding a tool result without losing it.
 	"tools.artifactSpillThreshold":
 		"consumed by planSpill as the byte threshold above which the full output is saved and only head and tail stay inline",
