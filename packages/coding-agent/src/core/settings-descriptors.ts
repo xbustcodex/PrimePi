@@ -1664,6 +1664,21 @@ export const bashAllowCompoundCommands = registerSetting({
 		control: "cycle",
 	},
 });
+export const checkpointEnabled = registerSetting({
+	key: "checkpoint.enabled",
+	type: "boolean",
+	// Off by default, as in the reference: the tools exist and the model is told
+	// when they are active, but a session is not turned into an investigation loop
+	// by default.
+	default: false,
+	ui: {
+		label: "Checkpoint/Rewind",
+		description: "Enable the checkpoint and rewind tools for context checkpointing",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

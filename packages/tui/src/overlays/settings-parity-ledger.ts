@@ -57,6 +57,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Available Tools: bounded exploration.
+	"checkpoint.enabled":
+		"consumed when the tool set is assembled, gating the checkpoint and rewind tools",
 	// Shell tab, Bash: per-segment approval for a literal && chain.
 	"bash.enabled":
 		"consumed when the tool set is assembled, gating whether bash is offered at all",

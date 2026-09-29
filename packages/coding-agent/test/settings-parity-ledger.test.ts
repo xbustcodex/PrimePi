@@ -80,6 +80,7 @@ describe("the classifications are the ones the program claims", () => {
 			"browser.relay",
 			"browser.relayUrl",
 			"browser.screenshotDir",
+			"checkpoint.enabled",
 			"claudeResets.autoRedeem",
 			"claudeResets.keepCredits",
 			"claudeResets.minBlockedMinutes",

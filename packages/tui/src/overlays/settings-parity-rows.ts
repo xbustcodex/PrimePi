@@ -6662,8 +6662,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Enable the checkpoint and rewind tools for context checkpointing",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "checkpoint.enabled",
+		note: "consumed when the tool set is assembled, gating the checkpoint and rewind tools",
 	},
 	{
 		id: "fetch.enabled",
