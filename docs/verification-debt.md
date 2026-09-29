@@ -371,3 +371,30 @@ rather than trusting the count.
 parallel contention (`vitest run --no-file-parallelism`, or per-file), and
 confirm the failures disappear. This needs an environment that can execute
 `bun`, `pnpm` and `yarn`, which this machine does not reliably provide.
+
+## PD-11: 51 failures in the agent package suite, pre-existing and untouched
+
+**Status:** pre-existing, unrelated to the migration.
+
+**Measured.** `packages/agent` reports `Test Files 6 failed | 76 passed (82)`,
+`Tests 51 failed | 913 passed | 2 skipped`. Verified by stashing the working
+tree and re-running: the same 51 failures at the same count, with and without
+this program's changes.
+
+**Where.** `test/harness/jsonl-session-repo.test.ts` and
+`test/harness/jsonl-v3-migration.test.ts`. Both assert on JSONL session-record
+shapes and fork-fixture migration behaviour.
+
+**Why it is not ours.** `git log b296459b3..HEAD --name-only` returns zero
+matches for either file or for `jsonl-session-repo.ts`. No commit in this
+program has touched the session repo or the v3 migration.
+
+**Distinct from PD-10.** These are not wall-clock-sensitive: they are
+`AssertionError`s on object shape, not timeouts, and they reproduce in
+isolation as well as under load. So whatever is wrong is a real behavioural
+difference in the JSONL session layer, not a machine-load artefact.
+
+**To close it:** the failures predate this program and sit in the session
+persistence layer, which no migrated subsystem depends on yet. Investigate
+when session persistence is next on the dependency path, or sooner if the
+owner wants the agent suite green independent of migration work.
