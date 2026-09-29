@@ -2553,6 +2553,18 @@ export const startupChangelogEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const askEnabled = registerSetting({
+	key: "ask.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Ask",
+		description: "Enable the ask tool for interactive user questions",
+		tab: "tools",
+		group: "Available Tools",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

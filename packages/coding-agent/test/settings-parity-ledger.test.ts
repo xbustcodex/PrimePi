@@ -69,6 +69,7 @@ describe("the classifications are the ones the program claims", () => {
 		// Listed rather than counted: a count in a test only proves the count
 		// matches itself, and that is how a wrong number survives.
 		expect(wired).toEqual([
+			"ask.enabled",
 			"autoResume",
 			"bash.allowCompoundCommands",
 			"bash.autoBackground.enabled",

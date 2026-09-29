@@ -57,6 +57,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Available Tools: asking the user.
+	"ask.enabled":
+		"consumed by validateAskQuestion, which refuses an option label that collides with one the dialog owns",
 	// Interaction tab, Startup & Updates: checking is not updating.
 	"startup.checkUpdate":
 		"consumed by evaluateUpdateCheck, which returns a notice and never a download or an install",

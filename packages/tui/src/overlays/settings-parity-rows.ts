@@ -6834,8 +6834,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Enable the ask tool for interactive user questions",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "ask.enabled",
+		note: "consumed by validateAskQuestion, which refuses an option label that collides with one the dialog owns",
 	},
 	{
 		id: "tools.intentTracing",
