@@ -87,6 +87,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.maxDelayMs",
 			"retry.maxRetries",
 			"retry.modelFallback",
+			"secrets.enabled",
 		]);
 	});
 
@@ -118,6 +119,7 @@ describe("the classifications are the ones the program claims", () => {
 			"retry.fallbackChains",
 			"retry.fallbackRevertPolicy",
 			"retry.modelFallback",
+			"secrets.enabled",
 		]);
 	});
 

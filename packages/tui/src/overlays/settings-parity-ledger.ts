@@ -53,6 +53,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
 	"compaction.dropUseless":
 		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",
+	// Providers tab, Privacy.
+	"secrets.enabled":
+		"consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",
 	// Model tab, Thinking.
 	"model.toolCallLoopGuard.enabled":
 		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
@@ -110,6 +113,7 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"retry.modelFallback",
 	"retry.fallbackChains",
 	"retry.fallbackRevertPolicy",
+	"secrets.enabled",
 	"autoResume",
 	"edit.recoverInlineEdits",
 	"compaction.dropUseless",

@@ -2970,8 +2970,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Obfuscate configured secrets and redact credential-shaped tokens before sending to AI providers",
 		type: "boolean",
 		default: "false",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "secrets.enabled",
+		note: "consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",
 	},
 	{
 		id: "workspace.additionalDirectories",
