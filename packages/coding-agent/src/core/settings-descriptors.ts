@@ -2074,6 +2074,97 @@ export const editAutoRepairEnabled = registerSetting({
 		control: "cycle",
 	},
 });
+export const lspEnabled = registerSetting({
+	key: "lsp.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "LSP",
+		description: "Enable language-server integration for completion and diagnostics",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspLazy = registerSetting({
+	key: "lsp.lazy",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Lazy LSP Startup",
+		description: "Start language servers on first use rather than at session startup",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspShared = registerSetting({
+	key: "lsp.shared",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Shared Language Servers",
+		description:
+			"Share one language server per project across instances via the daemon broker, falling back to private servers when unavailable",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspFormatOnWrite = registerSetting({
+	key: "lsp.formatOnWrite",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Format on Write",
+		description: "Format a file with its language server after a successful edit",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspDiagnosticsOnWrite = registerSetting({
+	key: "lsp.diagnosticsOnWrite",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Diagnostics on Write",
+		description: "Request diagnostics after writing a file",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspDiagnosticsOnEdit = registerSetting({
+	key: "lsp.diagnosticsOnEdit",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Diagnostics on Edit",
+		description: "Request diagnostics after editing a file",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
+
+export const lspDiagnosticsDeduplicate = registerSetting({
+	key: "lsp.diagnosticsDeduplicate",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Deduplicate Diagnostics",
+		description: "Collapse identical diagnostics reported from several servers",
+		tab: "files",
+		group: "LSP",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

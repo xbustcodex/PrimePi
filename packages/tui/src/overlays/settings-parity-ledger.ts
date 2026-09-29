@@ -57,6 +57,21 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Files tab, LSP: shared server identity and diagnostics.
+	"lsp.enabled":
+		"consumed when the tool set is assembled, gating language-server integration",
+	"lsp.lazy":
+		"consumed at startup, deferring a language server until the tool or a matching file needs it",
+	"lsp.shared":
+		"consumed by acquireServer, which falls back to a private server when the broker is unreachable",
+	"lsp.formatOnWrite":
+		"consumed after a successful edit, formatting through the file language server",
+	"lsp.diagnosticsOnWrite":
+		"consumed after writing a file, requesting diagnostics from its language server",
+	"lsp.diagnosticsOnEdit":
+		"consumed after editing a file, requesting diagnostics from its language server",
+	"lsp.diagnosticsDeduplicate":
+		"consumed when merging diagnostics, collapsing identical reports from several servers",
 	// Files tab, Editing: the write-safety guards.
 	"edit.mode":
 		"consumed when an edit is applied, choosing how the new content is written",
