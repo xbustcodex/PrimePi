@@ -38,6 +38,7 @@ export {
 	InMemoryTelemetryContext,
 	NOOP_TELEMETRY_CONTEXT,
 } from "@earendil-works/pi-telemetry";
+export * from "./advisor/emission-guard.ts";
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./code-mode.ts";

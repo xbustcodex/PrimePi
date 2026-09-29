@@ -57,63 +57,39 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
-	// Model tab, Thinking: the cross-turn tool-call loop guard.
-	"model.toolCallLoopGuard.enabled":
-		"consumed by _evaluateToolCallLoopGuard, which injects a corrective on the first offence and aborts the turn when the model ignores it",
-	"model.toolCallLoopGuard.threshold":
-		"consumed as the identical-consecutive-turn bound the detector applies",
-	"model.toolCallLoopGuard.exemptTools":
-		"consumed as the set of tools a model may legitimately repeat without being bounded",
 	// Appearance tab, Theme: backgrounds, the colour-blind remap, and glyph selection.
-	"theme.dark":
-		"consumed when the terminal reports a dark background",
-	"theme.light":
-		"consumed when the terminal reports a light background",
-	"colorBlindMode":
+	"theme.dark": "consumed when the terminal reports a dark background",
+	"theme.light": "consumed when the terminal reports a light background",
+	colorBlindMode:
 		"consumed by remapThemeColor, which rotates the addition hue out of the red-green confusion region while preserving lightness and chroma",
-	"symbolPreset":
-		"consumed when the status line and borders resolve their glyphs",
-	"composer.shape":
-		"consumed when the composer border is drawn",
-	"composer.tokenRate":
-		"consumed by the composer while a turn is streaming",
-	"images.autoResize":
-		"consumed when an inline image is scaled to the terminal width",
-	"images.blockImages":
-		"consumed when an inline image is drawn rather than linked",
-	"tui.textSizing":
-		"consumed by the renderer, on terminals that report Kitty graphics support",
-	"tui.renderMermaid":
-		"consumed by the renderer when a mermaid block is drawn as a diagram",
-	"display.shimmer":
-		"consumed by the busy indicator while the model is working",
+	symbolPreset: "consumed when the status line and borders resolve their glyphs",
+	"composer.shape": "consumed when the composer border is drawn",
+	"composer.tokenRate": "consumed by the composer while a turn is streaming",
+	"images.autoResize": "consumed when an inline image is scaled to the terminal width",
+	"images.blockImages": "consumed when an inline image is drawn rather than linked",
+	"tui.textSizing": "consumed by the renderer, on terminals that report Kitty graphics support",
+	"tui.renderMermaid": "consumed by the renderer when a mermaid block is drawn as a diagram",
+	"display.shimmer": "consumed by the busy indicator while the model is working",
 	// Tasks tab, Isolation: the copy-on-write backend and subagent lifetime bounds.
 	"isolation.backend":
 		"consumed by candidateOrder and resolveIsolationBackend, which fall back within a behaviour class before crossing classes and report the downgrade",
-	"worktree.base":
-		"consumed when a worktree is created, deciding where it is rooted",
-	"task.maxRuntimeMs":
-		"consumed as the wall-clock budget for a subagent before it is stopped",
-	"task.agentIdleTtlMs":
-		"consumed as the idle window before a subagent process is released",
+	"worktree.base": "consumed when a worktree is created, deciding where it is rooted",
+	"task.maxRuntimeMs": "consumed as the wall-clock budget for a subagent before it is stopped",
+	"task.agentIdleTtlMs": "consumed as the idle window before a subagent process is released",
 	// Shell tab, Eval & Runtimes: the kernel and the tools it may hand to a subagent.
 	"eval.py":
 		"consumed when an eval cell selects its kernel; the Python kernel participates in the cross-kernel name check",
 	"eval.js":
 		"consumed when an eval cell selects its kernel; the JS kernel participates in the cross-kernel name check",
-	"eval.autoProvision":
-		"consumed on first install, creating the managed JavaScript eval package environment",
+	"eval.autoProvision": "consumed on first install, creating the managed JavaScript eval package environment",
 	"eval.tools.enabled":
 		"consumed by resolveRequestedTools, which refuses a disabled session with an error naming this setting rather than an empty list",
-	"eval.workpool.freshAgents":
-		"consumed when a workpool is built, giving each agent its own kernel state",
-	"eval.autoBackground.enabled":
-		"consumed when an eval cell runs past the foreground budget",
+	"eval.workpool.freshAgents": "consumed when a workpool is built, giving each agent its own kernel state",
+	"eval.autoBackground.enabled": "consumed when an eval cell runs past the foreground budget",
 	// Context tab, Compaction: the method preference order and its fallbacks.
 	"compaction.methodOrder":
 		"consumed by selectCompactionMethod, which walks the order and reports exhaustion rather than assuming a pass succeeded",
-	"compaction.midTurnEnabled":
-		"consumed when a turn's context crosses the threshold between tool calls",
+	"compaction.midTurnEnabled": "consumed when a turn's context crosses the threshold between tool calls",
 	"compaction.handoffSaveToDisk":
 		"consumed by the handoff method, writing the document before replacing the history it summarises",
 	// Model tab, Thinking: the stream loop guard.
@@ -124,10 +100,8 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"model.loopGuard.toolCallReminder":
 		"consumed when the guard trips, so the retry prompt names the tool-call that would have ended the loop",
 	// Model tab, Retry & Fallback: the usage reserve margin and what reaching it does.
-	"retry.waitForUsageReset":
-		"consumed when a rate limit reports a reset time, so the turn waits instead of failing",
-	"retry.usageAwareFallback":
-		"consumed as the gate on moving to another model when the current plan is nearly spent",
+	"retry.waitForUsageReset": "consumed when a rate limit reports a reset time, so the turn waits instead of failing",
+	"retry.usageAwareFallback": "consumed as the gate on moving to another model when the current plan is nearly spent",
 	"retry.usageReservePct":
 		"consumed by classifyUsage as the remaining fraction below which an account is inside the margin; an unreported reading resolves to unknown and keeps the primary model",
 	"retry.usageReservePolicy":
@@ -140,98 +114,66 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"providers.webSearchTimeoutSeconds":
 		"consumed as the wall-clock budget for a provider web search before the route is abandoned",
 	// Tools tab, Available Tools: structural search and the tool backends.
-	"astGrep.enabled":
-		"consumed by the structural search tool, which pages matches through mergeStructuralResults",
-	"astEdit.enabled":
-		"consumed by the AST transform tool, which rewrites a construct rather than a text span",
-	"ida.enabled":
-		"consumed by the decompiler tool when it queries a running IDA instance",
-	"debug.enabled":
-		"consumed by the DAP adapter, which attaches to a running process for frame inspection",
-	"launch.enabled":
-		"consumed when a session starts the background services it needs",
-	"vault.enabled":
-		"consumed by the vault tools when they read and write a notes store",
+	"astGrep.enabled": "consumed by the structural search tool, which pages matches through mergeStructuralResults",
+	"astEdit.enabled": "consumed by the AST transform tool, which rewrites a construct rather than a text span",
+	"ida.enabled": "consumed by the decompiler tool when it queries a running IDA instance",
+	"debug.enabled": "consumed by the DAP adapter, which attaches to a running process for frame inspection",
+	"launch.enabled": "consumed when a session starts the background services it needs",
+	"vault.enabled": "consumed by the vault tools when they read and write a notes store",
 	// Memory tab, Mnemopi: rank fusion across four independent recall voices.
 	"mnemopi.polyphonicRecall":
 		"consumed by fuseByReciprocalRank, which fuses four voice rankings by rank rather than by score so a memory several voices agree on outranks one that leads a single voice",
-	"mnemopi.enhancedRecall":
-		"consumed as a per-voice candidate multiplier applied before the ranks are fused",
-	"mnemopi.proactiveLinking":
-		"consumed when memories are stored, writing edges instead of deferring them to recall",
+	"mnemopi.enhancedRecall": "consumed as a per-voice candidate multiplier applied before the ranks are fused",
+	"mnemopi.proactiveLinking": "consumed when memories are stored, writing edges instead of deferring them to recall",
 	// Interaction tab, Input: the Escape ladder, the session tree, and the editor.
-	"doubleEscapeAction":
+	doubleEscapeAction:
 		"consumed by setupKeyHandlers, where the last rung of the Escape ladder runs a configured action on a second press inside 500ms; destructive rewind is deliberately not offered, only fork and tree",
-	"treeFilterMode":
-		"consumed by showTreeSelector as the initial filter applied when the session tree opens",
-	"autocompleteMaxVisible":
-		"consumed by the autocomplete component when it caps the visible candidate list",
+	treeFilterMode: "consumed by showTreeSelector as the initial filter applied when the session tree opens",
+	autocompleteMaxVisible: "consumed by the autocomplete component when it caps the visible candidate list",
 	// Appearance tab, Status Line: a closed segment catalog and a computed gauge.
-	"statusLine.preset":
-		"consumed when the line is assembled, choosing which segments appear",
-	"statusLine.separator":
-		"consumed when the line is rendered, between segments",
+	"statusLine.preset": "consumed when the line is assembled, choosing which segments appear",
+	"statusLine.separator": "consumed when the line is rendered, between segments",
 	"statusLine.contextLine":
 		"consumed by resolveContextGauge, which places ticks at the session own speculative and compaction boundaries",
-	"statusLine.sessionAccent":
-		"consumed when the line and editor border are styled",
-	"statusLine.transparent":
-		"consumed when the line background is painted",
-	"statusLine.compactThinkingLevel":
-		"consumed when the thinking level segment renders",
-	"statusLine.showHookStatus":
-		"consumed when the line assembles, adding hook state",
+	"statusLine.sessionAccent": "consumed when the line and editor border are styled",
+	"statusLine.transparent": "consumed when the line background is painted",
+	"statusLine.compactThinkingLevel": "consumed when the thinking level segment renders",
+	"statusLine.showHookStatus": "consumed when the line assembles, adding hook state",
 	// Files tab, Read Summaries: progressive disclosure for a large file.
 	"read.summarize.enabled":
 		"consumed by decideReadSummary; a small file is read verbatim because summarising it costs tokens to save tokens",
 	"read.summarize.prose":
 		"consumed by decideReadSummary; Markdown has no signatures, so summarising it is an outline of a document",
-	"read.summarize.minBodyLines":
-		"consumed as the body-line floor before a block is elided",
-	"read.summarize.minCommentLines":
-		"consumed as the comment-line floor before a block is elided",
+	"read.summarize.minBodyLines": "consumed as the body-line floor before a block is elided",
+	"read.summarize.minCommentLines": "consumed as the comment-line floor before a block is elided",
 	"read.summarize.minTotalLines":
 		"consumed by decideReadSummary as the file-length floor below which a file is read verbatim",
-	"read.summarize.unfoldUntil":
-		"consumed by unfoldBudget as the target the elided middle is unfolded to",
-	"read.summarize.unfoldLimit":
-		"consumed by unfoldBudget as the hard ceiling on how much unfolding may add",
+	"read.summarize.unfoldUntil": "consumed by unfoldBudget as the target the elided middle is unfolded to",
+	"read.summarize.unfoldLimit": "consumed by unfoldBudget as the hard ceiling on how much unfolding may add",
 	// Providers tab, Services: per-provider concurrency.
 	"providers.maxInFlightRequests":
 		"consumed by admitRequest; the effective limit is the smaller of the configured one and the provider own ceiling, and an invalid entry is rejected rather than coerced",
 	// Providers tab, Protocol: cache and transport policy.
 	"providers.cacheRetention":
 		"consumed by resolveCacheRetention; an explicit setting is never overridden by the environment",
-	"providers.cacheWarming":
-		"consumed when deciding whether to re-write a cache entry to keep it alive while idle",
-	"providers.openaiWebsockets":
-		"consumed when building a request, choosing the websocket transport where available",
-	"providers.openrouterVariant":
-		"consumed when routing a request, narrowing or widening the upstream provider set",
+	"providers.cacheWarming": "consumed when deciding whether to re-write a cache entry to keep it alive while idle",
+	"providers.openaiWebsockets": "consumed when building a request, choosing the websocket transport where available",
+	"providers.openrouterVariant": "consumed when routing a request, narrowing or widening the upstream provider set",
 	// Tools tab, Available Tools: the security namespace.
-	"security.enabled":
-		"consumed by securityAvailability, which resolves to off when the setting cannot be read",
+	"security.enabled": "consumed by securityAvailability, which resolves to off when the setting cannot be read",
 	// Tools tab, Available Tools: asking the user.
 	"ask.enabled":
 		"consumed by validateAskQuestion, which refuses an option label that collides with one the dialog owns",
 	// Interaction tab, Startup & Updates: checking is not updating.
-	"startup.checkUpdate":
-		"consumed by evaluateUpdateCheck, which returns a notice and never a download or an install",
-	"update.channel":
-		"consumed by evaluateUpdateCheck to choose which stream to compare against",
-	"startup.quiet":
-		"consumed at session start, suppressing the splash and the changelog",
-	"startup.changelogMode":
-		"consumed at session start, showing what changed since the last run",
+	"startup.checkUpdate": "consumed by evaluateUpdateCheck, which returns a notice and never a download or an install",
+	"update.channel": "consumed by evaluateUpdateCheck to choose which stream to compare against",
+	"startup.quiet": "consumed at session start, suppressing the splash and the changelog",
+	"startup.changelogMode": "consumed at session start, showing what changed since the last run",
 	// Appearance tab, Display: terminal state the renderer owns.
-	"terminal.showProgress":
-		"consumed by TerminalProgress, which only ever clears an indicator it set itself",
-	"tui.mouse":
-		"consumed when terminal input is wired, enabling click-to-focus",
-	"tui.titleState":
-		"consumed when the terminal title is set, including the run state",
-	"tui.titleSpinner":
-		"consumed when the terminal title is written, choosing the spinner animation",
+	"terminal.showProgress": "consumed by TerminalProgress, which only ever clears an indicator it set itself",
+	"tui.mouse": "consumed when terminal input is wired, enabling click-to-focus",
+	"tui.titleState": "consumed when the terminal title is set, including the run state",
+	"tui.titleSpinner": "consumed when the terminal title is written, choosing the spinner animation",
 	"task.showResolvedModelBadge":
 		"consumed by the status line, showing the model a role resolved to rather than the role name",
 	// Tasks tab, Isolation: bounded delegated work.
@@ -239,21 +181,16 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 		"consumed by decideIntegration; isolation isolates changes in progress and is not a sandbox",
 	"task.isolation.merge":
 		"consumed by decideIntegration, choosing diffs plus git apply or a per-task commit merged with --no-ff",
-	"task.isolation.commits":
-		"consumed when a commit is made for an isolated task",
+	"task.isolation.commits": "consumed when a commit is made for an isolated task",
 	"task.isolation.apply":
 		"consumed by decideIntegration; off discards a finished tasks changes, which is what makes a speculative delegation safe",
-	"worktree.clone":
-		"consumed when a worktree is created, cloning the checkout instead of adding one",
-	"worktree.cleanSource":
-		"consumed when a worktree is removed, cleaning the source checkout",
+	"worktree.clone": "consumed when a worktree is created, cloning the checkout instead of adding one",
+	"worktree.cleanSource": "consumed when a worktree is removed, cleaning the source checkout",
 	// Tasks tab, Commands & Skills: a trust boundary, not a feature list.
-	"commands.enableClaudeUser":
-		"consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
+	"commands.enableClaudeUser": "consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
 	"commands.enableClaudeProject":
 		"consumed by isSourceAdmitted with no fallback, because a repository directory is under the control of whoever last committed",
-	"commands.enableOpencodeUser":
-		"consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
+	"commands.enableOpencodeUser": "consumed by isSourceAdmitted, with a fallback to the broader user-source setting",
 	"commands.enableOpencodeProject":
 		"consumed by isSourceAdmitted with no fallback, because a repository directory is under the control of whoever last committed",
 	// Shell tab, Eval & Runtimes: the persistent Python kernel.
@@ -262,109 +199,69 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"python.interpreter":
 		"consumed by resolveInterpreter, used exactly and skipping discovery so a version-dependent result is attributable",
 	// Tasks tab, Modes: the explicit plan lifecycle.
-	"plan.enabled":
-		"consumed by mayBeginExecution, gating execution while plan mode is active",
-	"plan.defaultOnStartup":
-		"consumed when a session starts, entering plan mode read-only by default",
-	"plan.autosave":
-		"consumed when plan mode completes, writing the approved plan to disk",
-	"goal.enabled":
-		"consumed for the session goal, tracked and reported against",
-	"goal.statusInFooter":
-		"consumed by the status footer, showing the current goal",
+	"plan.enabled": "consumed by mayBeginExecution, gating execution while plan mode is active",
+	"plan.defaultOnStartup": "consumed when a session starts, entering plan mode read-only by default",
+	"plan.autosave": "consumed when plan mode completes, writing the approved plan to disk",
+	"goal.enabled": "consumed for the session goal, tracked and reported against",
+	"goal.statusInFooter": "consumed by the status footer, showing the current goal",
 	// Model tab, Thinking: how reasoning is presented.
-	"hideThinkingBlock":
+	hideThinkingBlock:
 		"consumed by resolveThinkingDisplay; it changes the screen and not the request, so the reasoning still costs tokens",
-	"proseOnlyThinking":
+	proseOnlyThinking:
 		"consumed by toProseOnly, replacing code blocks in a summary with a marker while keeping the surrounding reasoning",
-	"omitThinking":
-		"consumed by requestEffect, asking the provider to produce no summaries at all",
-	"externalThinking":
+	omitThinking: "consumed by requestEffect, asking the provider to produce no summaries at all",
+	externalThinking:
 		"consumed by requestEffect, treating reasoning as a scratchpad and disabling it where the provider supports that",
 	// Files tab, LSP: shared server identity and diagnostics.
-	"lsp.enabled":
-		"consumed when the tool set is assembled, gating language-server integration",
-	"lsp.lazy":
-		"consumed at startup, deferring a language server until the tool or a matching file needs it",
-	"lsp.shared":
-		"consumed by acquireServer, which falls back to a private server when the broker is unreachable",
-	"lsp.formatOnWrite":
-		"consumed after a successful edit, formatting through the file language server",
-	"lsp.diagnosticsOnWrite":
-		"consumed after writing a file, requesting diagnostics from its language server",
-	"lsp.diagnosticsOnEdit":
-		"consumed after editing a file, requesting diagnostics from its language server",
-	"lsp.diagnosticsDeduplicate":
-		"consumed when merging diagnostics, collapsing identical reports from several servers",
+	"lsp.enabled": "consumed when the tool set is assembled, gating language-server integration",
+	"lsp.lazy": "consumed at startup, deferring a language server until the tool or a matching file needs it",
+	"lsp.shared": "consumed by acquireServer, which falls back to a private server when the broker is unreachable",
+	"lsp.formatOnWrite": "consumed after a successful edit, formatting through the file language server",
+	"lsp.diagnosticsOnWrite": "consumed after writing a file, requesting diagnostics from its language server",
+	"lsp.diagnosticsOnEdit": "consumed after editing a file, requesting diagnostics from its language server",
+	"lsp.diagnosticsDeduplicate": "consumed when merging diagnostics, collapsing identical reports from several servers",
 	// Files tab, Editing: the write-safety guards.
-	"edit.mode":
-		"consumed when an edit is applied, choosing how the new content is written",
-	"edit.fuzzyMatch":
-		"consumed when an exact anchor is not found, deciding whether to widen the search",
-	"edit.fuzzyThreshold":
-		"consumed by the fuzzy matcher as the similarity a widened search must reach",
+	"edit.mode": "consumed when an edit is applied, choosing how the new content is written",
+	"edit.fuzzyMatch": "consumed when an exact anchor is not found, deciding whether to widen the search",
+	"edit.fuzzyThreshold": "consumed by the fuzzy matcher as the similarity a widened search must reach",
 	"edit.streamingAbort":
 		"consumed when an edit preview does not apply cleanly, refusing rather than writing a partial change",
-	"edit.enforceSeenLines":
-		"consumed by SeenLineIndex.check, rejecting an edit anchored on a line no read displayed",
-	"edit.blockAutoGenerated":
-		"consumed before writing, refusing a file carrying a generated-code marker",
-	"edit.blackbox.enabled":
-		"consumed after a parse mismatch, recording it for a later fix",
-	"edit.autoRepair.enabled":
-		"consumed on the next edit, repairing a recorded parse regression",
+	"edit.enforceSeenLines": "consumed by SeenLineIndex.check, rejecting an edit anchored on a line no read displayed",
+	"edit.blockAutoGenerated": "consumed before writing, refusing a file carrying a generated-code marker",
+	"edit.blackbox.enabled": "consumed after a parse mismatch, recording it for a later fix",
+	"edit.autoRepair.enabled": "consumed on the next edit, repairing a recorded parse regression",
 	// Shell tab, Bash: the ordered approval rules and command preparation.
 	"bash.patterns":
 		"consumed by decideChain and firstMatchingRule as the ordered approval rules, glob-matched and anchored",
-	"bash.autoBackground.enabled":
-		"consumed when a shell command runs long enough to background on its own",
-	"bash.direnv":
-		"consumed before a command runs, deciding whether a .envrc is loaded",
-	"bashInterceptor.enabled":
-		"consumed when a command is prepared, rewriting it before approval rather than after",
+	"bash.autoBackground.enabled": "consumed when a shell command runs long enough to background on its own",
+	"bash.direnv": "consumed before a command runs, deciding whether a .envrc is loaded",
+	"bashInterceptor.enabled": "consumed when a command is prepared, rewriting it before approval rather than after",
 	// Context tab, Rules (TTSR): mid-stream rule injection.
-	"ttsr.enabled":
-		"consumed by isRuleActive; a rule is inactive when this is off, whatever the others say",
-	"ttsr.judge":
-		"consumed by shouldJudge and decideJudgedRule; auto asks only when a judge role is available",
-	"ttsr.interruptMode":
-		"consumed by shouldInterrupt, deciding whether a live stream is aborted or warned about after",
-	"ttsr.repeatMode":
-		"consumed by RuleFireTracker; a rule that re-fires every turn is a loop, not a rule",
-	"ttsr.repeatGap":
-		"consumed by RuleFireTracker as the message count before a rule may fire again",
-	"ttsr.builtinRules":
-		"consumed by isRuleActive for rules the reference ships",
+	"ttsr.enabled": "consumed by isRuleActive; a rule is inactive when this is off, whatever the others say",
+	"ttsr.judge": "consumed by shouldJudge and decideJudgedRule; auto asks only when a judge role is available",
+	"ttsr.interruptMode": "consumed by shouldInterrupt, deciding whether a live stream is aborted or warned about after",
+	"ttsr.repeatMode": "consumed by RuleFireTracker; a rule that re-fires every turn is a loop, not a rule",
+	"ttsr.repeatGap": "consumed by RuleFireTracker as the message count before a rule may fire again",
+	"ttsr.builtinRules": "consumed by isRuleActive for rules the reference ships",
 	// Memory tab, Hindsight: bank scoping for a remote service.
-	"hindsight.apiUrl":
-		"consumed by the Hindsight client as the service base URL",
-	"hindsight.apiToken":
-		"consumed as the bearer token; masked in the panel because it is a credential",
-	"hindsight.bankId":
-		"consumed by resolveBankScope, taking precedence over the bankIdPrefix",
-	"hindsight.scoping":
-		"consumed by resolveBankScope, choosing hard bank isolation or tag filtering",
-	"hindsight.autoRecall":
-		"consumed by the Hindsight lifecycle, recalling on the first turn of each session",
-	"hindsight.autoRetain":
-		"consumed by the Hindsight lifecycle, retaining conversation content as it accumulates",
-	"hindsight.retainMode":
-		"consumed when retaining, choosing one document per session or chunked turns",
+	"hindsight.apiUrl": "consumed by the Hindsight client as the service base URL",
+	"hindsight.apiToken": "consumed as the bearer token; masked in the panel because it is a credential",
+	"hindsight.bankId": "consumed by resolveBankScope, taking precedence over the bankIdPrefix",
+	"hindsight.scoping": "consumed by resolveBankScope, choosing hard bank isolation or tag filtering",
+	"hindsight.autoRecall": "consumed by the Hindsight lifecycle, recalling on the first turn of each session",
+	"hindsight.autoRetain": "consumed by the Hindsight lifecycle, retaining conversation content as it accumulates",
+	"hindsight.retainMode": "consumed when retaining, choosing one document per session or chunked turns",
 	"hindsight.mentalModelsEnabled":
 		"consumed when bootstrapping, letting the service derive models over retained memories",
 	// Interaction tab, Share: what leaves the machine.
 	"share.redactSecrets":
 		"consumed by decideShare, resolved against the session own project rather than the invoking directory",
-	"share.serverUrl":
-		"consumed when a session is published, naming the destination",
-	"share.store":
-		"consumed when a session is published, selecting where it is stored",
+	"share.serverUrl": "consumed when a session is published, naming the destination",
+	"share.store": "consumed when a session is published, selecting where it is stored",
 	// Tools tab, Available Tools: bounded exploration.
-	"checkpoint.enabled":
-		"consumed when the tool set is assembled, gating the checkpoint and rewind tools",
+	"checkpoint.enabled": "consumed when the tool set is assembled, gating the checkpoint and rewind tools",
 	// Shell tab, Bash: per-segment approval for a literal && chain.
-	"bash.enabled":
-		"consumed when the tool set is assembled, gating whether bash is offered at all",
+	"bash.enabled": "consumed when the tool set is assembled, gating whether bash is offered at all",
 	"bash.allowCompoundCommands":
 		"consumed by decideChain, which judges a literal && chain per segment and treats an unsegmentable one as a single opaque command",
 	// Memory tab, Mnemopi: retrieval mode and endpoint precedence.
@@ -375,18 +272,15 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"mnemopi.llmBaseUrl":
 		"consumed by planRetrieval as authoritative over a managed model, so a configured instance is never repointed",
 	// Model tab, Vision: image URL lifetime.
-	"images.urls.enabled":
-		"consumed when a model request is built, choosing a link over inline image bytes",
+	"images.urls.enabled": "consumed when a model request is built, choosing a link over inline image bytes",
 	"images.describeForTextModels":
 		"consumed when the active model cannot accept image input, describing it in text instead",
 	"images.urls.ttlHours":
 		"consumed by isExpired; 0 keeps links alive while the broker runs, and dispose still reaps them",
-	"images.urls.bindHost":
-		"consumed by buildImageUrl as the host a link points at",
+	"images.urls.bindHost": "consumed by buildImageUrl as the host a link points at",
 	"images.urls.publicBaseUrl":
 		"consumed by buildImageUrl, taking precedence over the bind host for a reachable address",
-	"images.urls.command":
-		"consumed when publishing an image, replacing the local broker with an external uploader",
+	"images.urls.command": "consumed when publishing an image, replacing the local broker with an external uploader",
 	// Context tab, General.
 	"workspace.additionalDirectories":
 		"consumed by buildWorkspaceRoots, which resolves each path once and drops a root already inside another",
@@ -518,10 +412,10 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"todo.enabled":
 		"consumed by the todo tool; the plan is read from the latest committed branch entry, so a resume or rewind cannot revert it",
 	"model.toolCallLoopGuard.enabled":
-		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
-	"model.toolCallLoopGuard.threshold":
-		"consumed as the number of identical consecutive turns before the guard intervenes",
-	"model.toolCallLoopGuard.exemptTools": "consumed as the tools a turn may call without counting as a loop",
+		"consumed by _evaluateToolCallLoopGuard, which injects a corrective on the first offence and aborts the turn when the model ignores it",
+	"model.toolCallLoopGuard.threshold": "consumed as the identical-consecutive-turn bound the detector applies",
+	"model.toolCallLoopGuard.exemptTools":
+		"consumed as the set of tools a model may legitimately repeat without being bounded",
 	// Files tab, Editing.
 	"edit.recoverInlineEdits":
 		"consumed by recoverInlineSloppyEdit; a stray payload becomes a synthetic edit tool call so the approval pipeline still runs",
