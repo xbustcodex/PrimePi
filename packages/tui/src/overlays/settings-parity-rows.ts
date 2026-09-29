@@ -2465,8 +2465,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 			},
 		],
 		values: ["prompt", "compact", "reset"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "loop.mode",
+		note: "consumed between /loop iterations; prompt re-submits without touching the session, compact and reset do not",
 	},
 	{
 		id: "loop.conditionTimeoutMs",
@@ -2495,8 +2496,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 				label: "2 minutes",
 			},
 		],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "loop.conditionTimeoutMs",
+		note: "consumed as the bound on one condition evaluation, and 0 disables the bound rather than defaulting to a value",
 	},
 	{
 		id: "composer.recallClearedDrafts",

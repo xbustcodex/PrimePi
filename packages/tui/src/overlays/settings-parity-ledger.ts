@@ -43,6 +43,10 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 		"consumed by shouldInterrupt; wait spares side-effecting calls and still cuts short purely interruptible ones",
 	"steeringMode":
 		"consumed by takeBatch; one-at-a-time lets the model act on a redirect before seeing the next",
+	"loop.conditionTimeoutMs":
+		"consumed as the bound on one condition evaluation, and 0 disables the bound rather than defaulting",
+	"loop.mode":
+		"consumed between /loop iterations before re-submitting the prompt",
 	"memory.backend": "resolved by SessionMemory.create and consumed by the backend registry",
 	// Memory tab, Mnemopi. The bank store and its lifecycle.
 	"mnemopi.dbPath": "consumed by the bank store as its storage root; empty means the agent directory",
@@ -138,6 +142,8 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"model.toolCallLoopGuard.enabled",
 	"model.toolCallLoopGuard.exemptTools",
 	"model.toolCallLoopGuard.threshold",
+	"loop.conditionTimeoutMs",
+	"loop.mode",
 	"followUpMode",
 	"interruptMode",
 	"steeringMode",

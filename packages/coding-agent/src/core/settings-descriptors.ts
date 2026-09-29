@@ -532,6 +532,39 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const loopMode = registerSetting({
+	key: "loop.mode",
+	type: "enum",
+	// Prompt is the default: re-submitting is the least destructive option and
+	// the one that changes nothing about the session the user is already in.
+	default: "prompt",
+	values: ["prompt", "compact", "reset"],
+	parse: (raw) => (raw === "prompt" || raw === "compact" || raw === "reset" ? raw : undefined),
+	ui: {
+		label: "Loop Mode",
+		description: "What happens between /loop iterations before re-submitting the prompt",
+		tab: "interaction",
+		group: "Input",
+		control: "submenu",
+	},
+});
+
+export const loopConditionTimeout = registerSetting({
+	key: "loop.conditionTimeoutMs",
+	type: "number",
+	default: 30_000,
+	// 0 disables the bound, which is a deliberate choice: a condition that
+	// legitimately takes minutes exists, and a user who wants that should say so.
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Loop Condition Timeout (ms)",
+		description:
+			"Max wait for a /loop --while or --until condition command before treating it as broken and stopping the loop. Set to 0 to wait indefinitely",
+		tab: "interaction",
+		group: "Input",
+	},
+});
+
 export const interruptMode = registerSetting({
 	key: "interruptMode",
 	type: "enum",
