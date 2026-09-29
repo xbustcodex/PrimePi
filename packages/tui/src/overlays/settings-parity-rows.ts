@@ -4789,8 +4789,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 				label: "30 minutes",
 			},
 		],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "providers.streamFirstEventTimeoutSeconds",
+		note: "consumed by withStreamWatchdog; -1 inherits the provider default and 0 disables the watchdog rather than aborting instantly",
 	},
 	{
 		id: "providers.streamIdleTimeoutSeconds",
@@ -4825,8 +4826,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 				label: "30 minutes",
 			},
 		],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "providers.streamIdleTimeoutSeconds",
+		note: "consumed by withStreamWatchdog as the per-gap budget, so a long healthy generation is never touched",
 	},
 	{
 		id: "providers.openrouterVariant",

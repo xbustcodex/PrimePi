@@ -82,6 +82,8 @@ describe("the classifications are the ones the program claims", () => {
 			"model.toolCallLoopGuard.enabled",
 			"model.toolCallLoopGuard.exemptTools",
 			"model.toolCallLoopGuard.threshold",
+			"providers.streamFirstEventTimeoutSeconds",
+			"providers.streamIdleTimeoutSeconds",
 			"retry.fallbackChains",
 			"retry.fallbackRevertPolicy",
 			"retry.maxDelayMs",

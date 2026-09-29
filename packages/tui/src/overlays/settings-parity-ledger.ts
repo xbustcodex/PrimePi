@@ -53,6 +53,11 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
 	"compaction.dropUseless":
 		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",
+	// Providers tab, Timeouts.
+	"providers.streamFirstEventTimeoutSeconds":
+		"consumed by withStreamWatchdog; -1 inherits the provider default and 0 disables the watchdog",
+	"providers.streamIdleTimeoutSeconds":
+		"consumed by withStreamWatchdog as the per-gap budget",
 	// Providers tab, Privacy.
 	"secrets.enabled":
 		"consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",

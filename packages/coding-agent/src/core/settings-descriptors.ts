@@ -531,6 +531,37 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const streamFirstEventTimeout = registerSetting({
+	key: "providers.streamFirstEventTimeoutSeconds",
+	type: "number",
+	// -1 means auto: use the provider default or the environment, rather than a
+	// constant that would override whatever the provider or operator configured.
+	// 0 disables the watchdog entirely; it does not mean an instant abort.
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : -1),
+	ui: {
+		label: "Stream First Event Timeout",
+		description:
+			"Seconds to wait for the first model stream event; -1 uses provider/env defaults, 0 disables the watchdog",
+		tab: "providers",
+		group: "Timeouts",
+	},
+});
+
+export const streamIdleTimeout = registerSetting({
+	key: "providers.streamIdleTimeoutSeconds",
+	type: "number",
+	default: -1,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? raw : -1),
+	ui: {
+		label: "Stream Idle Timeout",
+		description:
+			"Seconds a model stream may stay silent between events; -1 uses provider/env defaults, 0 disables the watchdog",
+		tab: "providers",
+		group: "Timeouts",
+	},
+});
+
 export const secretsRedactionEnabled = registerSetting({
 	key: "secrets.enabled",
 	type: "boolean",
@@ -725,7 +756,6 @@ export const retryFallbackRevertPolicy = registerSetting({
 		control: "submenu",
 	},
 });
-
 
 export const toolCallLoopGuardEnabled = registerSetting({
 	key: "model.toolCallLoopGuard.enabled",

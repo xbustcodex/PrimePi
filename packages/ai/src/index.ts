@@ -51,12 +51,6 @@ export {
 	type UnavailableReason,
 } from "./utils/failover.ts";
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
-export {
-	type RepeatedToolCallDetection,
-	ToolCallLoopGuard,
-	type ToolCallLoopGuardOptions,
-	type ToolCallLoopTurn,
-} from "./utils/tool-call-loop-guard.ts";
 export * from "./utils/json-parse.ts";
 export {
 	type AnnotatedPattern,
@@ -91,7 +85,22 @@ export {
 } from "./utils/model-roles.ts";
 export * from "./utils/overflow.ts";
 export * from "./utils/retry.ts";
+export {
+	describeTimeout,
+	parseTimeoutSeconds,
+	type StreamTimeoutSetting,
+	TIMEOUT_AUTO,
+	timeoutSecondsToMs,
+	type WatchdogOptions,
+	withStreamWatchdog,
+} from "./utils/stream-watchdog.ts";
 export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";
+export {
+	type RepeatedToolCallDetection,
+	ToolCallLoopGuard,
+	type ToolCallLoopGuardOptions,
+	type ToolCallLoopTurn,
+} from "./utils/tool-call-loop-guard.ts";
 export * from "./utils/transcript.ts";
 export * from "./utils/typebox-helpers.ts";
 export { uuidv7 } from "./utils/uuid.ts";
