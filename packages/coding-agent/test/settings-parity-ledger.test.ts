@@ -70,6 +70,14 @@ describe("the classifications are the ones the program claims", () => {
 		// matches itself, and that is how a wrong number survives.
 		expect(wired).toEqual([
 			"autoResume",
+			"browser.cdpUrl",
+			"browser.enabled",
+			"browser.freezeOnTurnEnd",
+			"browser.headless",
+			"browser.idleCloseSec",
+			"browser.relay",
+			"browser.relayUrl",
+			"browser.screenshotDir",
 			"claudeResets.autoRedeem",
 			"claudeResets.keepCredits",
 			"claudeResets.minBlockedMinutes",

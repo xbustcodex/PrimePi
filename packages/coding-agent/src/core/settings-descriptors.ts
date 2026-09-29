@@ -865,6 +865,111 @@ export const tasksTodoClearDelay = registerSetting({
 		group: "Todos",
 	},
 });
+export const browserEnabled = registerSetting({
+	key: "browser.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Browser",
+		description: "Enable the browser tool",
+		tab: "tools",
+		group: "Grep & Browser",
+		control: "cycle",
+	},
+});
+
+export const browserCdpUrl = registerSetting({
+	key: "browser.cdpUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Browser CDP URL",
+		description: "Attach to an existing browser over CDP instead of launching one",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
+
+export const browserRelay = registerSetting({
+	key: "browser.relay",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Browser Relay",
+		description: "Reach the browser through a relay rather than locally",
+		tab: "tools",
+		group: "Grep & Browser",
+		control: "cycle",
+	},
+});
+
+export const browserRelayUrl = registerSetting({
+	key: "browser.relayUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Browser Relay URL",
+		description: "Base URL of the browser relay",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
+
+export const browserHeadless = registerSetting({
+	key: "browser.headless",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Headless Browser",
+		description: "Launch the browser headless",
+		tab: "tools",
+		group: "Grep & Browser",
+		control: "cycle",
+	},
+});
+
+export const browserFreezeOnTurnEnd = registerSetting({
+	key: "browser.freezeOnTurnEnd",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Freeze Browser Tabs On Turn End",
+		description:
+			"Freeze owned headless tabs when a turn settles so animated pages stop burning CPU and GPU while idle. Tabs unfreeze automatically on next use; pass persist:true on open to opt a tab out",
+		tab: "tools",
+		group: "Grep & Browser",
+		control: "cycle",
+	},
+});
+
+export const browserIdleCloseSec = registerSetting({
+	key: "browser.idleCloseSec",
+	type: "number",
+	default: 1800,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Browser Idle Close Timeout",
+		description:
+			"Close owned headless tabs idle longer than this many seconds (0 = never; session dispose still reaps). Applies only to tabs this session launched headless, never a CDP, relay or spawned browser",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
+
+export const browserScreenshotDir = registerSetting({
+	key: "browser.screenshotDir",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Screenshot Directory",
+		description: "Directory screenshots are written to",
+		tab: "tools",
+		group: "Grep & Browser",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

@@ -57,6 +57,23 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tools tab, Grep & Browser: ownership decides the lifecycle.
+	"browser.enabled":
+		"consumed when the browser tool is assembled, gating whether it is offered at all",
+	"browser.cdpUrl":
+		"consumed as the attach target; a non-empty value means the browser is shared and never managed",
+	"browser.relay":
+		"consumed when the browser tool is assembled, selecting relay access over local launch",
+	"browser.relayUrl":
+		"consumed as the relay base URL",
+	"browser.headless":
+		"consumed when a tab is opened, deciding whether this session owns it",
+	"browser.freezeOnTurnEnd":
+		"consumed by decideTabAction, which freezes an owned idle tab rather than closing it",
+	"browser.idleCloseSec":
+		"consumed by decideTabAction; 0 never closes on idle, though dispose still reaps what the session owns",
+	"browser.screenshotDir":
+		"consumed as the directory screenshots are written to",
 	// Tools tab, Todos.
 	"todo.reminders":
 		"consumed by decideNudge; a nudge is suppressed while the user is mid-question, because a model answering is working",
