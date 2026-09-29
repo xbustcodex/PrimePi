@@ -111,6 +111,11 @@ describe("the classifications are the ones the program claims", () => {
 			"secrets.enabled",
 			"steeringMode",
 			"todo.enabled",
+			"tools.artifactHeadBytes",
+			"tools.artifactSpillThreshold",
+			"tools.artifactTailBytes",
+			"tools.artifactTailLines",
+			"tools.outputMaxColumns",
 			"tui.resizeScrollback",
 			"web_search.enabled",
 		]);

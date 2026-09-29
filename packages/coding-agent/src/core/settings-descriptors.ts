@@ -746,6 +746,70 @@ export const searxngEndpoint = registerSetting({
 		group: "Services",
 	},
 });
+export const toolsArtifactSpillThreshold = registerSetting({
+	key: "tools.artifactSpillThreshold",
+	type: "number",
+	default: 50,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Artifact Spill Threshold (KB)",
+		description: "Tool output above this size is saved as an artifact; head and tail are kept inline",
+		tab: "tools",
+		group: "Output Limits",
+	},
+});
+
+export const toolsArtifactHeadBytes = registerSetting({
+	key: "tools.artifactHeadBytes",
+	type: "number",
+	default: 2,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Artifact Head Size (KB)",
+		description: "Bytes of the head kept inline; 0 makes the view tail-only",
+		tab: "tools",
+		group: "Output Limits",
+	},
+});
+
+export const toolsArtifactTailBytes = registerSetting({
+	key: "tools.artifactTailBytes",
+	type: "number",
+	default: 2,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Artifact Tail Size (KB)",
+		description: "Bytes of the tail kept inline",
+		tab: "tools",
+		group: "Output Limits",
+	},
+});
+
+export const toolsArtifactTailLines = registerSetting({
+	key: "tools.artifactTailLines",
+	type: "number",
+	default: 20,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Artifact Tail Lines",
+		description: "Lines of the tail kept, applied before the byte budget",
+		tab: "tools",
+		group: "Output Limits",
+	},
+});
+
+export const toolsOutputMaxColumns = registerSetting({
+	key: "tools.outputMaxColumns",
+	type: "number",
+	default: 0,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Output Column Cap",
+		description: "Maximum columns per output line; 0 disables the clamp",
+		tab: "tools",
+		group: "Output Limits",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
