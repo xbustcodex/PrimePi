@@ -3748,8 +3748,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		label: "Max In-Flight Requests",
 		type: "record",
 		default: "EMPTY_NUMBER_RECORD",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "providers.maxInFlightRequests",
+		note: "consumed by admitRequest; the effective limit is the smaller of the configured one and the provider own ceiling, and an invalid entry is rejected rather than coerced",
 	},
 	{
 		id: "providers.openai-codex.codeMode",

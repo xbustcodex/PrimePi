@@ -2640,6 +2640,19 @@ export const openrouterVariant = registerSetting({
 		control: "submenu",
 	},
 });
+export const providersMaxInFlightRequests = registerSetting({
+	key: "providers.maxInFlightRequests",
+	type: "record",
+	default: {},
+	parse: (raw) => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, never>) : {}),
+	ui: {
+		label: "Max In-Flight Requests",
+		description:
+			"Maximum concurrent LLM requests per provider id, shared across local processes with this config root. Omitted providers are unlimited.",
+		tab: "providers",
+		group: "Services",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

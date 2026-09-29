@@ -57,6 +57,9 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Providers tab, Services: per-provider concurrency.
+	"providers.maxInFlightRequests":
+		"consumed by admitRequest; the effective limit is the smaller of the configured one and the provider own ceiling, and an invalid entry is rejected rather than coerced",
 	// Providers tab, Protocol: cache and transport policy.
 	"providers.cacheRetention":
 		"consumed by resolveCacheRetention; an explicit setting is never overridden by the environment",

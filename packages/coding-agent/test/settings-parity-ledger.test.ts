@@ -188,6 +188,7 @@ describe("the classifications are the ones the program claims", () => {
 			"providers.cacheRetention",
 			"providers.cacheWarming",
 			"providers.fetch",
+			"providers.maxInFlightRequests",
 			"providers.openaiWebsockets",
 			"providers.openrouterVariant",
 			"providers.streamFirstEventTimeoutSeconds",

@@ -105,6 +105,17 @@ export {
 	THINKING_LEVELS,
 } from "./utils/model-roles.ts";
 export * from "./utils/overflow.ts";
+export {
+	type AdmitDecision,
+	admitRequest,
+	backoffMs,
+	describeLimits,
+	InvalidProviderLimitError,
+	limitFor,
+	type ProviderLimits,
+	type ProviderUsage,
+	validateProviderLimits,
+} from "./utils/provider-limits.ts";
 export * from "./utils/retry.ts";
 export {
 	describeTimeout,
