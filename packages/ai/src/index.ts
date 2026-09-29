@@ -51,6 +51,12 @@ export {
 	type UnavailableReason,
 } from "./utils/failover.ts";
 export { isAnonymouslyAccessible, isCredentialFree } from "./utils/free-model.ts";
+export {
+	type RepeatedToolCallDetection,
+	ToolCallLoopGuard,
+	type ToolCallLoopGuardOptions,
+	type ToolCallLoopTurn,
+} from "./utils/tool-call-loop-guard.ts";
 export * from "./utils/json-parse.ts";
 export {
 	type AnnotatedPattern,

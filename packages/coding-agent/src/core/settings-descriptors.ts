@@ -726,6 +726,46 @@ export const retryFallbackRevertPolicy = registerSetting({
 	},
 });
 
+export const toolCallLoopGuardEnabled = registerSetting({
+	key: "model.toolCallLoopGuard.enabled",
+	type: "boolean",
+	// Off by default: a guard that fires wrongly gets disabled, and a disabled guard
+	// protects nothing. The user opts in to the correction being injected.
+	default: false,
+	ui: {
+		label: "Tool-Call Loop Guard",
+		description: "Detect a model reissuing the same tool call and steer it away",
+		tab: "model",
+		group: "Thinking",
+		control: "cycle",
+	},
+});
+
+export const toolCallLoopGuardThreshold = registerSetting({
+	key: "model.toolCallLoopGuard.threshold",
+	type: "number",
+	default: 3,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) ? Math.max(1, Math.trunc(raw)) : undefined),
+	ui: {
+		label: "Tool-Call Loop Threshold",
+		description: "Identical consecutive turns before the guard intervenes",
+		tab: "model",
+		group: "Thinking",
+	},
+});
+
+export const toolCallLoopGuardExemptTools = registerSetting({
+	key: "model.toolCallLoopGuard.exemptTools",
+	type: "stringList",
+	default: [],
+	ui: {
+		label: "Tool-Call Loop Exempt Tools",
+		description: "Tools that are expected to be called repeatedly and are not counted as a loop",
+		tab: "model",
+		group: "Thinking",
+	},
+});
+
 export const editRecoverInlineEdits = registerSetting({
 	key: "edit.recoverInlineEdits",
 	type: "boolean",

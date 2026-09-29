@@ -53,6 +53,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Context tab, Compaction. Promoted from the pruning implementation and its tests.
 	"compaction.dropUseless":
 		"consumed by pruneToolOutputs, which elides results the tool flagged as carrying no information",
+	// Model tab, Thinking.
+	"model.toolCallLoopGuard.enabled":
+		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
+	"model.toolCallLoopGuard.threshold":
+		"consumed as the number of identical consecutive turns before the guard intervenes",
+	"model.toolCallLoopGuard.exemptTools":
+		"consumed as the tools a turn may call without counting as a loop",
 	// Files tab, Editing.
 	"edit.recoverInlineEdits":
 		"consumed by recoverInlineSloppyEdit; a stray payload becomes a synthetic edit tool call so the approval pipeline still runs",
@@ -107,6 +114,9 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"edit.recoverInlineEdits",
 	"compaction.dropUseless",
 	"compaction.supersedeReads",
+	"model.toolCallLoopGuard.enabled",
+	"model.toolCallLoopGuard.exemptTools",
+	"model.toolCallLoopGuard.threshold",
 ]);
 
 function stateFor(row: ParityRow): LedgerState {
