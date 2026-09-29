@@ -96,6 +96,18 @@ export {
 } from "./utils/stream-watchdog.ts";
 export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";
 export {
+	AUTO_THINKING,
+	type ConfiguredThinkingLevel,
+	clampThinkingLevelForModel,
+	concreteThinkingLevel,
+	INHERIT_THINKING,
+	parseConfiguredThinkingLevel,
+	parseThinkingLevel,
+	resolveThinkingLevelForModel,
+	shouldDisableReasoning,
+	supportedThinkingLevels,
+} from "./utils/thinking-level.ts";
+export {
 	type RepeatedToolCallDetection,
 	ToolCallLoopGuard,
 	type ToolCallLoopGuardOptions,

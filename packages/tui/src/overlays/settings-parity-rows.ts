@@ -3701,8 +3701,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"high"',
 		values: ["...THINKING_EFFORTS", "AUTO_THINKING"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "defaultThinkingLevel",
+		note: "consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	},
 	{
 		id: "hideThinkingBlock",

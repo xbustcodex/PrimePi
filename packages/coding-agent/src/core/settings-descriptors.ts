@@ -10,6 +10,7 @@
  * the registry does not reorder the interface.
  */
 
+import { parseConfiguredThinkingLevel } from "@earendil-works/pi-ai";
 import { registerSetting } from "./settings-registry.ts";
 
 /**
@@ -531,6 +532,24 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const defaultThinkingLevel = registerSetting({
+	key: "defaultThinkingLevel",
+	type: "enum",
+	// `auto` is the default and is deliberately not a level: it means "let the
+	// model or role decide", and the request layer sends no reasoning parameter.
+	default: "auto",
+	values: ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"],
+	parse: (raw) =>
+		typeof raw === "string" && parseConfiguredThinkingLevel(raw) ? parseConfiguredThinkingLevel(raw) : undefined,
+	ui: {
+		label: "Thinking Level",
+		description: "Default reasoning effort, clamped down to what the active model supports",
+		tab: "model",
+		group: "Thinking",
+		control: "submenu",
+	},
+});
+
 export const streamFirstEventTimeout = registerSetting({
 	key: "providers.streamFirstEventTimeoutSeconds",
 	type: "number",

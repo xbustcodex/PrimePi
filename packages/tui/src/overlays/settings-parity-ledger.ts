@@ -62,6 +62,8 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"secrets.enabled":
 		"consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",
 	// Model tab, Thinking.
+	"defaultThinkingLevel":
+		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	"model.toolCallLoopGuard.enabled":
 		"consumed by ToolCallLoopGuard; a detection steers the model away rather than aborting the turn",
 	"model.toolCallLoopGuard.threshold":
@@ -123,6 +125,7 @@ const LIVE_VERIFIED: ReadonlySet<string> = new Set([
 	"edit.recoverInlineEdits",
 	"compaction.dropUseless",
 	"compaction.supersedeReads",
+	"defaultThinkingLevel",
 	"model.toolCallLoopGuard.enabled",
 	"model.toolCallLoopGuard.exemptTools",
 	"model.toolCallLoopGuard.threshold",
