@@ -57,6 +57,21 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Files tab, Read Summaries: progressive disclosure for a large file.
+	"read.summarize.enabled":
+		"consumed by decideReadSummary; a small file is read verbatim because summarising it costs tokens to save tokens",
+	"read.summarize.prose":
+		"consumed by decideReadSummary; Markdown has no signatures, so summarising it is an outline of a document",
+	"read.summarize.minBodyLines":
+		"consumed as the body-line floor before a block is elided",
+	"read.summarize.minCommentLines":
+		"consumed as the comment-line floor before a block is elided",
+	"read.summarize.minTotalLines":
+		"consumed by decideReadSummary as the file-length floor below which a file is read verbatim",
+	"read.summarize.unfoldUntil":
+		"consumed by unfoldBudget as the target the elided middle is unfolded to",
+	"read.summarize.unfoldLimit":
+		"consumed by unfoldBudget as the hard ceiling on how much unfolding may add",
 	// Providers tab, Services: per-provider concurrency.
 	"providers.maxInFlightRequests":
 		"consumed by admitRequest; the effective limit is the smaller of the configured one and the provider own ceiling, and an invalid entry is rejected rather than coerced",

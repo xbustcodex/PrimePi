@@ -116,6 +116,19 @@ export {
 	type ProviderUsage,
 	validateProviderLimits,
 } from "./utils/provider-limits.ts";
+export {
+	DEFAULT_READ_SUMMARY,
+	decideReadSummary,
+	isProseSummaryPath,
+	MAX_SUMMARY_BYTES,
+	MAX_SUMMARY_LINES,
+	type ReadSummarySettings,
+	SUMMARY_CACHE_MAX,
+	type SummaryDecision,
+	SummaryMemo,
+	summaryCacheKey,
+	unfoldBudget,
+} from "./utils/read-summary.ts";
 export * from "./utils/retry.ts";
 export {
 	describeTimeout,

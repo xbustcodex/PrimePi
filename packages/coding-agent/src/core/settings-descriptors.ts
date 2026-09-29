@@ -2644,13 +2644,104 @@ export const providersMaxInFlightRequests = registerSetting({
 	key: "providers.maxInFlightRequests",
 	type: "record",
 	default: {},
-	parse: (raw) => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, never>) : {}),
+	parse: (raw) =>
+		typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, never>) : {},
 	ui: {
 		label: "Max In-Flight Requests",
 		description:
 			"Maximum concurrent LLM requests per provider id, shared across local processes with this config root. Omitted providers are unlimited.",
 		tab: "providers",
 		group: "Services",
+	},
+});
+export const readSummarizeEnabled = registerSetting({
+	key: "read.summarize.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Read Summaries",
+		description: "Show a large file as signatures with the bodies elided, so the file can be read on demand",
+		tab: "files",
+		group: "Read Summaries",
+		control: "cycle",
+	},
+});
+
+export const readSummarizeProse = registerSetting({
+	key: "read.summarize.prose",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Prose Summaries",
+		description: "Summarise Markdown and plain text too, which have no signatures and are usually worse summarised",
+		tab: "files",
+		group: "Read Summaries",
+		control: "cycle",
+	},
+});
+
+export const readSummarizeMinBodyLines = registerSetting({
+	key: "read.summarize.minBodyLines",
+	type: "number",
+	default: 40,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Read Summary Body Lines",
+		description: "Minimum body lines before a block is elided",
+		tab: "files",
+		group: "Read Summaries",
+	},
+});
+
+export const readSummarizeMinCommentLines = registerSetting({
+	key: "read.summarize.minCommentLines",
+	type: "number",
+	default: 20,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Read Summary Comment Lines",
+		description: "Minimum comment lines before a block is elided",
+		tab: "files",
+		group: "Read Summaries",
+	},
+});
+
+export const readSummarizeMinTotalLines = registerSetting({
+	key: "read.summarize.minTotalLines",
+	type: "number",
+	default: 100,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Read Summary Minimum File Length",
+		description: "Files with fewer total lines are read verbatim instead of structurally summarized",
+		tab: "files",
+		group: "Read Summaries",
+	},
+});
+
+export const readSummarizeUnfoldUntil = registerSetting({
+	key: "read.summarize.unfoldUntil",
+	type: "number",
+	default: 2000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Read Summary Unfold Target",
+		description: "Unfold the elided middle until this many lines are shown",
+		tab: "files",
+		group: "Read Summaries",
+	},
+});
+
+export const readSummarizeUnfoldLimit = registerSetting({
+	key: "read.summarize.unfoldLimit",
+	type: "number",
+	default: 2000,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Read Summary Unfold Ceiling",
+		description: "Hard ceiling on how much unfolding may add",
+		tab: "files",
+		group: "Read Summaries",
 	},
 });
 export const composerRecallClearedDrafts = registerSetting({
