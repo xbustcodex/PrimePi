@@ -2393,8 +2393,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		type: "enum",
 		default: '"immediate"',
 		values: ["immediate", "wait"],
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "interruptMode",
+		note: "consumed by shouldInterrupt; wait spares side-effecting calls and still cuts short purely interruptible ones",
 	},
 	{
 		id: "tui.vimMode",

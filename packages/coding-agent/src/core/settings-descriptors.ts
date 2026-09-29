@@ -532,6 +532,23 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const interruptMode = registerSetting({
+	key: "interruptMode",
+	type: "enum",
+	// Immediate is the default because it honours the user rather than stalling
+	// them; `wait` exists for work that must not be abandoned halfway.
+	default: "immediate",
+	values: ["immediate", "wait"],
+	parse: (raw) => (raw === "immediate" || raw === "wait" ? raw : undefined),
+	ui: {
+		label: "Interrupt Mode",
+		description: "When steering messages interrupt tool execution",
+		tab: "interaction",
+		group: "Input",
+		control: "submenu",
+	},
+});
+
 export const todoEnabled = registerSetting({
 	key: "todo.enabled",
 	type: "boolean",

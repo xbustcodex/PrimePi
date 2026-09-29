@@ -74,6 +74,7 @@ describe("the classifications are the ones the program claims", () => {
 			"compaction.supersedeReads",
 			"defaultThinkingLevel",
 			"edit.recoverInlineEdits",
+			"interruptMode",
 			"memory.backend",
 			"mnemopi.autoRecall",
 			"mnemopi.autoRetain",
