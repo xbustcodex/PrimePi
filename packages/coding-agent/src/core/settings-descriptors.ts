@@ -3279,6 +3279,124 @@ export const taskAgentIdleTtlMs = registerSetting({
 		group: "Isolation",
 	},
 });
+export const themeDark = registerSetting({
+	key: "theme.dark",
+	type: "string",
+	default: "primepi-dark",
+	ui: {
+		label: "Dark Theme",
+		description: "Theme applied when the terminal reports a dark background",
+		tab: "appearance",
+		group: "Theme",
+	},
+});
+
+export const themeLight = registerSetting({
+	key: "theme.light",
+	type: "string",
+	default: "primepi-light",
+	ui: {
+		label: "Light Theme",
+		description: "Theme applied when the terminal reports a light background",
+		tab: "appearance",
+		group: "Theme",
+	},
+});
+
+export const colorBlindMode = registerSetting({
+	key: "colorBlindMode",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Color-Blind Mode",
+		description:
+			"Rotate the diff addition colour out of the red-green confusion region, keeping its lightness and chroma so the theme's contrast still holds",
+		tab: "appearance",
+		group: "Theme",
+		control: "cycle",
+	},
+});
+
+export const symbolPreset = registerSetting({
+	key: "symbolPreset",
+	type: "enum",
+	default: "default",
+	values: ["default", "minimal", "ascii", "nerd"],
+	parse: (raw) => (raw === "default" || raw === "minimal" || raw === "ascii" || raw === "nerd" ? raw : undefined),
+	ui: {
+		label: "Symbol Preset",
+		description: "Which glyph set the status line and borders use",
+		tab: "appearance",
+		group: "Theme",
+		control: "submenu",
+	},
+});
+
+export const composerShape = registerSetting({
+	key: "composer.shape",
+	type: "string",
+	default: "rounded",
+	ui: {
+		label: "Composer Shape",
+		description: "Border shape drawn around the composer",
+		tab: "appearance",
+		group: "Theme",
+	},
+});
+
+export const composerTokenRate = registerSetting({
+	key: "composer.tokenRate",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Generation Rate",
+		description: "Show tokens per second while the model is streaming",
+		tab: "appearance",
+		group: "Theme",
+		control: "cycle",
+	},
+});
+
+export const tuiTextSizing = registerSetting({
+	key: "tui.textSizing",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Large Headings (Kitty)",
+		description: "Draw headings at a larger size, on terminals that support it",
+		tab: "appearance",
+		group: "Theme",
+		control: "cycle",
+	},
+});
+
+export const tuiRenderMermaid = registerSetting({
+	key: "tui.renderMermaid",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Render Mermaid Diagrams",
+		description: "Render a mermaid block as a diagram where the terminal supports images",
+		tab: "appearance",
+		group: "Theme",
+		control: "cycle",
+	},
+});
+
+export const displayShimmer = registerSetting({
+	key: "display.shimmer",
+	type: "enum",
+	default: "auto",
+	values: ["off", "auto", "always"],
+	parse: (raw) => (raw === "off" || raw === "auto" || raw === "always" ? raw : undefined),
+	ui: {
+		label: "Shimmer",
+		description: "Animate the busy indicator while the model is working",
+		tab: "appearance",
+		group: "Theme",
+		control: "submenu",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

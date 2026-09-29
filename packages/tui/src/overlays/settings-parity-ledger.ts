@@ -57,6 +57,29 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Appearance tab, Theme: backgrounds, the colour-blind remap, and glyph selection.
+	"theme.dark":
+		"consumed when the terminal reports a dark background",
+	"theme.light":
+		"consumed when the terminal reports a light background",
+	"colorBlindMode":
+		"consumed by remapThemeColor, which rotates the addition hue out of the red-green confusion region while preserving lightness and chroma",
+	"symbolPreset":
+		"consumed when the status line and borders resolve their glyphs",
+	"composer.shape":
+		"consumed when the composer border is drawn",
+	"composer.tokenRate":
+		"consumed by the composer while a turn is streaming",
+	"images.autoResize":
+		"consumed when an inline image is scaled to the terminal width",
+	"images.blockImages":
+		"consumed when an inline image is drawn rather than linked",
+	"tui.textSizing":
+		"consumed by the renderer, on terminals that report Kitty graphics support",
+	"tui.renderMermaid":
+		"consumed by the renderer when a mermaid block is drawn as a diagram",
+	"display.shimmer":
+		"consumed by the busy indicator while the model is working",
 	// Tasks tab, Isolation: the copy-on-write backend and subagent lifetime bounds.
 	"isolation.backend":
 		"consumed by candidateOrder and resolveIsolationBackend, which fall back within a behaviour class before crossing classes and report the downgrade",
