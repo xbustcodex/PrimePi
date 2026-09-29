@@ -2507,8 +2507,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		label: "Recall Cleared Drafts",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
-		note: "recorded for parity; the runtime consumer is not yet identified in PrimePi",
+		status: "wired",
+		piKey: "composer.recallClearedDrafts",
+		note: "consumed by DraftHistory.clear; a composer holding an image is not empty, and the setting governs future clears only",
 	},
 	{
 		id: "doubleEscapeAction",

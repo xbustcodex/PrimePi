@@ -72,6 +72,7 @@ describe("the classifications are the ones the program claims", () => {
 			"autoResume",
 			"compaction.dropUseless",
 			"compaction.supersedeReads",
+			"composer.recallClearedDrafts",
 			"defaultThinkingLevel",
 			"edit.recoverInlineEdits",
 			"followUpMode",

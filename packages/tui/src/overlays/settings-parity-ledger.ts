@@ -72,6 +72,8 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"secrets.enabled":
 		"consumed by SecretObfuscator, which replaces configured secrets with a keyed placeholder before the request leaves the machine",
 	// Model tab, Thinking.
+	"composer.recallClearedDrafts":
+		"consumed by DraftHistory.clear; a composer holding an image is not empty, and the setting governs future clears only",
 	"defaultThinkingLevel":
 		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	"todo.enabled":

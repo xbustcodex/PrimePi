@@ -532,6 +532,21 @@ export const toolApprovalPolicies = registerSetting({
  * credential to a provider, and the failure mode of leaving it on is a
  * placeholder in a transcript, which is visible and recoverable.
  */
+export const composerRecallClearedDrafts = registerSetting({
+	key: "composer.recallClearedDrafts",
+	type: "boolean",
+	// On by default: a clear that throws away a half-written thought should be
+	// recoverable, and forgetting it silently is the worse failure.
+	default: true,
+	ui: {
+		label: "Recall Cleared Drafts",
+		description: "Keep drafts cleared with ctrl+c in local history until exit; disabling affects future clears",
+		tab: "interaction",
+		group: "Input",
+		control: "cycle",
+	},
+});
+
 export const loopMode = registerSetting({
 	key: "loop.mode",
 	type: "enum",
