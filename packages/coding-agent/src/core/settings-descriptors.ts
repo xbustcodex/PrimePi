@@ -1247,6 +1247,110 @@ export const samplingRepetitionPenalty = registerSetting({
 		group: "Sampling",
 	},
 });
+export const taskMaxConcurrency = registerSetting({
+	key: "task.maxConcurrency",
+	type: "number",
+	default: 32,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Max Concurrent Tasks",
+		description: "Maximum number of subagents running concurrently",
+		tab: "tasks",
+		group: "Subagents",
+	},
+});
+
+export const taskMaxRecursionDepth = registerSetting({
+	key: "task.maxRecursionDepth",
+	type: "number",
+	default: 2,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Max Task Recursion",
+		description: "How many levels deep subagents can spawn their own subagents",
+		tab: "tasks",
+		group: "Subagents",
+	},
+});
+
+export const taskSoftRequestBudget = registerSetting({
+	key: "task.softRequestBudget",
+	type: "number",
+	default: 200,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Soft Subagent Request Budget",
+		description:
+			"Soft per-subagent request budget (assistant requests per run). Crossing it injects a wrap-up notice; at 1.5x the run is force-stopped and the agent must yield its partial findings. 0 disables the guard",
+		tab: "tasks",
+		group: "Subagents",
+	},
+});
+
+export const taskMaxEffort = registerSetting({
+	key: "task.maxEffort",
+	type: "number",
+	default: 5,
+	parse: (raw) => (typeof raw === "number" && Number.isFinite(raw) && raw >= 0 ? Math.trunc(raw) : undefined),
+	ui: {
+		label: "Maximum Per-Spawn Effort",
+		description: "Highest reasoning effort a spawned subagent may be given",
+		tab: "tasks",
+		group: "Subagents",
+	},
+});
+
+export const taskEager = registerSetting({
+	key: "task.eager",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Prefer Task Delegation",
+		description: "Prefer delegating a self-contained piece of work to a subagent over doing it inline",
+		tab: "tasks",
+		group: "Subagents",
+		control: "cycle",
+	},
+});
+
+export const taskBatch = registerSetting({
+	key: "task.batch",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Batch Task Calls",
+		description: "Batch several task calls in one turn rather than issuing them one at a time",
+		tab: "tasks",
+		group: "Subagents",
+		control: "cycle",
+	},
+});
+
+export const taskEnableLsp = registerSetting({
+	key: "task.enableLsp",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "LSP in Subagents",
+		description: "Give a subagent language-server context for the files it is working on",
+		tab: "tasks",
+		group: "Subagents",
+		control: "cycle",
+	},
+});
+
+export const taskEnableEffort = registerSetting({
+	key: "task.enableEffort",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Per-Task Effort",
+		description: "Let a task request a specific reasoning effort for its subagent",
+		tab: "tasks",
+		group: "Subagents",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

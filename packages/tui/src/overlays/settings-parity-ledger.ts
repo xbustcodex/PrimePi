@@ -57,6 +57,23 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Tasks tab, Subagents.
+	"task.maxConcurrency":
+		"consumed when a subagent is spawned, bounding how many run at once",
+	"task.maxRecursionDepth":
+		"consumed when a subagent spawns another, bounding how deep delegation may go",
+	"task.softRequestBudget":
+		"consumed by resolveSoftRequestBudget, where it can only lower an agent bundled ceiling and never raise it",
+	"task.maxEffort":
+		"consumed when a spawn applies its effort, bounding what a subagent may be asked for",
+	"task.eager":
+		"consumed when work is classified, choosing whether a self-contained piece is delegated",
+	"task.batch":
+		"consumed when several task calls are issued in one turn, choosing batching over one at a time",
+	"task.enableLsp":
+		"consumed when a subagent is assembled, giving it language-server context for the files it works on",
+	"task.enableEffort":
+		"consumed when a task request is read, allowing a specific effort for its subagent",
 	// Model tab, Sampling: -1 means the provider default, and absence is not zero.
 	"temperature":
 		"consumed by resolveParameter, which omits it entirely at the -1 sentinel rather than defaulting it",
