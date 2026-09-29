@@ -1035,6 +1035,123 @@ export const mcpNotificationDebounceMs = registerSetting({
 		group: "Discovery & MCP",
 	},
 });
+export const displaySmoothStreaming = registerSetting({
+	key: "display.smoothStreaming",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Smooth Streaming",
+		description: "Redraw streamed text smoothly rather than per chunk",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const displayHideToolActivity = registerSetting({
+	key: "display.hideToolActivity",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Hide Tool Activity",
+		description: "Draw a short summary of a turn's tool activity instead of every call",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const displayShowTokenUsage = registerSetting({
+	key: "display.showTokenUsage",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Show Token Usage",
+		description: "Show token usage on assistant message rows",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const displayShowTurnTime = registerSetting({
+	key: "display.showTurnTime",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Show Turn Time",
+		description: "Show the total prompt-to-yield time on assistant message usage rows",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const displayCacheMissMarker = registerSetting({
+	key: "display.cacheMissMarker",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Cache Miss Marker",
+		description: "Show a divider after an assistant turn whose request lost the prompt cache",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const displayCollapseCompacted = registerSetting({
+	key: "display.collapseCompacted",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Collapse Compacted History",
+		description:
+			"Collapse pre-compaction history behind the summary divider; disable to keep the full transcript inline with dividers at each compaction point",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiImeSafeCursor = registerSetting({
+	key: "tui.imeSafeCursor",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "IME-Safe Prompt Layout",
+		description: "Layout the prompt so an IME candidate window does not cover it",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiHyperlinksEnabled = registerSetting({
+	key: "tui.hyperlinks",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Terminal Hyperlinks",
+		description: "Emit OSC 8 hyperlinks for paths",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiTightLayout = registerSetting({
+	key: "tui.tight",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Tight Layout",
+		description: "Use a compact layout with reduced padding",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",

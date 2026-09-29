@@ -57,43 +57,56 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Appearance tab, Display.
+	"display.smoothStreaming":
+		"consumed when a streamed chunk is drawn, choosing a smooth redraw over a per-chunk one",
+	"display.hideToolActivity":
+		"consumed by toolActivityMode, which chooses how much of a turn's tool activity is drawn",
+	"display.showTokenUsage":
+		"consumed by renderUsage; a display preference that changes what is drawn and not what was spent",
+	"display.showTurnTime":
+		"consumed by renderUsage when the caller measured a duration",
+	"display.cacheMissMarker":
+		"consumed by isCacheMiss, which marks only a lost cache and not a write or a hit",
+	"display.collapseCompacted":
+		"consumed by layoutCompacted, which emits one divider when collapsing and one per point when expanded",
+	"showHardwareCursor":
+		"consumed when the cursor is hidden or restored while drawing",
+	"tui.imeSafeCursor":
+		"consumed when the prompt is laid out, reserving room for an IME candidate window",
+	"tui.hyperlinks":
+		"consumed when a path is drawn, choosing an OSC 8 hyperlink or plain text",
+	"tui.tight":
+		"consumed when the layout is built, choosing compact padding",
+	"autoResume":
+		"consumed by chooseSessionToResume; a resumed session restores its own model instead of taking a CLI default",
+	"defaultThinkingLevel":
+		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	// Tools tab, Discovery & MCP.
-	"mcp.enableProjectConfig":
-		"consumed when servers are assembled, gating whether a project may declare its own",
-	"mcp.startupTimeoutMs":
-		"consumed by isStartupComplete; 0 waits until connections settle rather than not waiting",
-	"mcp.renderMarkdownResults":
-		"consumed when an MCP result is rendered, choosing markdown over plain text",
+	"mcp.enableProjectConfig": "consumed when servers are assembled, gating whether a project may declare its own",
+	"mcp.startupTimeoutMs": "consumed by isStartupComplete; 0 waits until connections settle rather than not waiting",
+	"mcp.renderMarkdownResults": "consumed when an MCP result is rendered, choosing markdown over plain text",
 	"mcp.notifications":
 		"consumed by injectionEnabled; disabled means nothing from a server reaches the conversation at all",
 	"mcp.notificationDebounceMs":
 		"consumed by NotificationDebouncer, which waits for quiet and injects the newest state",
 	// Tools tab, Grep & Browser: ownership decides the lifecycle.
-	"browser.enabled":
-		"consumed when the browser tool is assembled, gating whether it is offered at all",
-	"browser.cdpUrl":
-		"consumed as the attach target; a non-empty value means the browser is shared and never managed",
-	"browser.relay":
-		"consumed when the browser tool is assembled, selecting relay access over local launch",
-	"browser.relayUrl":
-		"consumed as the relay base URL",
-	"browser.headless":
-		"consumed when a tab is opened, deciding whether this session owns it",
-	"browser.freezeOnTurnEnd":
-		"consumed by decideTabAction, which freezes an owned idle tab rather than closing it",
+	"browser.enabled": "consumed when the browser tool is assembled, gating whether it is offered at all",
+	"browser.cdpUrl": "consumed as the attach target; a non-empty value means the browser is shared and never managed",
+	"browser.relay": "consumed when the browser tool is assembled, selecting relay access over local launch",
+	"browser.relayUrl": "consumed as the relay base URL",
+	"browser.headless": "consumed when a tab is opened, deciding whether this session owns it",
+	"browser.freezeOnTurnEnd": "consumed by decideTabAction, which freezes an owned idle tab rather than closing it",
 	"browser.idleCloseSec":
 		"consumed by decideTabAction; 0 never closes on idle, though dispose still reaps what the session owns",
-	"browser.screenshotDir":
-		"consumed as the directory screenshots are written to",
+	"browser.screenshotDir": "consumed as the directory screenshots are written to",
 	// Tools tab, Todos.
 	"todo.reminders":
 		"consumed by decideNudge; a nudge is suppressed while the user is mid-question, because a model answering is working",
-	"todo.remindersMax":
-		"consumed by decideNudge as the largest plan the reminder will nag about",
+	"todo.remindersMax": "consumed by decideNudge as the largest plan the reminder will nag about",
 	"todo.eager":
 		"consumed when a request is classified, choosing whether a multi-step request is turned into a plan without being asked",
-	"tasks.todoClearDelay":
-		"consumed when a plan completes, as the delay before it is cleared from the panel",
+	"tasks.todoClearDelay": "consumed when a plan completes, as the delay before it is cleared from the panel",
 	// Tools tab, Output Limits: bounding a tool result without losing it.
 	"tools.artifactSpillThreshold":
 		"consumed by planSpill as the byte threshold above which the full output is saved and only head and tail stay inline",
@@ -138,8 +151,6 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	// Model tab, Thinking.
 	"composer.recallClearedDrafts":
 		"consumed by DraftHistory.clear; a composer holding an image is not empty, and the setting governs future clears only",
-	defaultThinkingLevel:
-		"consumed by resolveThinkingLevelForModel, which clamps down to what the active model supports",
 	"todo.enabled":
 		"consumed by the todo tool; the plan is read from the latest committed branch entry, so a resume or rewind cannot revert it",
 	"model.toolCallLoopGuard.enabled":
@@ -151,8 +162,6 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"edit.recoverInlineEdits":
 		"consumed by recoverInlineSloppyEdit; a stray payload becomes a synthetic edit tool call so the approval pipeline still runs",
 	// Interaction tab, Startup & Updates.
-	autoResume:
-		"consumed by chooseSessionToResume; a resumed session restores its own model instead of taking a CLI default",
 	"compaction.supersedeReads":
 		"consumed by pruneToolOutputs, which replaces a result a newer read of the same target made redundant",
 };
