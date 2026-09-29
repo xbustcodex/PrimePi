@@ -57,6 +57,17 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Appearance tab, Display: terminal state the renderer owns.
+	"terminal.showProgress":
+		"consumed by TerminalProgress, which only ever clears an indicator it set itself",
+	"tui.mouse":
+		"consumed when terminal input is wired, enabling click-to-focus",
+	"tui.titleState":
+		"consumed when the terminal title is set, including the run state",
+	"tui.titleSpinner":
+		"consumed when the terminal title is written, choosing the spinner animation",
+	"task.showResolvedModelBadge":
+		"consumed by the status line, showing the model a role resolved to rather than the role name",
 	// Tasks tab, Isolation: bounded delegated work.
 	"task.isolation.enabled":
 		"consumed by decideIntegration; isolation isolates changes in progress and is not a sandbox",

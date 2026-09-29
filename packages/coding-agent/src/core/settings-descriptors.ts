@@ -2433,6 +2433,72 @@ export const worktreeCleanSource = registerSetting({
 		control: "cycle",
 	},
 });
+export const terminalShowProgress = registerSetting({
+	key: "terminal.showProgress",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Native Terminal Progress",
+		description: "Emit OSC 9;4 indeterminate progress while the agent or context maintenance is running",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiMouse = registerSetting({
+	key: "tui.mouse",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Mouse Click-to-Focus",
+		description: "Click in the terminal to focus the agent input",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiTitleState = registerSetting({
+	key: "tui.titleState",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Terminal Title Run State",
+		description: "Show the run state in the terminal title",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
+
+export const tuiTitleSpinner = registerSetting({
+	key: "tui.titleSpinner",
+	type: "enum",
+	default: "off",
+	values: ["off", "dots", "braille"],
+	parse: (raw) => (raw === "off" || raw === "dots" || raw === "braille" ? raw : undefined),
+	ui: {
+		label: "Terminal Title Spinner",
+		description: "Animate a spinner in the terminal title while the agent is working",
+		tab: "appearance",
+		group: "Display",
+		control: "submenu",
+	},
+});
+
+export const taskShowResolvedModelBadge = registerSetting({
+	key: "task.showResolvedModelBadge",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Show Resolved Model Badge",
+		description: "Show which model a role actually resolved to, rather than the role name alone",
+		tab: "appearance",
+		group: "Display",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
