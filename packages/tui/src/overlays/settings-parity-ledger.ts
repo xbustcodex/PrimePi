@@ -57,6 +57,13 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Memory tab, Mnemopi: retrieval mode and endpoint precedence.
+	"mnemopi.noEmbeddings":
+		"consumed by resolveRetrievalMode, selecting deterministic full-text recall rather than a cheaper vector one",
+	"mnemopi.llmMode":
+		"consumed by resolveRetrievalMode and planRetrieval; none disables recall rather than degrading it",
+	"mnemopi.llmBaseUrl":
+		"consumed by planRetrieval as authoritative over a managed model, so a configured instance is never repointed",
 	// Model tab, Vision: image URL lifetime.
 	"images.urls.enabled":
 		"consumed when a model request is built, choosing a link over inline image bytes",

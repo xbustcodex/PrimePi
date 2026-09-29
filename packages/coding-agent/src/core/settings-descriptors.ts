@@ -1593,6 +1593,48 @@ export const imagesUrlsCommand = registerSetting({
 		group: "Vision",
 	},
 });
+export const mnemopiNoEmbeddings = registerSetting({
+	key: "mnemopi.noEmbeddings",
+	type: "boolean",
+	// Off by default: vector recall is the better retrieval, and this setting is a
+	// deliberate trade for determinism rather than a cheaper equivalent.
+	default: false,
+	ui: {
+		label: "Mnemopi Disable Embeddings",
+		description: "Force deterministic FTS-only recall instead of vector embeddings",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "cycle",
+	},
+});
+
+export const mnemopiLlmMode = registerSetting({
+	key: "mnemopi.llmMode",
+	type: "enum",
+	default: "none",
+	values: ["none", "managed", "remote"],
+	parse: (raw) => (raw === "none" || raw === "managed" || raw === "remote" ? raw : undefined),
+	ui: {
+		label: "Mnemopi LLM Mode",
+		description: "Whether retrieval uses no model, a managed one, or a configured remote endpoint",
+		tab: "memory",
+		group: "Mnemopi",
+		control: "submenu",
+	},
+});
+
+export const mnemopiLlmBaseUrl = registerSetting({
+	key: "mnemopi.llmBaseUrl",
+	type: "string",
+	default: "",
+	parse: (raw) => (typeof raw === "string" ? raw.trim() : ""),
+	ui: {
+		label: "Mnemopi LLM Base URL",
+		description: "External endpoint for retrieval, authoritative over a managed model",
+		tab: "memory",
+		group: "Mnemopi",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
