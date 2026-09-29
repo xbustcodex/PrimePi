@@ -57,6 +57,19 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"retry.modelFallback": "consumed by resolveFallbackChain as the off/allowed switch",
 	"retry.fallbackChains": "consumed as the ordered routes resolveFallbackChain walks",
 	"retry.fallbackRevertPolicy": "consumed by shouldRevertToPrimary",
+	// Shell tab, Eval & Runtimes: the kernel and the tools it may hand to a subagent.
+	"eval.py":
+		"consumed when an eval cell selects its kernel; the Python kernel participates in the cross-kernel name check",
+	"eval.js":
+		"consumed when an eval cell selects its kernel; the JS kernel participates in the cross-kernel name check",
+	"eval.autoProvision":
+		"consumed on first install, creating the managed JavaScript eval package environment",
+	"eval.tools.enabled":
+		"consumed by resolveRequestedTools, which refuses a disabled session with an error naming this setting rather than an empty list",
+	"eval.workpool.freshAgents":
+		"consumed when a workpool is built, giving each agent its own kernel state",
+	"eval.autoBackground.enabled":
+		"consumed when an eval cell runs past the foreground budget",
 	// Context tab, Compaction: the method preference order and its fallbacks.
 	"compaction.methodOrder":
 		"consumed by selectCompactionMethod, which walks the order and reports exhaustion rather than assuming a pass succeeded",

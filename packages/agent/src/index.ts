@@ -41,6 +41,7 @@ export {
 export * from "./agent.ts";
 export * from "./agent-loop.ts";
 export * from "./code-mode.ts";
+export * from "./eval-tools.ts";
 export * from "./harness/agent-harness.ts";
 export {
 	type BranchPreparation,

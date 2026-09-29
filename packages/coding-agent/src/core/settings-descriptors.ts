@@ -3137,6 +3137,84 @@ export const compactionHandoffSaveToDisk = registerSetting({
 		control: "cycle",
 	},
 });
+export const evalPy = registerSetting({
+	key: "eval.py",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Python Eval Backend",
+		description: "Run eval cells in the Python kernel",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
+
+export const evalJs = registerSetting({
+	key: "eval.js",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "JavaScript Eval Backend",
+		description: "Run eval cells in the JavaScript kernel",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
+
+export const evalAutoProvision = registerSetting({
+	key: "eval.autoProvision",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Eval Environment Provisioning",
+		description: "Automatically create the managed JavaScript eval package environment on first install",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
+
+export const evalToolsEnabled = registerSetting({
+	key: "eval.tools.enabled",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Eval-Defined Tools",
+		description:
+			"Let eval cells define tools that task, agent(), and workpool() subagents can call. Disabled sessions get an error naming this setting rather than an empty list.",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
+
+export const evalWorkpoolFreshAgents = registerSetting({
+	key: "eval.workpool.freshAgents",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Fresh Workpool Agents",
+		description: "Give each workpool agent its own kernel state rather than sharing one",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
+
+export const evalAutoBackground = registerSetting({
+	key: "eval.autoBackground.enabled",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Eval Auto-Background",
+		description: "Move a long-running eval cell to the background instead of blocking the turn",
+		tab: "shell",
+		group: "Eval & Runtimes",
+		control: "cycle",
+	},
+});
 export const composerRecallClearedDrafts = registerSetting({
 	key: "composer.recallClearedDrafts",
 	type: "boolean",
