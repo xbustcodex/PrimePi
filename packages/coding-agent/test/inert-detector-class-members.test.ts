@@ -206,7 +206,10 @@ describe("the graph never lets a claim file be its own evidence", () => {
 });
 
 describe("a settings key is reported even with no read", () => {
-	it("classifies a key nothing reads as unreachable rather than omitting it", () => {
+	// The graph build parses the whole `packages/*/src` closure — roughly 650 modules
+	// and 4500 nodes — which is seconds, not milliseconds. The default 5s budget is
+	// below what it costs, so a slow machine reads as a failure here.
+	it("classifies a key nothing reads as unreachable rather than omitting it", { timeout: 120_000 }, () => {
 		// The graph is asked about settings keys as well as symbols. A key that
 		// vanishes from the report when nothing reads it is the same silent omission
 		// the class-member detector had.
