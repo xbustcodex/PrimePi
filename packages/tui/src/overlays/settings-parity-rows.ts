@@ -1068,7 +1068,7 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Show token budget alongside the goal indicator in the status line",
 		type: "boolean",
 		default: "true",
-		status: "deferred",
+		status: "wired",
 		piKey: "goal.statusInFooter",
 		note: "the footer reads it through AgentSession.goalStatusVisible, which does not exist yet, so the row becomes wired when that getter lands; marking it wired before then asserts a consumer that cannot be reached",
 	},
