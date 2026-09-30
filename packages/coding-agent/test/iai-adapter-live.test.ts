@@ -112,9 +112,7 @@ describe.skipIf(!available)("the PrimePi adapter against the live IAI engine", (
 
 		// The engine's `UUID(params["id"])` would raise and the whole request would
 		// fail with an opaque message. Saying why is the point of checking here.
-		await expect(backend.contradict({ recordId: "not-a-uuid", text: "replacement" })).rejects.toThrow(
-			/not a UUID/,
-		);
+		await expect(backend.contradict({ recordId: "not-a-uuid", text: "replacement" })).rejects.toThrow(/not a UUID/);
 		await backend.stop();
 	}, 300_000);
 

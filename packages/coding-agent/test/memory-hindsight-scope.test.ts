@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	describeScoping,
 	type HindsightConfig,
-	isolationBetween,
 	isInScope,
+	isolationBetween,
 	resolveBankScope,
 } from "../src/core/memory/hindsight-scope.ts";
 

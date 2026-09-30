@@ -240,8 +240,8 @@ export function matches(rule: ApprovalRule, text: string): boolean {
 	if (rule.match === "*") return true;
 	// An empty pattern matches nothing rather than everything. A rule with no text is
 	// a mistake, and reading it as a catch-all would be the unsafe direction.
-// `patternToRegExp` cannot throw — it escapes everything but `*` — so a denial is
-// never silently dropped here, which the previous try/catch was guarding against.
+	// `patternToRegExp` cannot throw — it escapes everything but `*` — so a denial is
+	// never silently dropped here, which the previous try/catch was guarding against.
 	if (rule.match.trim().length === 0) return false;
 	return commandMatches(text, rule.match);
 }

@@ -1,10 +1,7 @@
-import { describe, expect, it } from "vitest";
 import { Type } from "typebox";
-import {
-	createToolDefinitionFromAgentTool,
-	wrapToolDefinition,
-} from "../src/core/tools/tool-definition-wrapper.ts";
+import { describe, expect, it } from "vitest";
 import { resolveToolApproval } from "../src/core/security/tool-approval.ts";
+import { createToolDefinitionFromAgentTool, wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
 
 /**
  * The tool projection must carry a tool's approval declaration.
@@ -47,9 +44,7 @@ describe("definition to AgentTool carries the approval declaration", () => {
 		// The load-bearing case. With `mode: yolo` the ceiling approves everything, so
 		// only the tool's own declaration can refuse — which is exactly what the drop
 		// made impossible.
-		const tool = wrapToolDefinition(
-			definitionWith({ tier: "exec", policy: "deny", reason: "forbidden" }) as never,
-		);
+		const tool = wrapToolDefinition(definitionWith({ tier: "exec", policy: "deny", reason: "forbidden" }) as never);
 		expect(gate(tool).policy).toBe("deny");
 	});
 
@@ -99,9 +94,10 @@ describe("AgentTool to definition carries the approval declaration", () => {
 			definitionWith({ tier: "exec", policy: "deny", reason: "forbidden" }) as never,
 		);
 		const round = createToolDefinitionFromAgentTool(original);
-		expect(resolveToolApproval(wrapToolDefinition(round as never), {}, { mode: "yolo", policies: {}, hasPrompt: true }).policy).toBe(
-			"deny",
-		);
+		expect(
+			resolveToolApproval(wrapToolDefinition(round as never), {}, { mode: "yolo", policies: {}, hasPrompt: true })
+				.policy,
+		).toBe("deny");
 	});
 
 	it("preserves formatApprovalDetails", () => {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { SettingsPanel, type SettingsHost } from "../src/overlays/settings-panel.ts";
+import { type SettingsHost, SettingsPanel } from "../src/overlays/settings-panel.ts";
 import { OMP_PARITY_ROWS } from "../src/overlays/settings-parity-rows.ts";
 
 /**
@@ -87,8 +87,14 @@ describe("the frame matches OMP's overlay box", () => {
 		assert.ok(lines[0]?.startsWith("╭"), "opens with a rounded top border");
 		assert.ok(lines[0]?.includes("Settings"), "the title is inset into the rule");
 		assert.ok(lines.at(-1)?.startsWith("╰"), "closes with a rounded bottom border");
-		assert.ok(lines.some((line) => line.startsWith("├")), "has a section divider");
-		assert.ok(lines.some((line) => line.startsWith("│")), "content sits inside vertical borders");
+		assert.ok(
+			lines.some((line) => line.startsWith("├")),
+			"has a section divider",
+		);
+		assert.ok(
+			lines.some((line) => line.startsWith("│")),
+			"content sits inside vertical borders",
+		);
 	});
 
 	it("names the leading tab General on the bar", () => {

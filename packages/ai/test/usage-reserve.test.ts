@@ -21,8 +21,7 @@ import {
 
 const MARGIN = 0.2;
 
-const usage = (remaining: number | null) =>
-	classifyUsage({ remaining, reserveFraction: MARGIN });
+const usage = (remaining: number | null) => classifyUsage({ remaining, reserveFraction: MARGIN });
 
 describe("an unreported reading is unknown, not depleted", () => {
 	it("passes on a null reading", () => {

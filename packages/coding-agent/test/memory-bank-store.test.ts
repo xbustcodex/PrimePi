@@ -1,9 +1,13 @@
-import { mkdtemp } from "node:fs/promises";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { computeBankScope, limitBankName, projectBankSegment, sanitizeBankName } from "../src/core/memory/bank-scope.ts";
+import {
+	computeBankScope,
+	limitBankName,
+	projectBankSegment,
+	sanitizeBankName,
+} from "../src/core/memory/bank-scope.ts";
 import { BankStoreBackend, extendRecallWithLegacyBanks } from "../src/core/memory/bank-store.ts";
 
 /**
@@ -218,7 +222,11 @@ describe("the backend keeps one project's facts out of another's recall", () => 
 		const root = await mkdtemp(path.join(tmpdir(), "bank-legacy-dup-"));
 		const cwd = path.join(root, "proj");
 		const store = new BankStoreBackend({ root, cwd });
-		await store.retain({ kind: "decision", text: "A durable fact about the rescue bank rule", provenance: { scope: "project" } });
+		await store.retain({
+			kind: "decision",
+			text: "A durable fact about the rescue bank rule",
+			provenance: { scope: "project" },
+		});
 		await store.stop();
 
 		// A bank file is user-writable and may hold rows written by an older version,
@@ -283,8 +291,17 @@ async function makeBank(root: string, bank: string, cwds: readonly string[]): Pr
 	const directory = path.join(root, "banks", bank);
 	await mkdir(directory, { recursive: true });
 	const db = new DatabaseSync(path.join(directory, "bank.db"));
-	db.exec("CREATE TABLE IF NOT EXISTS working_memory (id TEXT PRIMARY KEY, content TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'convention', metadata_json TEXT NOT NULL DEFAULT '{}', cwd TEXT NOT NULL DEFAULT '', superseded_by TEXT, created_at INTEGER NOT NULL)");
-	const insert = db.prepare("INSERT INTO working_memory (id, content, metadata_json, cwd, created_at) VALUES (?, ?, ?, ?, ?)");
-	cwds.forEach((cwd, index) => insert.run(`row-${bank}-${index}`, "content", "{}", cwd, 1));
+	db.exec(
+		"CREATE TABLE IF NOT EXISTS working_memory (id TEXT PRIMARY KEY, content TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'convention', metadata_json TEXT NOT NULL DEFAULT '{}', cwd TEXT NOT NULL DEFAULT '', superseded_by TEXT, created_at INTEGER NOT NULL)",
+	);
+	const insert = db.prepare(
+		"INSERT INTO working_memory (id, content, metadata_json, cwd, created_at) VALUES (?, ?, ?, ?, ?)",
+	);
+	// `insert.run` returns a result object; an arrow with an expression body returns it
+	// from the forEach callback, which the linter rejects. The block form keeps the
+	// intent — "run the insert, discard the result" — explicit.
+	for (const [index, cwd] of cwds.entries()) {
+		insert.run(`row-${bank}-${index}`, "content", "{}", cwd, 1);
+	}
 	db.close();
 }

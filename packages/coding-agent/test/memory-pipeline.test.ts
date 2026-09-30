@@ -168,7 +168,9 @@ describe("duplicates", () => {
 		// Containment must not swallow a short generic claim into a long specific
 		// one, or a memory that says only "use the registry" would deduplicate
 		// against every registry sentence ever stored.
-		expect(isSameFact("use the registry", "the settings registry validates on write rather than on read")).toBe(false);
+		expect(isSameFact("use the registry", "the settings registry validates on write rather than on read")).toBe(
+			false,
+		);
 		expect(isSameFact("the cooldown is 30 seconds", "the cooldown is 90 seconds")).toBe(false);
 	});
 });

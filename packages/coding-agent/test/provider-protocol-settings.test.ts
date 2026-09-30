@@ -345,24 +345,28 @@ describe("providers.* protocol settings", () => {
 			return { stopReason: last?.stopReason ?? "", errorMessage: last?.errorMessage ?? "" };
 		}
 
-		it("survives a quiet stream when the user raised the idle budget and aborts when they lowered it", { timeout: 30_000 }, async () => {
-			harness = await startHarness();
-			// The idle budget is spent in real time — a raised budget means the harness
-			// waits that long before the stream may complete. Five seconds is enough to
-			// prove the point (longer than the default, shorter than the suite) and keeps
-			// the test from being a 30-second sleep that times out at the 5s default.
-			const raised = await runTurn(5, "raised");
-			expect(raised.stopReason).toBe("stop");
+		it(
+			"survives a quiet stream when the user raised the idle budget and aborts when they lowered it",
+			{ timeout: 30_000 },
+			async () => {
+				harness = await startHarness();
+				// The idle budget is spent in real time — a raised budget means the harness
+				// waits that long before the stream may complete. Five seconds is enough to
+				// prove the point (longer than the default, shorter than the suite) and keeps
+				// the test from being a 30-second sleep that times out at the 5s default.
+				const raised = await runTurn(5, "raised");
+				expect(raised.stopReason).toBe("stop");
 
-			const lowered = await runTurn(0.05, "lowered");
-			// The stall ends the turn as a failure, which is the behaviour the setting
-			// exists to produce. The text the user sees is the SDK's generic connection
-			// message, because the OpenAI SDK wraps any body-read error; the watchdog's
-			// own test asserts the message it raises.
-			expect(lowered.stopReason).toBe("error");
-			expect(lowered.errorMessage).not.toContain(SECRET_API_KEY);
-			expect(lowered.errorMessage).not.toContain("Bearer");
-		});
+				const lowered = await runTurn(0.05, "lowered");
+				// The stall ends the turn as a failure, which is the behaviour the setting
+				// exists to produce. The text the user sees is the SDK's generic connection
+				// message, because the OpenAI SDK wraps any body-read error; the watchdog's
+				// own test asserts the message it raises.
+				expect(lowered.stopReason).toBe("error");
+				expect(lowered.errorMessage).not.toContain(SECRET_API_KEY);
+				expect(lowered.errorMessage).not.toContain("Bearer");
+			},
+		);
 	});
 
 	it("serves a completing body by default, so a case about the request does not hang", async () => {

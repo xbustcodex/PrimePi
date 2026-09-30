@@ -35,14 +35,26 @@ function viewEntry(id: string, phases: TodoPhase[]): TodoSnapshotEntry {
 
 /** A failed call: committed nothing. */
 function errorEntry(id: string, phases: TodoPhase[]): TodoSnapshotEntry {
-	return { id, type: "message", message: { role: "toolResult", toolName: "todo", isError: true, details: { op: "start", phases } } };
+	return {
+		id,
+		type: "message",
+		message: { role: "toolResult", toolName: "todo", isError: true, details: { op: "start", phases } },
+	};
 }
 
-const plan = [phase("Build", [{ content: "write the module", status: "completed" }, { content: "write the test", status: "in_progress" }])];
+const plan = [
+	phase("Build", [
+		{ content: "write the module", status: "completed" },
+		{ content: "write the test", status: "in_progress" },
+	]),
+];
 
 describe("a committed snapshot is the one the session believes", () => {
 	it("reads the latest committed entry on the branch", () => {
-		const entries = [resultEntry("e1", [phase("A", [{ content: "old", status: "pending" }])]), resultEntry("e2", plan)];
+		const entries = [
+			resultEntry("e1", [phase("A", [{ content: "old", status: "pending" }])]),
+			resultEntry("e2", plan),
+		];
 		const snapshot = getLatestTodoSnapshotIdentity(entries);
 		expect(snapshot?.sourceEntryId).toBe("e2");
 		expect(latestTodoPhases(entries)).toEqual(plan);
@@ -51,12 +63,18 @@ describe("a committed snapshot is the one the session believes", () => {
 	it("skips a view read rather than freezing the plan at what it observed", () => {
 		// A view does not change the plan. Treating it as a snapshot would make a
 		// read the authority on state.
-		const entries = [resultEntry("e1", plan), viewEntry("e2", [phase("A", [{ content: "stale", status: "pending" }])])];
+		const entries = [
+			resultEntry("e1", plan),
+			viewEntry("e2", [phase("A", [{ content: "stale", status: "pending" }])]),
+		];
 		expect(getLatestTodoSnapshotIdentity(entries)?.sourceEntryId).toBe("e1");
 	});
 
 	it("skips a failed call, which committed nothing", () => {
-		const entries = [resultEntry("e1", plan), errorEntry("e2", [phase("A", [{ content: "never", status: "pending" }])])];
+		const entries = [
+			resultEntry("e1", plan),
+			errorEntry("e2", [phase("A", [{ content: "never", status: "pending" }])]),
+		];
 		expect(getLatestTodoSnapshotIdentity(entries)?.sourceEntryId).toBe("e1");
 	});
 
@@ -73,7 +91,12 @@ describe("a committed snapshot is the one the session believes", () => {
 		// user is the one who knows what the plan is.
 		const entries = [
 			resultEntry("e1", plan),
-			{ id: "e2", type: "custom", customType: "user_todo_edit", data: { phases: [phase("A", [{ content: "user plan", status: "pending" }])] } } satisfies TodoSnapshotEntry,
+			{
+				id: "e2",
+				type: "custom",
+				customType: "user_todo_edit",
+				data: { phases: [phase("A", [{ content: "user plan", status: "pending" }])] },
+			} satisfies TodoSnapshotEntry,
 		];
 		const snapshot = getLatestTodoSnapshotIdentity(entries);
 		expect(snapshot?.source).toBe("user-edit");
@@ -83,7 +106,10 @@ describe("a committed snapshot is the one the session believes", () => {
 	it("survives a rewind, because the snapshot follows the branch", () => {
 		// The rewind truncates the branch; what remains is the last committed state
 		// before the removed entries, which is the point.
-		const full = [resultEntry("e1", plan), resultEntry("e2", [phase("A", [{ content: "later", status: "pending" }])])];
+		const full = [
+			resultEntry("e1", plan),
+			resultEntry("e2", [phase("A", [{ content: "later", status: "pending" }])]),
+		];
 		const rewound = full.slice(0, 1);
 		expect(latestTodoPhases(rewound)).toEqual(plan);
 		expect(getLatestTodoSnapshotIdentity(full)?.sourceEntryId).toBe("e2");
@@ -168,13 +194,21 @@ describe("the actionable task", () => {
 	it("falls back to the first pending task", () => {
 		const phases = [
 			phase("A", [{ content: "done", status: "completed" }]),
-			phase("B", [{ content: "first pending", status: "pending" }, { content: "second pending", status: "pending" }]),
+			phase("B", [
+				{ content: "first pending", status: "pending" },
+				{ content: "second pending", status: "pending" },
+			]),
 		];
 		expect(nextActionableTask(phases)?.content).toBe("first pending");
 	});
 
 	it("finds nothing when everything is finished or abandoned", () => {
-		const phases = [phase("A", [{ content: "done", status: "completed" }, { content: "dropped", status: "abandoned" }])];
+		const phases = [
+			phase("A", [
+				{ content: "done", status: "completed" },
+				{ content: "dropped", status: "abandoned" },
+			]),
+		];
 		expect(nextActionableTask(phases)).toBeUndefined();
 		expect(nextActionableTask([])).toBeUndefined();
 	});

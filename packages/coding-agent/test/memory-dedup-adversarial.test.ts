@@ -37,11 +37,19 @@ describe("claims that differ only in a number", () => {
 	});
 
 	it("keeps a corrected port", () => {
-		distinct("The engine listens on port 7777 for local access", "The engine listens on port 8888 for local access", "port changed");
+		distinct(
+			"The engine listens on port 7777 for local access",
+			"The engine listens on port 8888 for local access",
+			"port changed",
+		);
 	});
 
 	it("keeps a corrected timeout", () => {
-		distinct("The request timeout is 15000 milliseconds", "The request timeout is 30000 milliseconds", "timeout changed");
+		distinct(
+			"The request timeout is 15000 milliseconds",
+			"The request timeout is 30000 milliseconds",
+			"timeout changed",
+		);
 	});
 
 	it("still merges a reworded claim with identical numbers", () => {
@@ -56,11 +64,19 @@ describe("claims that differ only in a number", () => {
 
 describe("claims that differ only in a version or path", () => {
 	it("keeps a corrected dependency version", () => {
-		distinct("The build requires numpy 1.26.0 or newer", "The build requires numpy 2.2.6 or newer", "version changed");
+		distinct(
+			"The build requires numpy 1.26.0 or newer",
+			"The build requires numpy 2.2.6 or newer",
+			"version changed",
+		);
 	});
 
 	it("keeps a corrected path separator", () => {
-		distinct("Windows path separators are backslashes throughout", "Windows path separators are forward slashes throughout", "path semantics reversed");
+		distinct(
+			"Windows path separators are backslashes throughout",
+			"Windows path separators are forward slashes throughout",
+			"path semantics reversed",
+		);
 	});
 
 	it("keeps a corrected file location", () => {
@@ -74,7 +90,11 @@ describe("claims that differ only in a version or path", () => {
 
 describe("claims that differ only in a boolean or an enablement", () => {
 	it("keeps a corrected enabled state", () => {
-		distinct("Auto recall is enabled for the first turn of each session", "Auto recall is disabled for the first turn of each session", "enabled flipped");
+		distinct(
+			"Auto recall is enabled for the first turn of each session",
+			"Auto recall is disabled for the first turn of each session",
+			"enabled flipped",
+		);
 	});
 
 	it("keeps a corrected encryption claim", () => {
@@ -88,15 +108,27 @@ describe("claims that differ only in a boolean or an enablement", () => {
 
 describe("claims that differ only in a name", () => {
 	it("keeps a corrected method name", () => {
-		distinct("The stdio server entry point is iai_mcp.core:main", "The stdio server entry point is iai_mcp.cli:main", "entry point corrected");
+		distinct(
+			"The stdio server entry point is iai_mcp.core:main",
+			"The stdio server entry point is iai_mcp.cli:main",
+			"entry point corrected",
+		);
 	});
 
 	it("keeps a corrected provider name", () => {
-		distinct("Failover prefers the OpenRouter route for free models", "Failover prefers the OpenCode route for free models", "provider changed");
+		distinct(
+			"Failover prefers the OpenRouter route for free models",
+			"Failover prefers the OpenCode route for free models",
+			"provider changed",
+		);
 	});
 
 	it("keeps a corrected setting key", () => {
-		distinct("The setting that selects the memory backend is memory.backend", "The setting that selects the memory backend is memory.store", "key renamed");
+		distinct(
+			"The setting that selects the memory backend is memory.backend",
+			"The setting that selects the memory backend is memory.store",
+			"key renamed",
+		);
 	});
 });
 
@@ -118,17 +150,30 @@ describe("claims that are negations of each other", () => {
 	});
 
 	it("keeps a supports versus does-not-support pair", () => {
-		distinct("Mnemopi supports tag filtered recall", "Mnemopi does not support tag filtered recall", "capability reversed");
+		distinct(
+			"Mnemopi supports tag filtered recall",
+			"Mnemopi does not support tag filtered recall",
+			"capability reversed",
+		);
 	});
 
 	it("keeps an is versus is-not pair", () => {
-		distinct("Recall preserves the engine assigned score", "Recall does not preserve the engine assigned score", "reversed");
+		distinct(
+			"Recall preserves the engine assigned score",
+			"Recall does not preserve the engine assigned score",
+			"reversed",
+		);
 	});
 });
 
 describe("genuinely identical claims still merge", () => {
 	it("merges a reworded identical claim", () => {
-		expect(isSameFact("The bank identity derives from the absolute path", "The bank identity is derived from the absolute path")).toBe(true);
+		expect(
+			isSameFact(
+				"The bank identity derives from the absolute path",
+				"The bank identity is derived from the absolute path",
+			),
+		).toBe(true);
 	});
 
 	it("merges a claim that differs only in punctuation and case", () => {

@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	acquireServer,
-	isRedactedKey,
-	isSharedKeyInUse,
-	muxServerKey,
-} from "../src/core/lsp/mux-identity.ts";
+import { acquireServer, isRedactedKey, isSharedKeyInUse, muxServerKey } from "../src/core/lsp/mux-identity.ts";
 
 /**
  * Language-server identity for a shared mux.

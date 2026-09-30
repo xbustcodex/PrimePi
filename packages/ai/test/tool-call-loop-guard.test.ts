@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { AssistantMessage, JsonObject, ToolCall, ToolResultMessage } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "vitest";
 import { ToolCallLoopGuard } from "../src/utils/tool-call-loop-guard.ts";
 
 /**
@@ -11,7 +11,10 @@ import { ToolCallLoopGuard } from "../src/utils/tool-call-loop-guard.ts";
  */
 
 let counter = 0;
-function turn(calls: { name: string; args?: JsonObject }[], results: string[] = []): {
+function turn(
+	calls: { name: string; args?: JsonObject }[],
+	results: string[] = [],
+): {
 	message: AssistantMessage;
 	toolResults: ToolResultMessage[];
 } {
@@ -29,7 +32,14 @@ function turn(calls: { name: string; args?: JsonObject }[], results: string[] = 
 		api: "anthropic-messages",
 		provider: "anthropic",
 		model: "m",
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
 		timestamp: counter,
 	} as unknown as AssistantMessage;
 	const toolResults: ToolResultMessage[] = toolCalls.map((call, index) => ({
@@ -131,8 +141,22 @@ describe("what does not count as a loop", () => {
 
 	it("ignores call order within a turn", () => {
 		const g = guard(2);
-		expect(g.recordTurn(turn([{ name: "read", args: { p: 1 } }, { name: "grep", args: { q: 2 } }]))).toBeNull();
-		expect(g.recordTurn(turn([{ name: "grep", args: { q: 2 } }, { name: "read", args: { p: 1 } }]))).not.toBeNull();
+		expect(
+			g.recordTurn(
+				turn([
+					{ name: "read", args: { p: 1 } },
+					{ name: "grep", args: { q: 2 } },
+				]),
+			),
+		).toBeNull();
+		expect(
+			g.recordTurn(
+				turn([
+					{ name: "grep", args: { q: 2 } },
+					{ name: "read", args: { p: 1 } },
+				]),
+			),
+		).not.toBeNull();
 	});
 });
 
@@ -164,7 +188,11 @@ describe("exempt tools", () => {
 
 	it("counts a turn that mixes an exempt call with a real one", () => {
 		const g = guard(2, ["wait"]);
-		const t = () => turn([{ name: "wait", args: { ms: 1 } }, { name: "bash", args: { command: "x" } }]);
+		const t = () =>
+			turn([
+				{ name: "wait", args: { ms: 1 } },
+				{ name: "bash", args: { command: "x" } },
+			]);
 		expect(g.recordTurn(t())).toBeNull();
 		expect(g.recordTurn(t())).not.toBeNull();
 	});
@@ -172,7 +200,11 @@ describe("exempt tools", () => {
 	it("reports a non-exempt call when a mixed turn trips", () => {
 		// The correction has to name something actionable.
 		const g = guard(2, ["wait"]);
-		const t = () => turn([{ name: "wait", args: { ms: 1 } }, { name: "bash", args: { command: "x" } }]);
+		const t = () =>
+			turn([
+				{ name: "wait", args: { ms: 1 } },
+				{ name: "bash", args: { command: "x" } },
+			]);
 		g.recordTurn(t());
 		expect(g.recordTurn(t())!.toolName).toBe("bash");
 	});

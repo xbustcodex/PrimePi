@@ -6,9 +6,9 @@ import {
 	isRuleActive,
 	type RuleContext,
 	RuleFireTracker,
+	type StreamRule,
 	shouldInterrupt,
 	shouldJudge,
-	type StreamRule,
 	type TtsrSettings,
 } from "../src/core/rules/ttsr.ts";
 

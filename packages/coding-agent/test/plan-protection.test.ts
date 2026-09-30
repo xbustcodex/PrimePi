@@ -5,8 +5,8 @@ import {
 	LOCAL_PLAN_ALIAS,
 	mayBeginExecution,
 	normalizePlanUrl,
-	planFileName,
 	type ProtectedToolContext,
+	planFileName,
 	readTargetsPlan,
 	resolvePlanFilePath,
 	resolvePlanTitle,
@@ -73,9 +73,12 @@ describe("the protection matcher", () => {
 
 	it("ignores a non-read tool even when the argument is a plan path", () => {
 		const matcher = createPlanReadMatcher(() => "local://PLAN.md");
-		expect(matcher({ toolResult: { toolName: "edit" }, toolCall: { name: "edit", arguments: { path: "local://PLAN.md" } } })).toBe(
-			false,
-		);
+		expect(
+			matcher({
+				toolResult: { toolName: "edit" },
+				toolCall: { name: "edit", arguments: { path: "local://PLAN.md" } },
+			}),
+		).toBe(false);
 	});
 
 	it("reads the reference path at match time, so a mid-session approval counts", () => {
@@ -123,7 +126,9 @@ describe("naming a saved plan", () => {
 
 describe("where a title comes from", () => {
 	it("prefers a supplied title", () => {
-		expect(resolvePlanTitle({ suppliedTitle: "Given", planContent: "# Other", planFilePath: "/p/x-plan.md" })).toEqual({
+		expect(
+			resolvePlanTitle({ suppliedTitle: "Given", planContent: "# Other", planFilePath: "/p/x-plan.md" }),
+		).toEqual({
 			title: "Given",
 			source: "supplied",
 		});
@@ -151,11 +156,15 @@ describe("where a title comes from", () => {
 describe("when execution may begin", () => {
 	it("does not gate a session that never enabled plan mode", () => {
 		// Otherwise the feature being off would leave every session stuck.
-		expect(mayBeginExecution({ planModeEnabled: false, planModeActive: true, planApproved: false }).allowed).toBe(true);
+		expect(mayBeginExecution({ planModeEnabled: false, planModeActive: true, planApproved: false }).allowed).toBe(
+			true,
+		);
 	});
 
 	it("does not gate a session not currently in plan mode", () => {
-		expect(mayBeginExecution({ planModeEnabled: true, planModeActive: false, planApproved: false }).allowed).toBe(true);
+		expect(mayBeginExecution({ planModeEnabled: true, planModeActive: false, planApproved: false }).allowed).toBe(
+			true,
+		);
 	});
 
 	it("gates an active plan awaiting approval", () => {

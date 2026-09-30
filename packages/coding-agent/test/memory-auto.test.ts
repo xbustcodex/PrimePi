@@ -4,14 +4,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	AutoMemoryLifecycle,
-	composeRecallQuery,
 	type ConversationMessage,
+	composeRecallQuery,
 	recallForTurn,
 	sliceLastTurnsByUserBoundary,
 	stripMemoryBlocks,
 	truncateRecallQuery,
 } from "../src/core/memory/auto-memory.ts";
-import { BankStoreBackend } from "../src/core/memory/bank-store.ts";
+import type { BankStoreBackend } from "../src/core/memory/bank-store.ts";
 import { configurePrimePiBackends, registerPrimePiBackend } from "../src/core/memory/registry.ts";
 import { SessionMemory } from "../src/core/memory/session.ts";
 
@@ -38,7 +38,10 @@ async function lifecycle(
 	// Configured through the registry, exactly as a session would, so the test
 	// exercises the real construction path rather than reaching past it.
 	configurePrimePiBackends({ bankStore: { root, cwd: path.join(root, "proj") } });
-	const memory = await SessionMemory.create({ backendId: "bank-store", bankStore: { root, cwd: path.join(root, "proj") } });
+	const memory = await SessionMemory.create({
+		backendId: "bank-store",
+		bankStore: { root, cwd: path.join(root, "proj") },
+	});
 	const backend = memory as unknown as { status: unknown };
 	return { lifecycle: new AutoMemoryLifecycle(memory, options), memory, backend: backend as never };
 }
@@ -201,7 +204,13 @@ describe("retention advances a cursor, not a flag", () => {
 		const { lifecycle: auto, memory, backend } = await lifecycle({ retainEveryNTurns: 3 });
 		const one = [message("user", "first durable statement about the registry design")];
 		expect((await auto.maybeRetain(one)).skipped).toBe(true);
-		const three = [...one, message("assistant", "ok"), message("user", "second"), message("assistant", "ok"), message("user", "third")];
+		const three = [
+			...one,
+			message("assistant", "ok"),
+			message("user", "second"),
+			message("assistant", "ok"),
+			message("user", "third"),
+		];
 		expect((await auto.maybeRetain(three)).skipped).toBe(false);
 		await memory.stop();
 		await backend.stop();

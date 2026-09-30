@@ -96,7 +96,12 @@ export function chooseSessionToResume(inputs: ResumeInputs): ResumeDecision {
 	if (inputs.explicitId) {
 		const found = sessions.find((session) => session.id === inputs.explicitId);
 		return found
-			? { source: "explicit-id", metadata: found, restoreSessionModel: true, reason: `session ${found.id} requested` }
+			? {
+					source: "explicit-id",
+					metadata: found,
+					restoreSessionModel: true,
+					reason: `session ${found.id} requested`,
+				}
 			: { source: "none", restoreSessionModel: false, reason: `session ${inputs.explicitId} not found` };
 	}
 	if (inputs.explicitDir) {

@@ -4,9 +4,9 @@ import {
 	defaultPlaceholderKey,
 	MIN_OBFUSCATE_SECRET_LEN,
 	SecretObfuscator,
+	sanitizedLabelCollidesWithSecret,
 	sanitizeForCollisionCheck,
 	sanitizeSecretFriendlyName,
-	sanitizedLabelCollidesWithSecret,
 } from "../src/core/secrets/placeholder.ts";
 
 /**
@@ -133,7 +133,9 @@ describe("a label must not leak the secret", () => {
 	});
 
 	it("drops a label that contains the whole secret", () => {
-		expect(sanitizedLabelCollidesWithSecret("XY7ZQ2K9MNB4VC8LP1RT6WJ3HD5FG0", sanitizeForCollisionCheck(SECRET))).toBe(true);
+		expect(
+			sanitizedLabelCollidesWithSecret("XY7ZQ2K9MNB4VC8LP1RT6WJ3HD5FG0", sanitizeForCollisionCheck(SECRET)),
+		).toBe(true);
 	});
 
 	it("keeps a short generic label, which is not a leak", () => {

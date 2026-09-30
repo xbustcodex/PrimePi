@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "vitest";
 import { extractInlineSloppyRegions, recoverInlineSloppyEdit } from "../src/harness/session/inline-edit-recovery.ts";
 
 /**
@@ -20,7 +20,14 @@ function message(text: string, extra: Partial<AssistantMessage> = {}): Assistant
 		api: "anthropic-messages",
 		provider: "anthropic",
 		model: "m",
-		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
 		timestamp: 1,
 		...extra,
 	} as unknown as AssistantMessage;
@@ -84,13 +91,22 @@ describe("recovery fires only where it is safe", () => {
 		// That turn handled its own edits, so a payload quoted in it is commentary
 		// about an edit, not the edit itself.
 		const m = message(`As shown in my earlier edit:\n${HEADER}\nconst a = 1;\n`);
-		m.content.push({ type: "toolCall", id: "t1", name: "read", arguments: {} } as AssistantMessage["content"][number]);
+		m.content.push({
+			type: "toolCall",
+			id: "t1",
+			name: "read",
+			arguments: {},
+		} as AssistantMessage["content"][number]);
 		expect(recoverInlineSloppyEdit(m)).toBe(0);
 		expect(m.content.filter((block) => block.type === "toolCall")).toHaveLength(1);
 	});
 
 	it("does not fire on a turn that ended for another reason", () => {
-		expect(recoverInlineSloppyEdit(message(`${HEADER}\nconst a = 1;`, { stopReason: "aborted" } as Partial<AssistantMessage>))).toBe(0);
+		expect(
+			recoverInlineSloppyEdit(
+				message(`${HEADER}\nconst a = 1;`, { stopReason: "aborted" } as Partial<AssistantMessage>),
+			),
+		).toBe(0);
 	});
 
 	it("leaves an ordinary answer untouched", () => {

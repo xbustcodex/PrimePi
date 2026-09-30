@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-	EvalToolError,
 	type EvalToolDescriptor,
+	EvalToolError,
 	INTENT_FIELD,
 	mergeEvalTools,
 	renderEvalResult,
@@ -40,7 +40,9 @@ describe("a name may come from one kernel only", () => {
 	});
 
 	it("names the collision and both kernels", () => {
-		expect(() => mergeEvalTools([[py("search")], [js("search")]])).toThrow(/defined in both the Python and JS kernels/);
+		expect(() => mergeEvalTools([[py("search")], [js("search")]])).toThrow(
+			/defined in both the Python and JS kernels/,
+		);
 	});
 
 	it("accepts distinct names from both kernels", () => {
@@ -133,7 +135,9 @@ describe("an intent field the schema does not declare is stripped", () => {
 
 	it("keeps it when the schema declares it", () => {
 		// There the author meant a parameter by that name.
-		expect(stripHarnessIntent({ query: "x", [INTENT_FIELD]: "why" }, declared)).toMatchObject({ [INTENT_FIELD]: "why" });
+		expect(stripHarnessIntent({ query: "x", [INTENT_FIELD]: "why" }, declared)).toMatchObject({
+			[INTENT_FIELD]: "why",
+		});
 	});
 
 	it("leaves params without it untouched", () => {

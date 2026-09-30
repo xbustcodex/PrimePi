@@ -39,18 +39,18 @@ describe("exit status decides, stdout does not", () => {
 	it("halts on exit 1, whatever the output says", async () => {
 		// `echo false` exits 0, so "boolean-ish output" and the exit code actively
 		// disagree. Reading stdout would mean inventing a rule about which wins.
-		const verdict = await evaluateLoopCondition(
-			"echo false",
-			{ ...base, ...runner({ exitCode: 1, stdout: "false" }) },
-		);
+		const verdict = await evaluateLoopCondition("echo false", {
+			...base,
+			...runner({ exitCode: 1, stdout: "false" }),
+		});
 		expect(verdict.kind).toBe("halt");
 	});
 
 	it("continues even when stdout says false and the exit code is 0", async () => {
-		const verdict = await evaluateLoopCondition(
-			"echo false",
-			{ ...base, ...runner({ exitCode: 0, stdout: "false" }) },
-		);
+		const verdict = await evaluateLoopCondition("echo false", {
+			...base,
+			...runner({ exitCode: 0, stdout: "false" }),
+		});
 		// Every predicate a user already reaches for speaks exit codes: test,
 		// grep -q, git diff --quiet. Reading them keeps a condition a condition.
 		expect(verdict.kind).toBe("continue");

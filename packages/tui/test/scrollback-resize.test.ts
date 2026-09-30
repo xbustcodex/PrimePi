@@ -5,8 +5,8 @@ import {
 	isDestructive,
 	isSettledResize,
 	planScrollbackResize,
-	SETTLE_MS,
 	type ScrollbackResizeMode,
+	SETTLE_MS,
 } from "../src/scrollback/resize.ts";
 
 /**

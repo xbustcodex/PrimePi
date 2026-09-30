@@ -1,9 +1,5 @@
+import { type Api, AvailabilityCooldowns, type Model } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
-import {
-	AvailabilityCooldowns,
-	type Api,
-	type Model,
-} from "@earendil-works/pi-ai";
 import {
 	type ChainState,
 	describeFallback,
@@ -229,7 +225,12 @@ describe("reverting to the primary", () => {
 
 	it("reverts once the cooldown has expired", () => {
 		expect(
-			shouldRevertToPrimary({ state, revertPolicy: "cooldown-expiry", primaryCooldownUntil: 500_000, now: 1_000_000 }),
+			shouldRevertToPrimary({
+				state,
+				revertPolicy: "cooldown-expiry",
+				primaryCooldownUntil: 500_000,
+				now: 1_000_000,
+			}),
 		).toBe(true);
 	});
 
@@ -237,7 +238,12 @@ describe("reverting to the primary", () => {
 		// Reverting into a live cooldown fails immediately and burns another
 		// fallback, which is the loop this check exists to stop.
 		expect(
-			shouldRevertToPrimary({ state, revertPolicy: "cooldown-expiry", primaryCooldownUntil: 2_000_000, now: 1_000_000 }),
+			shouldRevertToPrimary({
+				state,
+				revertPolicy: "cooldown-expiry",
+				primaryCooldownUntil: 2_000_000,
+				now: 1_000_000,
+			}),
 		).toBe(false);
 	});
 

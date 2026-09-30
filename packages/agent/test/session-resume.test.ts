@@ -146,8 +146,11 @@ describe("resuming restores the session's own model", () => {
 			expect(chooseSessionToResume({ ...nothing, sessions }).restoreSessionModel).toBe(true);
 		}
 		expect(
-			chooseSessionToResume({ ...nothing, sessions: [session("a")], terminalSessionPath: "/sessions/--project--/a.jsonl" })
-				.restoreSessionModel,
+			chooseSessionToResume({
+				...nothing,
+				sessions: [session("a")],
+				terminalSessionPath: "/sessions/--project--/a.jsonl",
+			}).restoreSessionModel,
 		).toBe(true);
 	});
 

@@ -165,14 +165,15 @@ describe("apply_patch refuses rather than guessing", () => {
 describe("apply_patch treats the target as hostile input", () => {
 	it("refuses a traversal target and creates nothing outside the workspace", async () => {
 		const root = workspace({ "a.ts": "one\n" });
-		// The escape target, if written, would be a sibling of the workspace.
-		const escape = join(root, "..", "escaped.txt");
+		// The escape target, if written, would be a sibling of the workspace. Named
+		// for the *path* rather than for the action: `escape` shadows `globalThis.escape`.
+		const escapedPath = join(root, "..", "escaped.txt");
 		const patch = ["--- a/../escaped.txt", "+++ b/../escaped.txt", "@@ -0,0 +1,1 @@", "+escaped"].join("\n");
 		const result = await run(root, patch);
 		expect(result.details?.applied).toBe(false);
 		expect(result.text).toMatch(/outside the workspace/);
 		// The decisive assertion: nothing appeared outside the root.
-		expect(() => readFileSync(escape, "utf8")).toThrow();
+		expect(() => readFileSync(escapedPath, "utf8")).toThrow();
 	});
 
 	it("refuses an absolute target rather than writing outside the root", async () => {

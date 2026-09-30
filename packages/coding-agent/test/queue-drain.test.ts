@@ -1,11 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	describeQueueState,
-	drainSize,
-	QueueClaim,
-	takeBatch,
-	type QueuedMessage,
-} from "../src/core/queue-drain.ts";
+import { describeQueueState, drainSize, QueueClaim, type QueuedMessage, takeBatch } from "../src/core/queue-drain.ts";
 
 /**
  * Queue drain policy.
@@ -16,7 +10,11 @@ import {
  */
 
 const messages = (count: number): QueuedMessage[] =>
-	Array.from({ length: count }, (_, index) => ({ id: `m${index}`, role: "user" as const, content: `message ${index}` }));
+	Array.from({ length: count }, (_, index) => ({
+		id: `m${index}`,
+		role: "user" as const,
+		content: `message ${index}`,
+	}));
 
 describe("how much a drain takes", () => {
 	it("takes one at a time under the default", () => {

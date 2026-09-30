@@ -139,7 +139,9 @@ describe("lookup and invalidation", () => {
 		index.relocate(FILE, "/repo/src/renamed.ts");
 		expect(index.headText(FILE)).toBeNull();
 		expect(index.headText("/repo/src/renamed.ts")).toBe(TEXT);
-		expect(index.check({ absolutePath: "/repo/src/renamed.ts", tag, editLines: [3], enforce: true }).allowed).toBe(true);
+		expect(index.check({ absolutePath: "/repo/src/renamed.ts", tag, editLines: [3], enforce: true }).allowed).toBe(
+			true,
+		);
 	});
 
 	it("forgets a path on invalidate", () => {

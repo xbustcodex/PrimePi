@@ -34,18 +34,28 @@ const decide = (input: {
 	policies?: Record<string, "allow" | "deny" | "prompt">;
 	tool?: typeof BASH;
 }) =>
-	resolveToolApproval(input.tool ?? BASH, { command: input.command }, {
-		mode: input.mode ?? "write",
-		policies: input.policies ?? {},
-		hasPrompt: true,
-		...(input.commandRules ? { command: input.commandRules, commandText: input.command } : {}),
-	});
+	resolveToolApproval(
+		input.tool ?? BASH,
+		{ command: input.command },
+		{
+			mode: input.mode ?? "write",
+			policies: input.policies ?? {},
+			hasPrompt: true,
+			...(input.commandRules ? { command: input.commandRules, commandText: input.command } : {}),
+		},
+	);
 
 describe("a pattern cannot widen past the mode", () => {
 	it("always-ask still asks for a command an allow pattern covers", () => {
 		// The single most important property: a permissive rule must not become a
 		// licence to skip the question the user explicitly asked for.
-		expect(decide({ command: "git status", commandRules: rules([{ match: "git *", approval: "allow" }]), mode: "always-ask" }).policy).toBe("prompt");
+		expect(
+			decide({
+				command: "git status",
+				commandRules: rules([{ match: "git *", approval: "allow" }]),
+				mode: "always-ask",
+			}).policy,
+		).toBe("prompt");
 	});
 
 	it("a mode below the ceiling auto-approves as before", () => {
@@ -64,12 +74,19 @@ describe("a pattern cannot widen past the mode", () => {
 describe("a pattern cannot un-deny", () => {
 	it("a user denial outranks an allow pattern", () => {
 		expect(
-			decide({ command: "rm -rf /tmp/x", commandRules: rules([{ match: "rm *", approval: "allow" }]), policies: { bash: "deny" } }).policy,
+			decide({
+				command: "rm -rf /tmp/x",
+				commandRules: rules([{ match: "rm *", approval: "allow" }]),
+				policies: { bash: "deny" },
+			}).policy,
 		).toBe("deny");
 	});
 
 	it("a pattern deny is final whatever the mode", () => {
-		expect(decide({ command: "rm -rf /", commandRules: rules([{ match: "rm *", approval: "deny" }]), mode: "yolo" }).policy).toBe("deny");
+		expect(
+			decide({ command: "rm -rf /", commandRules: rules([{ match: "rm *", approval: "deny" }]), mode: "yolo" })
+				.policy,
+		).toBe("deny");
 	});
 });
 
@@ -77,7 +94,10 @@ describe("a prompt pattern forces the question below the ceiling", () => {
 	it("asks even for a command the mode would otherwise allow outright", () => {
 		// An operator can ask to be consulted for a command they usually do not want
 		// to see unprompted.
-		expect(decide({ command: "git status", commandRules: rules([{ match: "git *", approval: "prompt" }]), mode: "yolo" }).policy).toBe("prompt");
+		expect(
+			decide({ command: "git status", commandRules: rules([{ match: "git *", approval: "prompt" }]), mode: "yolo" })
+				.policy,
+		).toBe("prompt");
 	});
 });
 
@@ -89,7 +109,13 @@ describe("a compound command is judged per segment", () => {
 		// delete. This is the confused-deputy bug segmentation exists to prevent.
 		const decision = decide({
 			command: "git status && rm -rf /tmp/build",
-			commandRules: rules([{ match: "git status", approval: "allow" }, { match: "rm *", approval: "deny" }], true),
+			commandRules: rules(
+				[
+					{ match: "git status", approval: "allow" },
+					{ match: "rm *", approval: "deny" },
+				],
+				true,
+			),
 		});
 		expect(decision.policy).toBe("deny");
 	});
@@ -101,7 +127,13 @@ describe("a compound command is judged per segment", () => {
 	it("allows only when every segment matches an allow", () => {
 		// Under `yolo`, which is the only mode whose ceiling covers `exec`, so the
 		// per-segment allow is actually what decides it.
-		const both = rules([{ match: "git status", approval: "allow" }, { match: "npm test", approval: "allow" }], true);
+		const both = rules(
+			[
+				{ match: "git status", approval: "allow" },
+				{ match: "npm test", approval: "allow" },
+			],
+			true,
+		);
 		expect(decide({ command: "git status && npm test", commandRules: both, mode: "yolo" }).policy).toBe("allow");
 	});
 });
@@ -110,26 +142,45 @@ describe("a catch-all allow cannot vouch for an unsegmentable chain", () => {
 	it("asks rather than allowing", () => {
 		// The whole reason segmentation was refused is that we cannot say what the
 		// chain contains.
-		const decision = decide({ command: "git status && rm -rf /", commandRules: rules([{ match: "*", approval: "allow" }]), mode: "yolo" });
+		const decision = decide({
+			command: "git status && rm -rf /",
+			commandRules: rules([{ match: "*", approval: "allow" }]),
+			mode: "yolo",
+		});
 		expect(decision.policy).toBe("prompt");
 	});
 
 	it("allows the same catch-all for a single command", () => {
 		// Otherwise the catch-all would be useless, which is why this is narrow.
-		expect(decide({ command: "git status", commandRules: rules([{ match: "*", approval: "allow" }]), mode: "yolo" }).policy).toBe("allow");
+		expect(
+			decide({ command: "git status", commandRules: rules([{ match: "*", approval: "allow" }]), mode: "yolo" })
+				.policy,
+		).toBe("allow");
 	});
 });
 
 describe("pattern syntax", () => {
 	it("treats a pattern as an anchored glob, not a regular expression", () => {
 		// `rm -rf /tmp/*` must not mean "ends in a character class".
-		expect(decide({ command: "echo rm -rf /tmp/abc", commandRules: rules([{ match: "rm *", approval: "deny" }]), mode: "yolo" }).policy).not.toBe("deny");
+		expect(
+			decide({
+				command: "echo rm -rf /tmp/abc",
+				commandRules: rules([{ match: "rm *", approval: "deny" }]),
+				mode: "yolo",
+			}).policy,
+		).not.toBe("deny");
 	});
 
 	it("normalises whitespace so a readable pattern still fires", () => {
 		// A pattern that never matches invites widening it, which is how a dangerous
 		// allow gets written.
-		expect(decide({ command: "git   status", commandRules: rules([{ match: "git status", approval: "deny" }]), mode: "yolo" }).policy).toBe("deny");
+		expect(
+			decide({
+				command: "git   status",
+				commandRules: rules([{ match: "git status", approval: "deny" }]),
+				mode: "yolo",
+			}).policy,
+		).toBe("deny");
 	});
 
 	it("drops a malformed rule without dropping the rules around it", () => {

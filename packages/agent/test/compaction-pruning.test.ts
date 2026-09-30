@@ -1,6 +1,6 @@
 import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
-import type { MarkedToolResult } from "../src/harness/compaction/pruning.ts";
 import { describe, expect, it } from "vitest";
+import type { MarkedToolResult } from "../src/harness/compaction/pruning.ts";
 import {
 	collectToolCallsById,
 	DEFAULT_PRUNE_CONFIG,

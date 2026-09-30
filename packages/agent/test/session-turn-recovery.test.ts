@@ -1,12 +1,12 @@
-import { describe, expect, it } from "vitest";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { describe, expect, it } from "vitest";
 import {
 	buildRecovery,
 	classifyRecovery,
 	describeRecovery,
 	isEmptyErrorTurn,
-	sessionMessagePersistenceKey,
 	type RecoveryOutcome,
+	sessionMessagePersistenceKey,
 } from "../src/harness/session/turn-recovery.ts";
 
 /**
@@ -18,7 +18,23 @@ import {
  */
 
 function message(content: unknown[], stopReason: AssistantMessage["stopReason"] = "error"): AssistantMessage {
-	return { role: "assistant", content, stopReason, api: "anthropic-messages", provider: "anthropic", model: "m", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, timestamp: 1 } as unknown as AssistantMessage;
+	return {
+		role: "assistant",
+		content,
+		stopReason,
+		api: "anthropic-messages",
+		provider: "anthropic",
+		model: "m",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		timestamp: 1,
+	} as unknown as AssistantMessage;
 }
 
 const outcome = (overrides: Partial<RecoveryOutcome> = {}): RecoveryOutcome => ({
@@ -56,9 +72,9 @@ describe("an empty error turn is one that produced nothing", () => {
 	it("treats a redacted thinking block with a signature as content", () => {
 		// The opaque payload is what the provider needs for multi-turn continuity.
 		// Eliding the turn would break the next request.
-		expect(isEmptyErrorTurn(message([{ type: "thinking", thinking: "", redacted: true, thinkingSignature: "opaque" }]))).toBe(
-			false,
-		);
+		expect(
+			isEmptyErrorTurn(message([{ type: "thinking", thinking: "", redacted: true, thinkingSignature: "opaque" }])),
+		).toBe(false);
 	});
 
 	it("treats a redacted thinking block with nothing at all as empty", () => {

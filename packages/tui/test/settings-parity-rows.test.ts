@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { SETTING_TABS, TAB_GROUPS } from "../src/overlays/settings-defs.ts";
 import {
-	OMP_PARITY_ROWS,
 	OMP_PARITY_ROW_COUNT,
+	OMP_PARITY_ROWS,
 	OMP_PARITY_TAB_COUNTS,
 	parityStatusCounts,
 	rowsForGroup,
 	rowsForTab,
 	unavailableRows,
 } from "../src/overlays/settings-parity-rows.ts";
-import { SETTING_TABS, TAB_GROUPS } from "../src/overlays/settings-defs.ts";
 
 /**
  * The parity contract's own integrity.
@@ -73,7 +73,10 @@ describe("the contract accounts for the whole reference panel", () => {
 		for (const row of OMP_PARITY_ROWS) {
 			if (!row.group) continue;
 			const groups = TAB_GROUPS[row.tab as never] as readonly string[];
-			assert.ok(groups.includes(row.group), `${row.id} is in group "${row.group}", which ${row.tab} does not declare`);
+			assert.ok(
+				groups.includes(row.group),
+				`${row.id} is in group "${row.group}", which ${row.tab} does not declare`,
+			);
 		}
 	});
 });

@@ -57,7 +57,10 @@ describe("the rules hold on real migration findings", () => {
 
 	it("does not retain the same correction twice", async () => {
 		const { svc } = await service();
-		const event = protocolFinding("The IAI engine has no initialize handshake and dispatches a fixed method set", "core/__init__.py:276");
+		const event = protocolFinding(
+			"The IAI engine has no initialize handshake and dispatches a fixed method set",
+			"core/__init__.py:276",
+		);
 		await svc.retainEvent(event);
 		// Re-derived later, in a different session, worded slightly differently.
 		const again = await svc.retainEvent({
@@ -78,7 +81,12 @@ describe("the rules hold on real migration findings", () => {
 		// The proof showed otherwise: a derived markdown cache holds plaintext.
 		const recalled = await svc.recall(
 			{ text: "encrypts every file store root" },
-			{ contradicts: (record) => (record.text.includes("every file") ? "only the store and index are encrypted; .working-tier.-.cached.md is plaintext" : undefined) },
+			{
+				contradicts: (record) =>
+					record.text.includes("every file")
+						? "only the store and index are encrypted; .working-tier.-.cached.md is plaintext"
+						: undefined,
+			},
 		);
 		// The failure this guards: a blanket claim read as current, relied on by a
 		// user who then believes a derived cache is protected.

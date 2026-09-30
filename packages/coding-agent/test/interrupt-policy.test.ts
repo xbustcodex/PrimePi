@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
 	type InFlightCall,
-	isInterruptible,
 	type InterruptMode,
+	isInterruptible,
 	resolveInterruption,
 	shouldInterrupt,
 } from "../src/core/interrupt-policy.ts";
