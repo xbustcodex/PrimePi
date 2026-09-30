@@ -73,6 +73,25 @@ export {
 	serializeConversation,
 	shouldCompact,
 } from "./harness/compaction/compaction.ts";
+export {
+	type AgentToolCall,
+	collectToolCallsById,
+	DEFAULT_PRUNE_CONFIG,
+	estimatePrunedSavings,
+	isArtifactRecoveryResult,
+	isProtectedToolResult,
+	isSkillReadResult,
+	type MarkedToolResult,
+	MIN_PRUNE_TOKENS,
+	type ProtectedToolContext,
+	type ProtectedToolMatcher,
+	type PruneConfig,
+	type PruneResult,
+	pruneToolOutputs,
+	SUPERSEDED_NOTICE,
+	type SupersedeKeyFn,
+	USELESS_NOTICE,
+} from "./harness/compaction/pruning.ts";
 export * from "./harness/context.ts";
 export * from "./harness/messages.ts";
 export * from "./harness/prompt-templates.ts";

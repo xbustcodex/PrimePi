@@ -21,9 +21,20 @@
  * than by a retry policy, so there is no window in which a job could report the
  * same result twice.
  *
- * Job state is in-memory by design and says so: a background job does not
- * survive a process, and pretending otherwise would mean persisting a child
- * transcript, which is a much larger decision than this phase authorizes.
+ * ## Live state is in memory; its history is not
+ *
+ * The map below is still process-local — a background job does not survive a
+ * process, and pretending otherwise would mean persisting a child transcript.
+ * What a host needs, though, is the *record* of that job, because a result held
+ * only in this map is lost the moment the process ends. `onChange` is that exit:
+ * it fires at registration, at settlement, and at delivery — the three points at
+ * which a crash would otherwise lose something — so a host can write the history
+ * out without this class knowing what a journal is.
+ *
+ * `claimIds` closes the other half. Ids are per-process, so a restart would
+ * otherwise mint `job-1` a second time and make a recovered record of the old
+ * `job-1` ambiguous. Claiming the recovered ids advances the counter past them,
+ * so a stale id never names a new job across a restart, not just within one.
  */
 
 /** A job's lifecycle. */
@@ -51,6 +62,8 @@ export interface JobRecord {
 	error?: string;
 	/** True after the result has been handed to the caller. */
 	delivered: boolean;
+	/** The child that ran this job, once the delegation registered it. */
+	agentId?: string;
 }
 
 /** A handle on a running job. */
@@ -66,6 +79,21 @@ export interface JobManagerOptions {
 	/** Maximum jobs that may run at once. Further `start` calls are refused. */
 	maxRunning?: number;
 	now?: () => number;
+	/**
+	 * Called after every state change, with the record as it now stands.
+	 *
+	 * A host that throws here cannot fail the job: the record is already settled
+	 * in memory and journaling is not the job's concern. What the host lost, the
+	 * host reports.
+	 */
+	onChange?: (job: JobRecord) => void;
+	/**
+	 * Ids a previous process already used, normally ones recovered from disk.
+	 *
+	 * Anything matching this class's id shape advances the counter past it, so a
+	 * restart cannot mint an id a persisted record already describes.
+	 */
+	claimIds?: readonly string[];
 }
 
 /**
@@ -81,11 +109,18 @@ export class JobManager {
 	readonly #settled = new Map<string, Promise<JobState>>();
 	readonly #maxRunning: number;
 	readonly #now: () => number;
+	readonly #onChange: ((job: JobRecord) => void) | undefined;
 	#counter = 0;
 
 	constructor(options: JobManagerOptions = {}) {
 		this.#maxRunning = options.maxRunning ?? 8;
 		this.#now = options.now ?? Date.now;
+		this.#onChange = options.onChange;
+		// Claimed before anything is minted, so a recovered id is never reissued.
+		for (const id of options.claimIds ?? []) {
+			const suffix = /^job-(\d+)$/.exec(id)?.[1];
+			if (suffix) this.#counter = Math.max(this.#counter, Number(suffix));
+		}
 	}
 
 	/** Jobs currently running. */
@@ -110,6 +145,9 @@ export class JobManager {
 		const controller = new AbortController();
 
 		this.#jobs.set(id, { id, label, state: "running", startedAt: this.#now(), delivered: false });
+		// Written before the work begins: a crash mid-run is exactly the case a
+		// restart has to be able to name.
+		this.#notify(id);
 		this.#controllers.set(id, controller);
 
 		const settled = (async (): Promise<JobState> => {
@@ -223,6 +261,23 @@ export class JobManager {
 		const record = this.#jobs.get(id);
 		if (!record || record.delivered) return false;
 		record.delivered = true;
+		// The delivery flag is the one thing a restart must not undo: without this
+		// write, a recovered result would be handed to the parent a second time.
+		this.#notify(id);
+		return true;
+	}
+
+	/**
+	 * Records which child ran a job.
+	 *
+	 * Refuses an unknown job and a second assignment, so the association is
+	 * claimed once and never rewritten by a later child.
+	 */
+	attachAgent(id: string, agentId: string): boolean {
+		const record = this.#jobs.get(id);
+		if (!record || record.agentId !== undefined) return false;
+		record.agentId = agentId;
+		this.#notify(id);
 		return true;
 	}
 
@@ -243,5 +298,17 @@ export class JobManager {
 		// Only assigned once, so a result cannot be overwritten by a late arrival.
 		if (result !== undefined && record.result === undefined) record.result = result;
 		if (error !== undefined && record.error === undefined) record.error = error;
+		this.#notify(id);
+	}
+
+	#notify(id: string): void {
+		const record = this.#jobs.get(id);
+		if (!this.#onChange || !record) return;
+		try {
+			this.#onChange({ ...record });
+		} catch {
+			// A host that cannot journal must not be able to fail the job. The
+			// record is already correct in memory; the host owns its own failure.
+		}
 	}
 }

@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `pruneToolOutputs` treating a selector-free supersede key backwards, so a later *partial* read of a file could mark an earlier whole-file read as superseded and drop the only complete copy of that file. A key now only supersedes an older key that shares its base path.
+- Fixed the age-based branch of `pruneToolOutputs` pruning results it was required to keep: protected results (skill reads, artifact recoveries) and results below `MIN_PRUNE_TOKENS` were pruned, while ordinary recent ones were kept. The three keep rules are now independent vetoes.
+
 ## [0.87.1] - 2026-09-22
 
 ## [0.87.0] - 2026-09-21

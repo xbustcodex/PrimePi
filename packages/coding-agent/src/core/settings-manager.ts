@@ -1331,6 +1331,23 @@ export class SettingsManager {
 		};
 	}
 
+	/**
+	 * Which tool-result pruning rules apply.
+	 *
+	 * Read through the registry so a mid-session change takes effect on the next
+	 * turn. Both default to enabled; turning both off disables the pass entirely
+	 * rather than leaving a no-op prune running every turn.
+	 */
+	getToolResultPruneSettings(): {
+		supersedeReads: boolean;
+		dropUseless: boolean;
+	} {
+		return {
+			supersedeReads: this.getSetting("compaction.supersedeReads")?.value !== false,
+			dropUseless: this.getSetting("compaction.dropUseless")?.value !== false,
+		};
+	}
+
 	getBranchSummarySettings(): { reserveTokens: number; skipPrompt: boolean } {
 		return {
 			reserveTokens: this.settings.branchSummary?.reserveTokens ?? 16384,

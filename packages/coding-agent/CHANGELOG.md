@@ -10,11 +10,15 @@
 - Added the `provider_stream_event` extension event for observing parsed provider events before normalization, with an opt-in `/debug-provider` example viewer ([#9784](https://github.com/earendil-works/pi/issues/9784)).
 - Added a show/hide toggle (`H`) in HTML exports for custom messages marked `display: false`. Messages remain hidden by default and can also be revealed from the sidebar ([#8896](https://github.com/earendil-works/pi/issues/8896)).
 - Added a free-only filter to the model picker: free-tier models show a `free` badge, and `app.models.freeOnly` (`ctrl+f`, `alt+f` on Windows) narrows the list to free models.
+- Added per-turn tool-result pruning. A `read` result that a later read of the same target has superseded, and a result carrying no information, are replaced in context by a short notice before each compaction decision. Rewrites are persisted as `context_edit` entries, so the raw result stays in the journal. Gated on `compaction.supersedeReads` and `compaction.dropUseless`; the newest read of a target, skill reads, and artifact recovery reads are never elided.
 
 ### Fixed
 
 - Fixed X11 clipboard text being misidentified as an image when the clipboard owner accepts unadvertised image targets ([#9786](https://github.com/earendil-works/pi/issues/9786)).
 - Prevented managed git packages from automatically installing Pi peer dependencies and added warnings for extension packages that list host-provided modules in `dependencies` ([#9863](https://github.com/earendil-works/pi/issues/9863)).
+- Fixed a later partial read of a file superseding an earlier whole-file read, which could drop the only complete copy of the file.
+- Fixed the age-based pruning rule pruning protected and below-minimum-size tool results while leaving ordinary recent ones intact.
+- Fixed `/share` publishing session content to Radius or a gist with no secret redaction at all. The share now resolves its policy against the session's own project directory, irreversibly masks any configured credential in both published artifacts, refuses to upload when a credential survives that pass, and warns when a share went out unredacted. Gated on `share.redactSecrets` and `secrets.enabled`; a session with no resolvable project directory is refused rather than resolved against the invoking one.
 
 ## [0.87.1] - 2026-09-22
 

@@ -57,6 +57,7 @@ import type {
 	TextContent,
 	ToolResultMessage,
 	Usage,
+	UserMessage,
 } from "@earendil-works/pi-ai/compat";
 import {
 	clampThinkingLevel,
@@ -70,6 +71,7 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@earendil-works/pi-ai/compat";
+import { getAgentDir } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -92,6 +94,7 @@ import {
 	prepareCompaction,
 	shouldCompact,
 } from "./compaction/index.ts";
+import { planStaleToolResultPrunes } from "./compaction/pruning.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
@@ -129,9 +132,21 @@ import { type ChainState, parseRouteSelector, resolveFallbackChain } from "./fai
 import { DiagnosticsLedger, type DiagnosticsSnapshot, diagnosticsSnapshot } from "./lsp/integration.ts";
 import { LspManager, type LspServerConfig } from "./lsp/manager.ts";
 import { describeSeverity, type LspDiagnostic } from "./lsp/operations.ts";
+import { AutoMemoryLifecycle, type ConversationMessage } from "./memory/auto-memory.ts";
+import { SessionMemory } from "./memory/session.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import {
+	DELEGATION_JOURNAL_ENTRY_TYPE,
+	DELEGATION_JOURNAL_VERSION,
+	DELEGATION_RECOVERY_ENTRY_TYPE,
+	DelegationJournal,
+	type DelegationJournalEntry,
+	type DelegationRecoveryNotice,
+} from "./orchestration/delegation-journal.js";
+import { GoalAccounting } from "./orchestration/goal-accounting.ts";
+import type { UsageLike } from "./orchestration/goal-state.ts";
 import { JobManager } from "./orchestration/job-manager.js";
 import { Orchestration } from "./orchestration/orchestration.ts";
 import {
@@ -170,6 +185,7 @@ import {
 import { createApplyPatchTool, createApplyPatchToolDefinition } from "./tools/apply-patch.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createGitToolDefinitions, createGitTools, type GitToolOperations } from "./tools/git.ts";
+import { createGoalTool, createGoalToolDefinition, type GoalOperations } from "./tools/goal.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
 import { createTaskTool, createTaskToolDefinition, type TaskOperations } from "./tools/task.ts";
 import { createTodoTool, createTodoToolDefinition } from "./tools/todo.ts";
@@ -301,6 +317,14 @@ export interface AgentSessionConfig {
 	extensionRunnerRef?: { current?: ExtensionRunner };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
 	sessionStartEvent?: SessionStartEvent;
+	/**
+	 * The session's long-term memory.
+	 *
+	 * Defaults to one built from `memory.backend`; supplying one is for hosts and
+	 * tests that already own a store, and never bypasses the recall lifecycle -
+	 * the lifecycle is still what decides when a turn recalls.
+	 */
+	memory?: SessionMemory;
 }
 
 export interface ExtensionBindings {
@@ -381,6 +405,33 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 	return tokens;
 }
 
+/** The text of a message, with every non-text block dropped. */
+function messageTextForRecall(message: UserMessage | AssistantMessage): string {
+	if (typeof message.content === "string") return message.content;
+	const text: TextContent[] = [];
+	for (const part of message.content) {
+		if (part.type === "text") text.push(part);
+	}
+	return text.map((part) => part.text).join("\n");
+}
+
+/**
+ * The conversation as recall reads it: role plus flattened text, nothing else.
+ *
+ * Tool calls, tool results and system messages are dropped rather than flattened,
+ * because a recall query is a question about what the user asked, and a tool's
+ * internal transcript is neither.
+ */
+function conversationForRecall(messages: readonly AgentMessage[]): ConversationMessage[] {
+	const conversation: ConversationMessage[] = [];
+	for (const message of messages) {
+		if (message.role !== "user" && message.role !== "assistant") continue;
+		const text = messageTextForRecall(message).trim();
+		if (text) conversation.push({ role: message.role, content: text });
+	}
+	return conversation;
+}
+
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -396,6 +447,7 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
  */
 const SESSION_SCOPED_TOOL_NAMES = new Set<string>([
 	"todo",
+	"goal",
 	"task",
 	"git_inspect",
 	"git_stage",
@@ -545,6 +597,22 @@ export class AgentSession {
 	 * state — unenforceable rather than merely intended.
 	 */
 	private _orchestration = new Orchestration();
+
+	/**
+	 * Charges each turn's tokens to the goal that was active when it began.
+	 *
+	 * Read through the injected host rather than holding a goal of its own, so
+	 * there is exactly one authority for goal state: the orchestration. That is
+	 * also what keeps the additive invariant enforceable — the accounting has no
+	 * reference to plan state to write through, so it cannot rewrite an approved
+	 * plan no matter what the model asks for.
+	 */
+	private readonly _goalAccounting = new GoalAccounting({
+		getState: () => this._orchestration.goal,
+		setState: (state) => this._orchestration.setGoalState(state),
+		getCurrentUsage: () => this._currentGoalUsage(),
+	});
+	private _unsubscribeGoalSetting?: () => void;
 	/**
 	 * The delegation engine and its job substrate.
 	 *
@@ -559,6 +627,14 @@ export class AgentSession {
 	 * one's children and a disposed session's jobs cannot outlive it.
 	 */
 	private _taskJobs?: JobManager;
+	/**
+	 * The durable record of this session's delegated work.
+	 *
+	 * Separate from the job substrate on purpose: jobs are live and process-local,
+	 * while this is what survives the process. The two are joined only by the
+	 * `onChange` hook, so the live authority stays the live authority.
+	 */
+	private _delegationJournal?: DelegationJournal;
 	private _worktrees?: WorktreeManager;
 	/**
 	 * The repository these tools act on, resolved once per session.
@@ -593,6 +669,17 @@ export class AgentSession {
 	private _toolPromptGuidelines: Map<string, string[]> = new Map();
 
 	private _baseSystemPromptOptions!: NormalizedBuildSystemPromptOptions;
+
+	/**
+	 * This session's long-term memory and its auto-recall lifecycle.
+	 *
+	 * Built on first use and kept, because the lifecycle holds the once-per-turn
+	 * cursor: a second lifecycle would let one user turn recall twice, and a
+	 * rebuilt one would silently reset that cursor mid-turn.
+	 */
+	private _memory?: SessionMemory;
+	private _autoMemory?: Promise<AutoMemoryLifecycle>;
+
 	/** Prompt options after before_agent_start mutations for the active run. */
 	private _runSystemPromptOptions?: NormalizedBuildSystemPromptOptions;
 
@@ -623,6 +710,10 @@ export class AgentSession {
 		this._initialActiveToolNames = config.initialActiveToolNames;
 		this._allowedToolNames = config.allowedToolNames ? new Set(config.allowedToolNames) : undefined;
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
+		// A host-supplied store is adopted as-is; a resolved one is built on the
+		// first prompt, because the backend is a setting the user can change and
+		// constructing it eagerly would open a store nobody asked for.
+		this._memory = config.memory;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
 
@@ -638,6 +729,23 @@ export class AgentSession {
 		this._installAgentBoundaryHooks();
 		this._installProviderRequestGate();
 		this._installAgentForcedPromptProjection();
+		// `goal.enabled` decides whether the goal tool exists at all, so flipping it
+		// has to rebuild the registry rather than wait for a restart — in both
+		// directions, because a setting that only prevents a future add leaves a
+		// tool the user turned off still callable. Watched rather than read once,
+		// because a toggle that applies only on next launch is not a live setting.
+		this._unsubscribeGoalSetting = this.settingsManager.onEffectiveChange(["goal.enabled"], () => {
+			this._applyGoalSettingToToolSelection();
+		});
+
+		// Before `_buildRuntime`, because that is what builds the system prompt from
+		// the session projection. After it, a recovery notice would be persisted and
+		// visible from the second turn, and the first prompt — the one that decides
+		// whether the model believes its delegation succeeded — would not have it.
+		this._restoreDelegationFromSession();
+		// A goal restored from the transcript must not inherit a baseline that could
+		// still charge it, so accounting starts from nothing either way.
+		this._goalAccounting.clear();
 
 		this._buildRuntime({
 			activeToolNames: this._initialActiveToolNames,
@@ -1083,6 +1191,12 @@ export class AgentSession {
 				},
 				redactor: this._secretRedactor,
 				worktrees: this.taskWorktrees,
+				// Names the child on its job the instant it registers. A child that
+				// dies with the process never completes, so registration is the only
+				// moment at which a crash can still be attributed to it.
+				onSpawn: ({ childId, jobId }) => {
+					if (jobId) this.taskJobs.attachAgent(jobId, childId);
+				},
 				run: (input) => this._runDelegatedChild(input),
 			});
 		}
@@ -1101,9 +1215,42 @@ export class AgentSession {
 		return this._worktrees;
 	}
 
-	/** Background jobs for this session. */
+	/**
+	 * The durable record of this session's delegated work.
+	 *
+	 * Reads and writes the session's own entry stream rather than a file of its
+	 * own, so a delegation record shares the session's identity, its append-only
+	 * ordering, and its flush semantics — including the fact that nothing is
+	 * written until the session has an assistant turn.
+	 */
+	get delegationJournal(): DelegationJournal {
+		if (!this._delegationJournal) {
+			this._delegationJournal = new DelegationJournal({
+				sessionId: this.sessionManager.getSessionId(),
+				read: (): readonly DelegationJournalEntry[] => this.sessionManager.getBranch(),
+				write: (snapshot) => {
+					this.sessionManager.appendCustomEntry(DELEGATION_JOURNAL_ENTRY_TYPE, snapshot);
+				},
+			});
+		}
+		return this._delegationJournal;
+	}
+
+	/**
+	 * Background jobs for this session.
+	 *
+	 * Journaled at every state change, because a result that exists only in the
+	 * live map is lost the moment the process ends — which is the whole reason the
+	 * journal exists. `claimIds` is read from the same journal the session loaded
+	 * at startup, so a job id a previous process used is never reissued.
+	 */
 	get taskJobs(): JobManager {
-		if (!this._taskJobs) this._taskJobs = new JobManager();
+		if (!this._taskJobs) {
+			this._taskJobs = new JobManager({
+				onChange: (job) => this.delegationJournal.record(job),
+				claimIds: this.delegationJournal.recoveredIds,
+			});
+		}
 		return this._taskJobs;
 	}
 
@@ -1454,11 +1601,77 @@ ${context}`
 					(await this.taskJobs.waitById(id)) === undefined ? undefined : (this.taskJobs.status(id)?.result ?? ""),
 				cancel: (id) => this.taskJobs.cancel(id),
 				start: (label, run) => this.taskJobs.start(label, run),
+				// Journaled so a restart knows the parent already has this result.
+				markDelivered: (id) => this.taskJobs.markDelivered(id),
+				// Read from the journal rather than the live map: a recovered job has
+				// no promise to await and no child to cancel, so merging it into the
+				// live substrate would let a dead job look runnable.
+				recovered: () => this.delegationJournal.recovered,
+				markRecoveredDelivered: (id) => this.delegationJournal.markDelivered(id),
+				// A record the session could not write is a record a restart will not
+				// know about, so the loss is reported rather than swallowed.
+				writeError: () => this.delegationJournal.writeFailure,
 			},
 			worktrees: this.taskWorktrees,
 			runChild: (request) => this.taskRunner.run(request),
 			parentTools: () => this.getActiveToolNames(),
 		};
+	}
+
+	/**
+	 * What the `goal` tool closes over.
+	 *
+	 * Goal state only. There is deliberately no plan handle here: the additive
+	 * invariant is kept structurally, by this object having nothing to write plan
+	 * state through, rather than by a check that a later edit could forget.
+	 */
+	private _goalOperations(): GoalOperations {
+		return {
+			get: () => this._orchestration.goal,
+			set: (state) => this._orchestration.setGoalState(state),
+			flushUsage: () => {
+				this._goalAccounting.flush();
+			},
+			now: () => Date.now(),
+		};
+	}
+
+	/**
+	 * Whether the goal subsystem is on.
+	 *
+	 * Read at every use rather than captured, so a flip takes effect on the next
+	 * turn instead of at the next launch.
+	 */
+	private _goalAccountingEnabled(): boolean {
+		return this.settingsManager.getSetting("goal.enabled")?.value === true;
+	}
+
+	/**
+	 * The session's cumulative token counters, in the shape goal accounting reads.
+	 *
+	 * Cumulative over all entries, which is what makes a turn's cost a difference
+	 * rather than a total. `cacheRead` is excluded downstream by `goalTokenDelta`
+	 * because a reused prefix is not new work; `cacheWrite` is not, because
+	 * re-anchoring a prompt can write a very large number of tokens.
+	 */
+	private _currentGoalUsage(): UsageLike {
+		const { input, output, cacheRead, cacheWrite } = this.getSessionStats().tokens;
+		return { input, output, cacheRead, cacheWrite };
+	}
+
+	/**
+	 * Adds or removes `goal` from the active selection as `goal.enabled` flips.
+	 *
+	 * Removing it matters as much as adding it: refusing to register on the next
+	 * build would leave a tool the user switched off still callable in this one.
+	 */
+	private _applyGoalSettingToToolSelection(): void {
+		const active = this.getActiveToolNames();
+		const enabled = this._goalAccountingEnabled();
+		if (enabled === active.includes("goal")) return;
+		this._refreshToolRegistry({
+			activeToolNames: enabled ? [...active, "goal"] : active.filter((name) => name !== "goal"),
+		});
 	}
 
 	/**
@@ -2157,6 +2370,39 @@ ${context}`
 		return undefined;
 	}
 
+	/**
+	 * Replace tool results that no longer earn their tokens: a read a newer read
+	 * of the same target has superseded, and a result carrying no information.
+	 *
+	 * Runs ahead of the `compaction.enabled` gate, matching the reference, where
+	 * the stale-result pass is explicitly independent of the compaction setting:
+	 * it costs no model call, and the two rules it applies are gated by their own
+	 * settings (`compaction.supersedeReads`, `compaction.dropUseless`). Turning
+	 * both of those off disables the pass entirely.
+	 *
+	 * The writes go through `SessionManager.appendContextEdit`, the same
+	 * authority `_omitRecoveryAttempt` uses, so the raw result stays in the
+	 * journal and the notice is provenance-tracked. That is also what makes the
+	 * effect observable: every request rebuilds from
+	 * `buildSessionProjection()`, so the next turn sends the notices.
+	 */
+	private _pruneStaleToolResults(): void {
+		const plan = planStaleToolResultPrunes(
+			this.sessionManager.getEntries(),
+			this.sessionManager.getLeafId(),
+			this.settingsManager.getToolResultPruneSettings(),
+		);
+		if (plan.edits.length === 0) return;
+		for (const edit of plan.edits) {
+			const editId = this.sessionManager.appendContextEdit(edit.targetId, {
+				content: [{ type: "text" as const, text: edit.notice }],
+			});
+			const entry = this.sessionManager.getEntry(editId);
+			if (entry) this._emit({ type: "entry_appended", entry });
+		}
+		this._refreshFinalizedContext();
+	}
+
 	private _omitRecoveryAttempt(message: AssistantMessage, toolResults: AgentMessage[] = []): void {
 		const targets = [message, ...toolResults];
 		const targetIds = targets.map((target) => this._findPersistedMessageEntryId(target));
@@ -2211,6 +2457,12 @@ ${context}`
 		} else if (event.type === "agent_end") {
 			await this._extensionRunner.emit({ type: "agent_end", messages: event.messages });
 		} else if (event.type === "turn_start") {
+			// Baseline for the goal's token accounting, sampled here rather than at
+			// prompt time so the budget measures the turn running now — a goal created
+			// mid-session must not be charged for everything billed before it.
+			if (this._goalAccountingEnabled()) {
+				this._goalAccounting.onTurnStart(`turn-${this._turnIndex}`, this._currentGoalUsage());
+			}
 			const extensionEvent: TurnStartEvent = {
 				type: "turn_start",
 				turnIndex: this._turnIndex,
@@ -2218,6 +2470,13 @@ ${context}`
 			};
 			await this._extensionRunner.emit(extensionEvent);
 		} else if (event.type === "turn_end") {
+			// The turn's messages are already appended, so what the turn cost is
+			// visible and can be charged. `budget-limited` is reached from accounted
+			// tokens here and never from elapsed time. With no turn started, the
+			// baseline is unset and this charges nothing rather than a stale one.
+			if (this._goalAccountingEnabled()) {
+				this._goalAccounting.flush();
+			}
 			if (event.message.role === "assistant" && !this._boundaryDispatchedMessages.delete(event.message)) {
 				await this._dispatchTurnEndBoundary(event.message, event.toolResults);
 			}
@@ -2347,11 +2606,17 @@ ${context}`
 			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
 		);
 		this._disconnectFromAgent();
+		// A disposed session must stop reacting to settings: the listener rebuilds
+		// the tool registry, which belongs to a session nobody is using any more.
+		this._unsubscribeGoalSetting?.();
 		this._eventListeners = [];
 		if (this._cacheWarmer) {
 			this._cacheWarmer.onWarmed = undefined;
 			this._cacheWarmer.cancel();
 		}
+		// Releases the memory backend's storage handles. Not awaited: dispose is
+		// synchronous, and a backend that fails to stop already swallows it.
+		void this._memory?.stop();
 		cleanupSessionResources(this.sessionId);
 	}
 
@@ -2626,9 +2891,143 @@ ${context}`
 		this._rebuildSystemPrompt(toolNames);
 	}
 
+	/**
+	 * Reads what a previous process left behind, and tells the parent about it.
+	 *
+	 * Two things happen here, in this order. The journal is loaded first, because
+	 * the job substrate claims those ids as its own when it is built and a
+	 * recovered `job-1` must never be handed out to different work. Then, if
+	 * there is anything to report, a notice goes into the session.
+	 *
+	 * The notice is the integration, not a convenience. Without it a parent that
+	 * never calls the `task` tool would believe a delegation that was interrupted
+	 * had succeeded — the same failure as producing a correct answer nobody
+	 * consumes.
+	 *
+	 * ## Why it is stamped with the journal entry id
+	 *
+	 * The notice is persisted, so an unstamped one would repeat on every resume of
+	 * the same session and grow the context each time. A timestamp or a boot count
+	 * would do the same thing, because both change per run. The journal entry id
+	 * is the one value that is stable for as long as the state it reports is, so
+	 * the notice is written once per distinct recovered state and not again.
+	 */
+	private _restoreDelegationFromSession(): void {
+		const journal = this.delegationJournal;
+		// Loaded before anything reads `taskJobs`, which is what makes the id claim
+		// sound: the job substrate builds itself with `claimIds` from this same
+		// journal, so a recovered `job-1` is claimed before any new job can be
+		// minted. Both are lazy and both are reached from the constructor, so the
+		// load above is guaranteed to win that race.
+		const recovered = journal.load();
+
+		const lines = journal.describe();
+		if (lines.length === 0) return;
+		const source = this._latestDelegationJournalEntryId();
+		if (!source || this._hasRecoveryNotice(source)) return;
+
+		const stopped = recovered.jobs.filter((job) => job.state === "interrupted");
+		this.sessionManager.appendCustomMessageEntry(
+			DELEGATION_RECOVERY_ENTRY_TYPE,
+			[
+				"Delegated work from a previous session of this one:",
+				...lines,
+				...(stopped.length > 0
+					? [
+							`${stopped.length} child(ren) were interrupted and were not resumed. That work has to be started again if it is still needed; do not assume any of it finished.`,
+						]
+					: []),
+			].join("\n"),
+			true,
+			{ version: DELEGATION_JOURNAL_VERSION, source } satisfies DelegationRecoveryNotice,
+		);
+	}
+
+	/** The id of the newest journal entry on the branch, or undefined if there is none. */
+	private _latestDelegationJournalEntryId(): string | undefined {
+		const branch = this.sessionManager.getBranch();
+		for (let index = branch.length - 1; index >= 0; index--) {
+			const entry = branch[index];
+			if (entry.type === "custom" && entry.customType === DELEGATION_JOURNAL_ENTRY_TYPE) return entry.id;
+		}
+		return undefined;
+	}
+
+	/** Whether this branch already carries a notice for the given journal entry. */
+	private _hasRecoveryNotice(source: string): boolean {
+		return this.sessionManager
+			.getBranch()
+			.some(
+				(entry) =>
+					entry.type === "custom_message" &&
+					entry.customType === DELEGATION_RECOVERY_ENTRY_TYPE &&
+					(entry.details as DelegationRecoveryNotice | undefined)?.source === source,
+			);
+	}
+
 	// =========================================================================
 	// Prompting
 	// =========================================================================
+
+	/**
+	 * This session's auto-recall lifecycle, built once from `memory.backend`.
+	 *
+	 * `off` is the default, so the default session builds an inert store and the
+	 * recall path costs nothing. A backend that cannot be constructed degrades to
+	 * the same inert store carrying its reason: a missing optional subsystem is
+	 * never a reason to refuse a prompt.
+	 */
+	private async _autoMemoryLifecycle(): Promise<AutoMemoryLifecycle> {
+		if (!this._autoMemory) {
+			const configured = this.settingsManager.getSetting("memory.backend")?.value;
+			const backendId = typeof configured === "string" && configured !== "" ? configured : "off";
+			const injected = this._memory;
+			this._autoMemory = (async () => {
+				const memory =
+					injected ??
+					(await SessionMemory.create({
+						backendId,
+						agentDir: getAgentDir(),
+						project: this._cwd,
+						bankStore: { cwd: this._cwd },
+					}));
+				this._memory = memory;
+				// Keyed on the store's own capabilities, never on `inert` and never on
+				// the setting that selected it. `inert` folds retain and recall into one
+				// flag, so a backend that can recall but not store — a read-only mirror
+				// of another engine — would have been refused both. Each side is asked
+				// only for what it can actually do.
+				return new AutoMemoryLifecycle(memory, {
+					autoRecall: memory.status.capabilities.recall,
+					autoRetain: memory.status.capabilities.retain,
+				});
+			})();
+		}
+		return this._autoMemory;
+	}
+
+	/**
+	 * The memory block for the turn about to be generated, or nothing to inject.
+	 *
+	 * The lifecycle owns the once-per-turn rule and the generation counter; this
+	 * only decides what survives. A recall that throws is dropped rather than
+	 * failing the turn, and a recall a newer turn superseded is dropped rather than
+	 * applied out of order - both leave the turn's cursor unconsumed only if the
+	 * commit says so.
+	 */
+	private async _recallMemoryForTurn(promptText: string): Promise<string | undefined> {
+		const lifecycle = await this._autoMemoryLifecycle();
+		const prepared = lifecycle.prepareRecall(promptText, conversationForRecall(this.agent.state.messages));
+		if (!prepared) return undefined;
+		let block: string;
+		try {
+			block = (await prepared.run()).block;
+		} catch {
+			// A store that throws is a store that is broken, not a turn that is.
+			return undefined;
+		}
+		return prepared.commit() && block ? block : undefined;
+	}
 
 	private async _runAgentPrompt(messages: AgentMessage | AgentMessage[]): Promise<void> {
 		this._agentRunAbortRequested = false;
@@ -2647,6 +3046,18 @@ ${context}`
 			}
 		} finally {
 			if (this._agentRunAbortRequested) this._finishCancelledRetry();
+			// The user turn is over, including the continuations and retries inside
+			// it, so the next submitted prompt may recall again. In a `finally`: a turn
+			// that aborted or errored has still been consumed.
+			await this._autoMemory?.then((lifecycle) => lifecycle.endTurn());
+			// The turn's answer is in the transcript now, so what it established can be
+			// stored. Retention is the lifecycle's decision and its cursor, not a second
+			// channel here: a store that throws is swallowed rather than taking the
+			// turn down with it, and the cursor does not advance past a turn it failed
+			// to store, so nothing is silently lost.
+			await this._autoMemory
+				?.then((lifecycle) => lifecycle.maybeRetain(conversationForRecall(this.agent.state.messages)))
+				.catch(() => undefined);
 			this._runSystemPromptOptions = undefined;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
@@ -2884,6 +3295,16 @@ ${context}`
 			const normalized = await this._normalizePromptImages(currentImages);
 			const userText =
 				normalized.hints.length > 0 ? `${expandedText}\n\n${normalized.hints.join("\n")}` : expandedText;
+
+			// Automatic recall runs after the hooks and before the loadout is applied,
+			// so a handler that rewrote the prompt still owns the base and the block
+			// lands in the same system message the provider is sent. It is a named
+			// section, not a forced prompt: memory is context, and a section is the
+			// shape the transcript can replace or drop on a later turn.
+			const recalledMemory = await this._recallMemoryForTurn(userText);
+			if (recalledMemory) {
+				result.systemPromptOptions.sections = { ...result.systemPromptOptions.sections, memory: recalledMemory };
+			}
 
 			// Build messages only after hooks and image normalization have completed.
 			messages = [];
@@ -3777,6 +4198,11 @@ ${context}`
 		skipAbortedCheck = true,
 		toolResults: AgentMessage[] = [],
 	): Promise<boolean> {
+		// Reclaim tool results a newer read has made redundant before anything
+		// reads the context size. Both call sites — after a tool batch and before
+		// a prompt — route here, so this is the one place history is pruned.
+		this._pruneStaleToolResults();
+
 		const settings = this.settingsManager.getCompactionSettings(this.model);
 		if (!settings.enabled) return false;
 
@@ -4397,6 +4823,15 @@ ${context}`
 				sourceInfo: createSyntheticSourceInfo("<builtin:todo>", { source: "builtin" }),
 			});
 		}
+		// `goal` is session-scoped for the same reason `todo` is: it reads and
+		// writes this session's goal state, and it exists only when `goal.enabled`
+		// is on, which is what the third clause says.
+		if (isAllowedTool("goal") && isSelected("goal") && this._goalAccountingEnabled()) {
+			definitionRegistry.set("goal", {
+				definition: createGoalToolDefinition(this._goalOperations()),
+				sourceInfo: createSyntheticSourceInfo("<builtin:goal>", { source: "builtin" }),
+			});
+		}
 		this._toolDefinitions = definitionRegistry;
 		this._toolPromptSnippets = new Map(
 			Array.from(definitionRegistry.values())
@@ -4459,6 +4894,10 @@ ${context}`
 				set: (state) => this._orchestration.setTodo(state),
 			});
 			toolRegistry.set(todoTool.name, todoTool);
+		}
+		if (isAllowedTool("goal") && isSelected("goal") && this._goalAccountingEnabled()) {
+			const goalTool = createGoalTool(this._goalOperations());
+			toolRegistry.set(goalTool.name, goalTool);
 		}
 		for (const tool of wrappedExtensionTools as AgentTool[]) {
 			toolRegistry.set(tool.name, tool);

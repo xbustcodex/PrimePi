@@ -18,6 +18,7 @@ import { registerFauxProvider, streamSimple } from "@earendil-works/pi-ai/compat
 import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
 import type { ExtensionRunner } from "../../src/core/extensions/index.ts";
+import type { SessionMemory } from "../../src/core/memory/session.ts";
 import { convertToLlm } from "../../src/core/messages.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type { Settings } from "../../src/core/settings-manager.ts";
@@ -71,8 +72,16 @@ export interface HarnessOptions {
 	extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
 	withConfiguredAuth?: boolean;
 	modelsJson?: Record<string, unknown>;
+	/** The session's long-term memory. Defaults to whatever `memory.backend` resolves to. */
+	memory?: SessionMemory;
+	/**
+	 * The session to run against. Defaults to a fresh in-memory one.
+	 *
+	 * Supplied so a test can build a second `AgentSession` over the same session,
+	 * which is what a restart is: same entries, new process.
+	 */
+	sessionManager?: SessionManager;
 }
-
 export interface Harness {
 	session: AgentSession;
 	sessionManager: SessionManager;
@@ -108,7 +117,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 	const withConfiguredAuth = options.withConfiguredAuth ?? true;
 	const extensionRunnerRef: { current?: ExtensionRunner } = {};
 
-	const sessionManager = SessionManager.inMemory();
+	const sessionManager = options.sessionManager ?? SessionManager.inMemory();
 	const settingsManager = SettingsManager.inMemory(options.settings);
 
 	const authStorage = AuthStorage.inMemory();
@@ -192,6 +201,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 		allowedToolNames: options.allowedToolNames,
 		excludedToolNames: options.excludedToolNames,
 		extensionRunnerRef,
+		memory: options.memory,
 	});
 
 	const events: AgentSessionEvent[] = [];

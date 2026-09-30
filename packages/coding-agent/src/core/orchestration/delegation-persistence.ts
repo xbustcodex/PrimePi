@@ -173,7 +173,9 @@ export function describeRecovery(recovered: RecoveredDelegation): string[] {
 	}
 	for (const job of recovered.jobs.filter((entry) => entry.state === "interrupted")) {
 		lines.push(
-			`Job ${job.id} (${job.label}) was still running when the session ended. It was stopped and has not completed. ${job.note ?? ""}`.trim(),
+			`Job ${job.id} (${job.label}) was still running when the session ended. ` +
+				"It was interrupted and not resumed — the process that was running it is gone — " +
+				`so the work has not completed and is not waiting on anything. ${job.note ?? ""}`.trim(),
 		);
 	}
 	return lines;

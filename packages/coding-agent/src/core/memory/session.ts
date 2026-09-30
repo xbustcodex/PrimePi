@@ -34,7 +34,7 @@
  */
 
 import path from "node:path";
-import type { MemoryBackend, MemoryQuery, MemoryScope } from "./backend.ts";
+import type { MemoryBackend, MemoryBackendCapabilities, MemoryQuery, MemoryScope } from "./backend.ts";
 import type { BankScoping } from "./bank-scope.ts";
 import { buildMemoryContext, type MemoryContext } from "./context.ts";
 import { configurePrimePiBackends, createMemoryBackend } from "./registry.ts";
@@ -116,6 +116,15 @@ export interface MemoryStatus {
 	readonly reason?: string;
 	/** True when the backend cannot retain or recall at all. */
 	readonly inert: boolean;
+	/**
+	 * What the backend can do, one capability at a time.
+	 *
+	 * `inert` folds retain and recall together, so it answers "does this backend
+	 * run memory at all" but not "may this caller retain". A backend that can
+	 * recall but not store is a real shape - a read-only mirror of another
+	 * engine - and keying a write path on `!inert` would call it storable.
+	 */
+	readonly capabilities: MemoryBackendCapabilities;
 	/** A sentence a settings panel can show without inventing anything. */
 	readonly summary: string;
 }
@@ -191,6 +200,7 @@ export class SessionMemory {
 			available: this.#available.ok,
 			...(this.#available.reason ? { reason: this.#available.reason } : {}),
 			inert,
+			capabilities: this.#backend.capabilities,
 			summary: this.#summary(inert),
 		};
 	}

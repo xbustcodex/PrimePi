@@ -267,8 +267,11 @@ function collectSuperseded(
 		const key = supersedeKey(call.name, call.arguments);
 		if (key === undefined) continue;
 		// A key is superseded when a *later* read produced the same key, or a
-		// selector-free read of the same base path.
-		if (seenKeys.has(key) || seenKeys.has(`${key}\0`)) {
+		// selector-free read of the same base path. The second case is what keeps
+		// a whole-file read from being replaced by a partial one: a partial read is
+		// never strictly newer information, so it cannot retire the full copy.
+		const separator = key.indexOf("\0");
+		if (seenKeys.has(key) || (separator >= 0 && seenKeys.has(key.slice(0, separator)))) {
 			candidates.push({
 				message: message as ToolResultMessage,
 				index,
@@ -362,19 +365,24 @@ export function pruneToolOutputs(
 		}
 		if (!exempt.has(index)) {
 			const call = calls.get((message as ToolResultMessage).toolCallId);
-			const protectedResult = isProtectedToolResult(message as ToolResultMessage, call, config.protectedTools);
-			if (accumulated < config.protectTokens && !protectedResult && tokens >= MIN_PRUNE_TOKENS) {
-				accumulated += tokens;
-				continue;
+			// A result is kept when any one of three rules says to keep it. They are
+			// checked as separate vetoes rather than folded into one condition,
+			// because each is independently sufficient: a protected result is never
+			// pruned, and a result too small to pay for its own notice is never
+			// pruned, regardless of how old it is or how much budget is left.
+			const keepProtected = isProtectedToolResult(message as ToolResultMessage, call, config.protectedTools);
+			const keepTooSmallToPay = tokens < MIN_PRUNE_TOKENS;
+			const keepRecent = accumulated < config.protectTokens;
+			if (!keepProtected && !keepTooSmallToPay && !keepRecent) {
+				additional.push({
+					message: message as ToolResultMessage,
+					index,
+					tokens,
+					notice: createPrunedNotice(tokens),
+					superseded: false,
+					useless: false,
+				});
 			}
-			additional.push({
-				message: message as ToolResultMessage,
-				index,
-				tokens,
-				notice: createPrunedNotice(tokens),
-				superseded: false,
-				useless: false,
-			});
 		}
 		accumulated += tokens;
 	}

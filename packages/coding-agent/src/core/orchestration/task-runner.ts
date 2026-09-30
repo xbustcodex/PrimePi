@@ -74,6 +74,15 @@ export interface TaskRunRequest {
 	 */
 	background?: boolean;
 	/**
+	 * The background job this child is running under, when there is one.
+	 *
+	 * Carried so the job can name the child that ran it. The association has to be
+	 * made at registration rather than at completion: a child that dies with the
+	 * process never completes, and a crash report that cannot name the child is a
+	 * report about nothing.
+	 */
+	jobId?: string;
+	/**
 	 * Whether the child gets its own worktree.
 	 *
 	 * Opt-in per call: `shared` for a read-only research child, `worktree`
@@ -170,6 +179,13 @@ export interface TaskRunnerOptions {
 	}) => Promise<string>;
 	/** Called after a child settles, for delivery. */
 	onComplete?: (id: string, result: string) => void;
+	/**
+	 * Called the moment a child is registered, before it runs.
+	 *
+	 * The earliest point at which a child has an id, and therefore the only one at
+	 * which a crash can still be attributed to it.
+	 */
+	onSpawn?: (input: { childId: string; jobId: string | undefined }) => void;
 }
 
 /** Abort reason used only for a runtime timeout, so the two stops are distinguishable. */
@@ -311,6 +327,10 @@ export class TaskRunner {
 			tools: granted,
 			requestedRole: request.modelRole,
 		});
+
+		// Announced here rather than after the run, because a child that never
+		// returns is exactly the child a restart has to be able to name.
+		this.#options.onSpawn?.({ childId: ref.id, jobId: request.jobId });
 
 		// A permit is held for the whole run and released exactly once, including
 		// on every failure path below.

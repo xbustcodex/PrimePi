@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { DelegationJournal, type DelegationJournalEntry } from "../src/core/orchestration/delegation-journal.ts";
 import { JobManager } from "../src/core/orchestration/job-manager.ts";
 import { TaskRunner, type TaskRunRequest } from "../src/core/orchestration/task-runner.ts";
 import { WorktreeManager } from "../src/core/orchestration/worktree-manager.ts";
@@ -67,7 +68,16 @@ function harness(
 		},
 	});
 
-	const jobs = new JobManager();
+	// A real journal over a real (empty) entry stream, so the recovery surface the
+	// tool reads is the production one rather than a stand-in.
+	const entries: DelegationJournalEntry[] = [];
+	const journal = new DelegationJournal({
+		sessionId: "session-1",
+		read: () => entries,
+		write: (snapshot) => entries.push({ type: "custom", customType: "pi.delegation-journal", data: snapshot }),
+	});
+	journal.load();
+	const jobs = new JobManager({ onChange: (job) => journal.record(job), claimIds: journal.recoveredIds });
 	const ops: TaskOperations = {
 		runner,
 		jobs: {
@@ -76,6 +86,10 @@ function harness(
 			wait: async (id) => ((await jobs.waitById(id)) === undefined ? undefined : (jobs.status(id)?.result ?? "")),
 			cancel: (id) => jobs.cancel(id),
 			start: (label, run) => jobs.start(label, run),
+			markDelivered: (id) => jobs.markDelivered(id),
+			recovered: () => journal.recovered,
+			markRecoveredDelivered: (id) => journal.markDelivered(id),
+			writeError: () => journal.writeFailure,
 		},
 		worktrees,
 		runChild: (request) => runner.run(request),
