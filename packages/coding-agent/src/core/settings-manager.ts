@@ -64,6 +64,13 @@ export interface RetrySettings {
 	maxRetries?: number; // default: 3
 	baseDelayMs?: number; // default: 2000 (exponential backoff: 2s, 4s, 8s)
 	maxAgentDelayMs?: number; // default: 60000
+	/**
+	 * Registered keys that may still arrive here from a file written before they
+	 * were registered, or from one whose migration was removed. Read as a fallback, so
+	 * the type has to admit them even though the authority prefers the registry.
+	 */
+	maxDelayMs?: number;
+	waitForUsageReset?: boolean;
 	provider?: ProviderRetrySettings;
 }
 

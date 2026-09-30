@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { type ApprovalGateOptions, decideToolApproval } from "../src/core/security/approval-gate.ts";
 import { bashPatterns } from "../src/core/settings-descriptors.ts";
+import { parseApprovalPatterns } from "../src/core/shell/approval-patterns.ts";
 
 /**
  * Shell approval rules, driven through the real gate.
@@ -32,6 +33,7 @@ const BASH_ALLOWING = { name: "bash", approval: "allow" as const };
 const NO_UI: ApprovalGateOptions["prompt"] = undefined;
 
 const gate = (
+	/** The wire shape as a settings file holds it, before parsing. */
 	patterns: unknown,
 	mode: ApprovalGateOptions["mode"] = "yolo",
 	extra: Partial<ApprovalGateOptions> = {},
@@ -46,7 +48,7 @@ const gate = (
 			command: {
 				// Read through the real descriptor, so a setting that cannot carry a
 				// rule shows up here as an empty list rather than as a silent pass.
-				patterns: bashPatterns.parse(patterns),
+				patterns: parseApprovalPatterns(patterns),
 				compoundAllowed: false,
 				shell: "/bin/bash",
 			},
@@ -92,7 +94,7 @@ describe("a configured deny rule refuses through the gate", () => {
 				policies: {},
 				prompt: async () => "allow" as const,
 				command: {
-					patterns: bashPatterns.parse([{ match: "rm -rf *", approval: "deny" }]),
+					patterns: parseApprovalPatterns([{ match: "rm -rf *", approval: "deny" }]),
 					compoundAllowed: false,
 				},
 			},
@@ -120,7 +122,7 @@ describe("the setting can carry a rule at all", () => {
 	it("admits the documented array wire form", async () => {
 		// Defect 2: declared as a `record`, the registry rejected this array, so a
 		// user could write `bash.patterns` and never once populate it.
-		expect(bashPatterns.parse([{ match: "rm -rf *", approval: "deny" }])).toEqual([
+		expect(parseApprovalPatterns([{ match: "rm -rf *", approval: "deny" }])).toEqual([
 			{ match: "rm -rf *", approval: "deny" },
 		]);
 	});
@@ -149,7 +151,7 @@ describe("a tool that takes no command is unaffected", () => {
 			options: {
 				mode: "yolo",
 				policies: {},
-				command: { patterns: bashPatterns.parse([{ match: "*", approval: "deny" }]), compoundAllowed: false },
+				command: { patterns: parseApprovalPatterns([{ match: "*", approval: "deny" }]), compoundAllowed: false },
 			},
 		});
 		expect(result.kind).toBe("allow");
@@ -162,7 +164,7 @@ describe("a tool that takes no command is unaffected", () => {
 			options: {
 				mode: "yolo",
 				policies: {},
-				command: { patterns: bashPatterns.parse([{ match: "*", approval: "deny" }]), compoundAllowed: false },
+				command: { patterns: parseApprovalPatterns([{ match: "*", approval: "deny" }]), compoundAllowed: false },
 			},
 		});
 		expect(result.kind).toBe("allow");

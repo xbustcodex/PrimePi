@@ -1932,6 +1932,10 @@ export const bashPatterns = registerSetting({
 	default: [],
 	parse: (raw) => {
 		if (!Array.isArray(raw)) return undefined;
+		// `Record<string, unknown>[]` because that is what `SettingObjectList` is: a
+		// structural wire shape, so a descriptor may carry any object entry. The
+		// approval authority re-parses through `parseApprovalPatterns`, which is where
+		// `match`/`approval` regain their types.
 		const kept: Record<string, unknown>[] = [];
 		for (const entry of parseApprovalPatterns(raw)) kept.push({ ...entry });
 		// Rules that do not survive the entry schema are dropped rather than

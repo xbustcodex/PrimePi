@@ -380,7 +380,7 @@ describe("SettingsManager", () => {
 
 		it("lets the registered keys outrank the legacy retry tree", () => {
 			const manager = SettingsManager.inMemory({
-				retry: { maxRetries: 10, maxDelayMs: 1_000, waitForUsageReset: false },
+				retry: { maxRetries: 10, maxDelayMs: 1_000 },
 			});
 			manager.setSetting("retry.maxRetries", 1);
 			manager.setSetting("retry.waitForUsageReset", true);

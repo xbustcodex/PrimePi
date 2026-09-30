@@ -59,10 +59,12 @@ describe("auto-resume selects the newest session that actually holds something",
 	/** A session file with a real user/assistant exchange, so it has content. */
 	function writeContentBearingSession(cwd: string, id: string): string {
 		const session = SessionManager.create(cwd, sessionDir, { id });
-		session.appendMessage({ role: "user", content: "real work" });
+		session.appendMessage({ role: "user", content: [{ type: "text", text: "real work" }], timestamp: Date.now() });
 		session.appendMessage({
 			role: "assistant",
-			content: "real answer",
+			content: [{ type: "text", text: "real answer" }],
+			api: "openai-completions",
+			provider: "test",
 			model: "test",
 			usage: USAGE,
 			stopReason: "stop",

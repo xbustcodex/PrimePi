@@ -160,7 +160,7 @@ describe("reminders come from a finished turn, not from a helper", () => {
 	 * making progress. Twelve is the threshold, so twelve is what this does.
 	 */
 	async function turnThatStopsMidPlan(
-		settings: Record<string, unknown>,
+		settings: Record<string, boolean | number>,
 		promptText = "do the work",
 	): Promise<Harness> {
 		const harness = await harnessWith(settings);
