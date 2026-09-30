@@ -196,6 +196,17 @@ export interface Edit {
 export interface AppliedEditsResult {
 	baseContent: string;
 	newContent: string;
+	/**
+	 * 1-based line numbers in `baseContent` that the edits anchored on.
+	 *
+	 * The edit tool matches by exact text rather than by line, so "which lines
+	 * does this edit touch" is a question only the matcher can answer. Deriving it
+	 * here rather than re-searching in the tool is what keeps the seen-line guard
+	 * honest: a line number computed by a second, slightly different search would
+	 * disagree with the region actually replaced, and the guard would then police
+	 * the wrong lines.
+	 */
+	anchoredLines: number[];
 }
 
 /**
@@ -349,6 +360,16 @@ export function applyEditsToNormalizedContent(
 		}
 	}
 
+	// 1-based, because that is what a model sees in a numbered listing and what the
+	// seen-line index records. Computed from the same match offsets the replacement
+	// uses, so the guard and the edit can never disagree about which lines moved.
+	const anchoredLines: number[] = [];
+	for (const match of matchedEdits) {
+		const range = getReplacementLineRange(getLineSpans(normalizedContent), match);
+		for (let line = range.startLine + 1; line <= range.endLine; line++) anchoredLines.push(line);
+	}
+	anchoredLines.sort((left, right) => left - right);
+
 	const baseContent = normalizedContent;
 	const newContent = usedFuzzyMatch
 		? applyReplacementsPreservingUnchangedLines(normalizedContent, replacementBaseContent, matchedEdits)
@@ -358,7 +379,7 @@ export function applyEditsToNormalizedContent(
 		throw getNoChangeError(path, normalizedEdits.length);
 	}
 
-	return { baseContent, newContent };
+	return { baseContent, newContent, anchoredLines };
 }
 
 /** Generate a standard unified patch. */

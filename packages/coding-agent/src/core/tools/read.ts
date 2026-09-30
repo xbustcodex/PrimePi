@@ -68,6 +68,46 @@ export interface ReadToolOptions {
 	 * follows the user configuration; absent, the built-in defaults apply.
 	 */
 	readSetting?: (key: string) => unknown;
+	/**
+	 * Reports what a read actually displayed.
+	 *
+	 * Supplied by the session so the seen-line guard knows what the model was shown.
+	 * The `seenLines` argument is the whole point: it is the *displayed* range, not
+	 * the file's extent. A read that summarizes, truncates, or pages shows some
+	 * lines and not others, and recording the file's full extent for it would claim
+	 * provenance the model never had — which is exactly the stale-anchor case the
+	 * guard exists to stop, laundered through a recorder that overstated.
+	 *
+	 * A read that displayed no line at all reports an empty range. That is honest
+	 * and it is safe, because an edit anchored on a line a summary never showed is
+	 * an edit the model had no basis for; refusing it costs one re-read, which the
+	 * rejection message names.
+	 */
+	onRead?: (observed: {
+		readonly absolutePath: string;
+		/** The file's full text, which the caller hashes to key the snapshot. */
+		readonly text: string;
+		/** 1-based first displayed line. */
+		readonly firstLine: number;
+		/**
+		 * 1-based last displayed line, or one less than `firstLine` when nothing
+		 * was displayed. An empty range is a real answer, not a missing one: a
+		 * summarized or oversized read displayed no line at all, and an edit
+		 * anchored on one is an edit the model had no basis for.
+		 */
+		readonly lastLine: number;
+		/**
+		 * Whether the read was summarized rather than shown verbatim.
+		 *
+		 * Reported so the session can tell "nothing was displayed" from "nothing
+		 * could be displayed". A summarized read still tells the model the file
+		 * exists and roughly what is in it, so the digest guard has something true
+		 * to record; but no line of it was displayed, so the line guard has nothing.
+		 * That is still the honest answer, and refusing is cheap — the message names
+		 * `offset`/`limit`, which is one call away.
+		 */
+		readonly summarized: boolean;
+	}) => void;
 }
 
 function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
@@ -200,6 +240,15 @@ export function createReadToolDefinition(
 									totalLines: totalFileLines,
 									bytes: Buffer.byteLength(textContent, "utf-8"),
 								});
+
+								// What the model was actually shown, as a count of lines starting at
+								// `startLineDisplay`. Zero until a branch proves otherwise: a branch
+								// that does not say what it displayed has displayed nothing, and
+								// recording the file's full extent here would claim provenance the
+								// model never had — the stale-anchor case laundered through a recorder
+								// that overstated.
+								let displayedLineCount = 0;
+								let wasSummarized = false;
 								if (summary.action === "skip") {
 									// Parsing a file this large costs more than the summary saves, and the
 									// model can still page through it with offset and limit.
@@ -213,6 +262,9 @@ export function createReadToolDefinition(
 										},
 									];
 									details = undefined;
+									// The model knows the file exists and roughly what is in it; not one of
+									// its lines was displayed, so none may be recorded as seen.
+									wasSummarized = true;
 								} else {
 									// Apply truncation, respecting both line and byte limits.
 									const truncation = truncateHead(selectedContent);
@@ -245,8 +297,20 @@ export function createReadToolDefinition(
 										// No truncation and no remaining user-limited content.
 										outputText = truncation.content;
 									}
+									// `truncation.outputLines` is what the model was shown, whether it was
+									// cut short by the line budget, the byte budget, a user's `limit`, or
+									// nothing at all. The two cases that displayed no text — an
+									// oversized first line, and the skip above — leave it at zero.
+									displayedLineCount = truncation.outputLines;
 									content = [{ type: "text", text: outputText }];
 								}
+								options?.onRead?.({
+									absolutePath,
+									text: textContent,
+									firstLine: startLineDisplay,
+									lastLine: startLineDisplay + displayedLineCount - 1,
+									summarized: wasSummarized,
+								});
 							}
 
 							if (aborted) return;

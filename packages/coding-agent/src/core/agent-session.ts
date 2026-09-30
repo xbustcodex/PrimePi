@@ -14,7 +14,7 @@
  */
 
 import { readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type {
 	Agent,
@@ -36,6 +36,7 @@ import {
 	type AvailabilityFailure,
 	admitRequest,
 	classifyAvailabilityFailure,
+	contentDigest,
 	contentText,
 	failoverNotice,
 	getCurrentSystemMessage,
@@ -96,6 +97,7 @@ import {
 } from "./compaction/index.ts";
 import { planStaleToolResultPrunes } from "./compaction/pruning.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
+import { createSeenLineSource, SeenLineIndex } from "./edit/seen-lines.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
 import {
@@ -595,6 +597,26 @@ export class AgentSession {
 	private _customTools: ToolDefinition[];
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
 	private _cwd: string;
+	/**
+	 * Which lines of which content this session's model has actually been shown.
+	 *
+	 * Owned here rather than built per tool call because provenance is a property of
+	 * the session's history, not of any one tool invocation: a read records into it
+	 * and an edit consults it, possibly many calls apart. The guard is enforced at
+	 * the edit's pre-write site; this is only where the record lives.
+	 */
+	private _seenLines = new SeenLineIndex();
+	/**
+	 * The digest of the content the model was shown, per path.
+	 *
+	 * A separate map from `_seenLines` because the two use different hashes:
+	 * `contentDigest` over the content alone, against the `seenDigests` the edit
+	 * tool compares, versus a tag over path+content inside the index. Feeding a tag
+	 * where a digest belongs makes every comparison mismatch, which would refuse
+	 * every edit in the product — a wiring mistake that type-checks cleanly and is
+	 * therefore asserted in `test/edit-guards-wiring.test.ts` rather than trusted.
+	 */
+	private _seenDigests = new Map<string, string>();
 	private _extensionRunnerRef?: { current?: ExtensionRunner };
 	private _initialActiveToolNames?: string[];
 	private _allowedToolNames?: Set<string>;
@@ -3163,11 +3185,34 @@ ${context}`
 	 * recall path costs nothing. A backend that cannot be constructed degrades to
 	 * the same inert store carrying its reason: a missing optional subsystem is
 	 * never a reason to refuse a prompt.
+	 *
+	 * ## Why the bank settings are read here and not in the memory subsystem
+	 *
+	 * `core/memory/session.ts` takes a resolved `BankStoreConfig` precisely so it
+	 * stays free of the settings layer, and this is the layer that owns the
+	 * registry. Reading the keys at the construction point is what makes
+	 * `mnemopi.dbPath`, `mnemopi.bank` and `mnemopi.scoping` consumed rather than
+	 * merely declared.
+	 *
+	 * `dbPath` names a SQLite *file* in the reference, while the bank store's
+	 * `root` is the directory holding `banks/`, so the file's parent is what
+	 * carries over. It is resolved to an absolute path first: `dirname` of a bare
+	 * relative name is `"."`, which would hand the bank store the process working
+	 * directory and write memories into a repository. `BankStoreConfig.root` says
+	 * exactly that this must not happen, so a configured path is made absolute
+	 * against the cwd once, here, rather than re-resolved at open time.
+	 *
+	 * `dbPath` and `bank` both parse an all-whitespace value back to `""`, so the
+	 * truthiness guards are load-bearing rather than defensive: without them an
+	 * unset `dbPath` would reach `dirname("")` and resolve to the cwd.
 	 */
 	private async _autoMemoryLifecycle(): Promise<AutoMemoryLifecycle> {
 		if (!this._autoMemory) {
 			const configured = this.settingsManager.getSetting("memory.backend")?.value;
 			const backendId = typeof configured === "string" && configured !== "" ? configured : "off";
+			const dbPath = this.settingsManager.getSetting("mnemopi.dbPath")?.value;
+			const bank = this.settingsManager.getSetting("mnemopi.bank")?.value;
+			const scoping = this.settingsManager.getSetting("mnemopi.scoping")?.value;
 			const injected = this._memory;
 			this._autoMemory = (async () => {
 				const memory =
@@ -3176,7 +3221,14 @@ ${context}`
 						backendId,
 						agentDir: getAgentDir(),
 						project: this._cwd,
-						bankStore: { cwd: this._cwd },
+						bankStore: {
+							cwd: this._cwd,
+							...(typeof dbPath === "string" && dbPath ? { root: dirname(resolve(dbPath)) } : {}),
+							...(typeof bank === "string" && bank ? { bank } : {}),
+							...(scoping === "global" || scoping === "per-project" || scoping === "per-project-tagged"
+								? { scoping }
+								: {}),
+						},
 					}));
 				this._memory = memory;
 				// Keyed on the store's own capabilities, never on `inert` and never on
@@ -3184,9 +3236,17 @@ ${context}`
 				// flag, so a backend that can recall but not store — a read-only mirror
 				// of another engine — would have been refused both. Each side is asked
 				// only for what it can actually do.
+				//
+				// `mnemopi.autoRecall` / `mnemopi.autoRetain` may only *narrow* those
+				// capabilities, never grant one: a backend that cannot recall stays
+				// silent when the setting is on.
 				return new AutoMemoryLifecycle(memory, {
-					autoRecall: memory.status.capabilities.recall,
-					autoRetain: memory.status.capabilities.retain,
+					autoRecall:
+						this.settingsManager.getSetting("mnemopi.autoRecall")?.value !== false &&
+						memory.status.capabilities.recall,
+					autoRetain:
+						this.settingsManager.getSetting("mnemopi.autoRetain")?.value !== false &&
+						memory.status.capabilities.retain,
 				});
 			})();
 		}
@@ -5162,6 +5222,7 @@ ${context}`
 		const autoResizeImages = this.settingsManager.getImageAutoResize();
 		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
 		const shellPath = this.settingsManager.getShellPath();
+		const readSetting = (key: string): unknown => this.settingsManager.getSetting(key)?.value;
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -5170,9 +5231,42 @@ ${context}`
 					]),
 				)
 			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
+					// A read is where provenance comes from, so the recorder is supplied
+					// here rather than being reconstructed per edit. The reported range is
+					// the lines actually displayed; a summarized read reports none.
+					read: {
+						autoResizeImages,
+						readSetting,
+						onRead: (observed) => {
+							const lines =
+								observed.summarized || observed.lastLine < observed.firstLine
+									? []
+									: Array.from(
+											{ length: observed.lastLine - observed.firstLine + 1 },
+											(_, index) => observed.firstLine + index,
+										);
+							this._seenLines.recordSnapshot(observed.absolutePath, observed.text, lines);
+							this._seenDigests.set(observed.absolutePath, contentDigest(observed.text));
+						},
+					},
 					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					// The edit guard's two halves. `readSetting` was previously absent
+					// here, so `edit.blockAutoGenerated` was true by accident of a
+					// comparison against `undefined` rather than by reading the key, and
+					// `edit.enforceSeenLines` had no path to the tool at all.
+					edit: {
+						readSetting,
+						seenDigests: this._seenDigests,
+						seenLines: createSeenLineSource(
+							this._seenLines,
+							() => this.settingsManager.getSetting("edit.enforceSeenLines")?.value !== false,
+						),
+					},
 				});
+		// A reload rebuilds the tools, and the previous definitions' `onRead` closure
+		// captured the same maps, so provenance survives a reload rather than resetting
+		// and making every subsequent edit look unrecorded. The write path records
+		// through `recordWrite`, which updates both structures together.
 
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
