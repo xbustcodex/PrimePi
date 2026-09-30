@@ -3728,7 +3728,12 @@ ${context}`
 		} else {
 			contextTokens = directContextTokens;
 		}
-		if (shouldCompact(contextTokens, contextWindow, settings)) {
+		// The configured threshold percent and token count are resolved into the
+		// engine reserved-token field here, so the engine keeps one comparison and the
+		// two settings keep their distinct meanings. An absolute token limit that would
+		// fire earlier than the percentage wins; see resolveCompactionLimits.
+		const limits = this.settingsManager.getCompactionLimits(contextWindow);
+		if (shouldCompact(contextTokens, contextWindow, { ...settings, reserveTokens: limits.reserveTokens })) {
 			return await this._runAutoCompaction("threshold", false);
 		}
 		return false;

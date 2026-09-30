@@ -74,6 +74,15 @@ export {
 	type SpeculationMethod,
 	selectCompactionMethod,
 } from "./utils/compaction-methods.ts";
+export {
+	type CompactionThresholds,
+	DEFAULT_RESERVE_TOKENS,
+	decideIdleCompaction,
+	type IdleCompactionDecision,
+	type IdleCompactionInput,
+	type ResolvedCompactionLimits,
+	resolveCompactionLimits,
+} from "./utils/compaction-thresholds.ts";
 export * from "./utils/diagnostics.ts";
 export {
 	checkEditAllowed,

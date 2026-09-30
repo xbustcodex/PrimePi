@@ -3,6 +3,8 @@ import {
 	DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
 	type FailoverPolicy,
 	type Model,
+	type ResolvedCompactionLimits,
+	resolveCompactionLimits,
 	type Transport,
 } from "@earendil-works/pi-ai";
 import type { TuiMode as RendererTuiMode, ScrollViewScrollbar, TerminalCapabilities } from "@earendil-works/pi-tui";
@@ -1369,6 +1371,27 @@ export class SettingsManager {
 	 * money, so `compatible` is reachable only by explicit configuration. An
 	 * unrecognized value also degrades to `free-only` rather than to a paid-capable one.
 	 */
+	/**
+	 * Resolves the compaction trigger from the two configured limits.
+	 *
+	 * Both are exposed by the reference: a percentage and an absolute token count.
+	 * They answer different questions — the percentage adapts to a small window,
+	 * the absolute count stops a large one from waiting until compaction no longer
+	 * fits — so neither is derived from the other here.
+	 *
+	 * Read through the registry rather than a field so a mid-session change takes
+	 * effect on the next turn.
+	 */
+	getCompactionLimits(contextWindow: number): ResolvedCompactionLimits {
+		return resolveCompactionLimits({
+			contextWindow,
+			thresholds: {
+				thresholdPercent: this.getSetting("compaction.thresholdPercent")?.value as number | undefined,
+				thresholdTokens: this.getSetting("compaction.thresholdTokens")?.value as number | undefined,
+			},
+		});
+	}
+
 	getFailoverPolicy(): FailoverPolicy {
 		const configured = this.settings.failover;
 		return configured === "off" || configured === "same-provider" || configured === "compatible"
