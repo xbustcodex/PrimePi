@@ -53,6 +53,43 @@ describe("the ledger reconciles against the reference contract", () => {
 });
 
 describe("the evidence classes mean what they say", () => {
+	it("asserts nested sets, so the subset invariants hold structurally", () => {
+		// The classes are cumulative: a row asserting `behaviourally-verified` also
+		// asserts `runtime-reachable` and `registered`. Reading only the strongest
+		// claim is what produced the original contradiction, where 17 reachable rows
+		// were hidden inside the behavioural bucket.
+		for (const entry of buildLedger()) {
+			const claims = new Set(entry.claims);
+			// The first two classes are alternatives, not a ladder: a row is unregistered
+			// *or* registered, never both. Everything above them is a genuine ladder.
+			expect(claims.has("unregistered") && claims.has("registered"), entry.id).toBe(false);
+			const aboveFloor = EVIDENCE_CLASSES.slice(2);
+			const asserted = aboveFloor.filter((cls) => claims.has(cls));
+			for (let index = 0; index < asserted.length; index++) {
+				// Reaching index i means every weaker class above the floor is asserted too.
+				expect(asserted[index], `${entry.id} missing ${aboveFloor[index]}`).toBe(aboveFloor[index]);
+			}
+		}
+	});
+
+	it("reports nested counts, not exclusive buckets", () => {
+		// The buckets must not sum to the row count: a row asserting live also asserts
+		// three weaker classes. A report that summed them was reading the wrong thing.
+		const summary = reconcileLedger();
+		const total = EVIDENCE_CLASSES.reduce((sum, cls) => sum + summary.byEvidence[cls], 0);
+		const rows = summary.total;
+		const exclusiveSum = summary.byEvidence.unregistered + summary.byEvidence.registered;
+		expect(exclusiveSum, "unregistered and registered partition the rows").toBe(rows);
+		// Only rows above the floor contribute extra assertions, so the total is the
+		// row count plus one per asserted class beyond `registered`.
+		expect(total).toBeGreaterThanOrEqual(rows);
+		expect(total - rows).toBe(
+			summary.byEvidence["runtime-reachable"] +
+				summary.byEvidence["behaviourally-verified"] +
+				summary.byEvidence["live-verified"],
+		);
+	});
+
 	it("never claims a registry key the typed registry does not have", () => {
 		// A row asserting `registered` for a key nothing declares is a contradiction
 		// with the only part of the chain that is a fact rather than a claim.

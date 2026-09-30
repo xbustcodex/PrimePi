@@ -91,6 +91,13 @@ export interface LedgerEntry {
 	 */
 	readonly evidence: EvidenceClass;
 	/**
+	 * Every class this row asserts, weakest first.
+	 *
+	 * Cumulative by construction, so a report can count the sets as nested without
+	 * the ledger and the invariants disagreeing about what the numbers mean.
+	 */
+	readonly claims: readonly EvidenceClass[];
+	/**
 	 * Production sites proven to obtain the key.
 	 *
 	 * Empty does not by itself mean inert — a parameterized accessor is
@@ -211,24 +218,40 @@ export function buildLedger(): readonly LedgerEntry[] {
 		// mistake this module was re-cut to remove.
 		const key = row.piKey;
 		const sites = key === undefined ? undefined : consumptionIndex.get(key);
-		let evidence: EvidenceClass = key === undefined ? "unregistered" : "registered";
-		// The classes ascend, so a stronger claim can only be made on top of a proven
-		// weaker one. Behavioural evidence without a proven consumption site would mean
-		// a test demonstrated a difference through a path production never takes, which
-		// is not evidence of integration — so reachability gates the rest.
-		// A live claim is only honoured when a production read is proven. The set is
-		// retained as a record of what the program intended to verify; the class is
-		// what it can currently back.
-		if (sites !== undefined && sites.length > 0) {
-			evidence = BEHAVIOURALLY_VERIFIED.has(row.id) ? "behaviourally-verified" : "runtime-reachable";
-			if (evidence === "behaviourally-verified" && LIVE_VERIFIED.has(row.id) && sites.length > 0) {
-				evidence = "live-verified";
-			}
-		}
+		// Cumulative claims, weakest first. Each is independent and each implies every
+		// weaker one, so the subset invariants hold by construction rather than by
+		// convention:
+		//
+		//     live-verified ⊆ behaviourally-verified ⊆ runtime-reachable ⊆ registered
+		//
+		// The previous single-value ladder made these *mutually exclusive*, so a row
+		// claiming behavioural evidence was not counted as reachable. A report quoting
+		// "16 reachable, 17 behavioural" against an enforced subset invariant was
+		// therefore describing two universes without saying so.
+		const reachable = sites !== undefined && sites.length > 0;
+		const behavioural = reachable && BEHAVIOURALLY_VERIFIED.has(row.id);
+		const liveVerified = behavioural && LIVE_VERIFIED.has(row.id);
+		const claims = new Set<EvidenceClass>();
+		if (key === undefined) claims.add("unregistered");
+		else claims.add("registered");
+		if (reachable) claims.add("runtime-reachable");
+		if (behavioural) claims.add("behaviourally-verified");
+		if (liveVerified) claims.add("live-verified");
+		// The strongest claim asserted, kept for the row display.
+		const evidence = liveVerified
+			? "live-verified"
+			: behavioural
+				? "behaviourally-verified"
+				: reachable
+					? "runtime-reachable"
+					: key === undefined
+						? "unregistered"
+						: "registered";
 		return {
 			id: row.id,
 			tab: row.tab,
 			state,
+			claims: [...claims],
 			...(row.piKey ? { piKey: row.piKey } : {}),
 			evidence,
 			...(sites !== undefined && sites.length > 0 ? { consumedBy: [...sites] } : {}),
@@ -296,8 +319,11 @@ export function reconcileLedger(): LedgerSummary {
 	const reachableWithoutSite: string[] = [];
 	const liveWithoutSite: string[] = [];
 
+	// Nested sets, not exclusive buckets: a row asserting `behaviourally-verified` also
+	// asserts `runtime-reachable` and `registered`. Counting each class once per
+	// asserted claim is what makes the subset invariants meaningful.
 	for (const entry of entries) {
-		byEvidence[entry.evidence] += 1;
+		for (const claimed of entry.claims) byEvidence[claimed] += 1;
 		byState[entry.state] += 1;
 		byTab[entry.tab] ??= emptyState();
 		byTab[entry.tab]![entry.state] += 1;
