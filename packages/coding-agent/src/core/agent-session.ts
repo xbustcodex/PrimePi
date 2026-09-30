@@ -24,6 +24,7 @@ import type {
 	AgentTool,
 	AgentTurnContext,
 	PrepareNextTurnContext,
+	StreamFn,
 	ThinkingLevel,
 	ToolApprovalDeclaration,
 } from "@earendil-works/pi-agent-core";
@@ -32,6 +33,7 @@ import {
 	type Api,
 	AvailabilityCooldowns,
 	type AvailabilityFailure,
+	admitRequest,
 	classifyAvailabilityFailure,
 	contentText,
 	failoverNotice,
@@ -42,6 +44,7 @@ import {
 	retryDelayMs,
 	selectFailoverCandidate,
 	type TurnRequirements,
+	validateProviderLimits,
 } from "@earendil-works/pi-ai";
 import type {
 	AssistantMessage,
@@ -485,6 +488,13 @@ export class AgentSession {
 	private _fallbackChain: ChainState | undefined;
 	/** Lazily built; the settings it reads can change after construction. */
 	private _toolCallLoopGuard: CrossTurnLoopGuard | undefined;
+	/**
+	 * In-flight request count per provider, for `providers.maxInFlightRequests`.
+	 *
+	 * Counted around the stream call rather than around credential resolution, so
+	 * one increment corresponds to one request actually on the wire.
+	 */
+	private readonly _providerInFlight = new Map<string, number>();
 	private _isBeforeSettle = false;
 	private _abortDuringBeforeSettle = false;
 	private _isEmittingAgentSettled = false;
@@ -612,6 +622,7 @@ export class AgentSession {
 		this._installAgentNextTurnRefresh();
 		this._installAgentRequestProjection();
 		this._installAgentBoundaryHooks();
+		this._installProviderRequestGate();
 		this._installAgentForcedPromptProjection();
 
 		this._buildRuntime({
@@ -623,6 +634,72 @@ export class AgentSession {
 
 	get modelRuntime(): ModelRuntime {
 		return this._modelRuntime;
+	}
+
+	/**
+	 * Wraps the stream function so every request passes the per-provider
+	 * concurrency ceiling.
+	 *
+	 * A limit above the provider's own ceiling produces rate-limit errors rather
+	 * than throughput, so a rejection names which number is at fault instead of
+	 * implying the limit simply did not apply.
+	 *
+	 * The counter is decremented in a `finally`, so a request that throws — a
+	 * provider error, an abort, a parse failure — still releases its slot. Without
+	 * that, enough failed requests would lock a provider out permanently.
+	 *
+	 * Idempotent: wrapping an already-wrapped stream is a no-op, so repeated
+	 * installs do not double-count.
+	 */
+	private _installProviderRequestGate(): void {
+		const agent = this.agent as unknown as { streamFunction: StreamFn & { providerLimited?: true } };
+		if (agent.streamFunction.providerLimited) return;
+		const inner = agent.streamFunction;
+		const wrapped = ((...args: Parameters<StreamFn>) => {
+			const provider = this._gateProviderFor(args);
+			const limits = validateProviderLimits(this.settingsManager.getSetting("providers.maxInFlightRequests")?.value);
+			const current = provider === undefined ? 0 : (this._providerInFlight.get(provider) ?? 0);
+			const decision = admitRequest({ limits, usage: { provider: provider ?? "", inFlight: current } });
+			if (!decision.admit) {
+				throw new Error(
+					`${provider} already has ${decision.inFlight} requests in flight, at its configured limit of ${decision.limit}. ` +
+						`Raise providers.maxInFlightRequests, or lower it below the provider's own ceiling.`,
+				);
+			}
+			if (provider !== undefined) this._providerInFlight.set(provider, current + 1);
+			const release = () => {
+				if (provider === undefined) return;
+				const now = this._providerInFlight.get(provider) ?? 0;
+				if (now <= 1) this._providerInFlight.delete(provider);
+				else this._providerInFlight.set(provider, now - 1);
+			};
+			try {
+				const stream = inner(...args);
+				// A stream function may return either a promise of a stream or the stream
+				// itself, so `.finally` cannot be assumed. Both shapes release on failure.
+				if (stream instanceof Promise) return stream.finally(release) as typeof stream;
+				return stream;
+			} catch (error) {
+				// A synchronous throw never produced a stream to attach to, so the slot is
+				// released here rather than leaked.
+				release();
+				throw error;
+			}
+		}) as StreamFn & { providerLimited: true };
+		wrapped.providerLimited = true;
+		agent.streamFunction = wrapped;
+	}
+
+	/**
+	 * Which provider a stream call is for.
+	 *
+	 * Read from the request's own model rather than the session's, because a
+	 * compaction or a subagent runs on a different model than the session does and
+	 * must be counted against that provider.
+	 */
+	private _gateProviderFor(args: Parameters<StreamFn>): string | undefined {
+		const model = (args[0] as { model?: { provider?: string } } | undefined)?.model;
+		return model?.provider;
 	}
 
 	private async _getRequiredRequestAuth(
