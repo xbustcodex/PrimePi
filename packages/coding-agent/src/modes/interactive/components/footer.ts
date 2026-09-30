@@ -131,17 +131,12 @@ export class FooterComponent implements Component {
 		// Build stats line
 		const statsParts = [];
 
-		// The session goal, shown only when the goal subsystem is on and the user
-		// asked for it in the footer. Read live rather than captured: a setting the
-		// user flips has to take effect on the next repaint, or the flag is wired to
-		// nothing. `statusInFooter` defaults to true, so only an explicit false hides it.
-		if (
-			this.session.settingsManager.getSetting("goal.enabled")?.value === true &&
-			this.session.settingsManager.getSetting("goal.statusInFooter")?.value !== false
-		) {
-			const goal = goalIndicator(this.session.orchestration.state);
-			if (goal) statsParts.push(theme.fg("accent", goal));
-		}
+		// The session goal, when the session says it belongs here. The two settings
+		// behind that answer are read live by the session, so a flip shows on the
+		// next repaint; the footer itself resolves no settings, which keeps it out of
+		// the business of deciding what is enabled.
+		const goal = this.session.goalStatusVisible ? goalIndicator(this.session.orchestration.state) : undefined;
+		if (goal) statsParts.push(theme.fg("accent", goal));
 		if (usageTotals.input) statsParts.push(`↑${formatTokens(usageTotals.input)}`);
 		if (usageTotals.output) statsParts.push(`↓${formatTokens(usageTotals.output)}`);
 		if (usageTotals.cacheRead) statsParts.push(`R${formatTokens(usageTotals.cacheRead)}`);

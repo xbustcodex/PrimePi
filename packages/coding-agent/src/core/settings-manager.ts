@@ -1,6 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
-	DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
 	type FailoverPolicy,
 	type Model,
 	type ResolvedCompactionLimits,
@@ -16,6 +15,7 @@ import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
+import { type RetryPolicyResolution, resolveRetryPolicy } from "./retry-policy.ts";
 import { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 import {
 	allSettings,
@@ -692,29 +692,11 @@ export class SettingsManager {
 			}
 		}
 
-		// Migrate retry.maxDelayMs -> retry.provider.maxRetryDelayMs
-		if (
-			"retry" in settings &&
-			typeof settings.retry === "object" &&
-			settings.retry !== null &&
-			!Array.isArray(settings.retry)
-		) {
-			const retrySettings = settings.retry as Record<string, unknown>;
-			const providerSettings =
-				typeof retrySettings.provider === "object" && retrySettings.provider !== null
-					? (retrySettings.provider as Record<string, unknown>)
-					: undefined;
-			if (
-				typeof retrySettings.maxDelayMs === "number" &&
-				(providerSettings?.maxRetryDelayMs === undefined || providerSettings?.maxRetryDelayMs === null)
-			) {
-				retrySettings.provider = {
-					...(providerSettings ?? {}),
-					maxRetryDelayMs: retrySettings.maxDelayMs,
-				};
-			}
-			delete retrySettings.maxDelayMs;
-		}
+		// `retry.maxDelayMs` is a live registered setting (it caps the wait before a
+		// retry and before a provider-reported usage reset is waited out). It used to
+		// be deleted here on load and rerouted to `retry.provider.maxRetryDelayMs`,
+		// which is neither registered nor read anywhere in the repo, so the move left
+		// the setting impossible to configure and had no consumer at the destination.
 
 		return settings as Settings;
 	}
@@ -1359,8 +1341,20 @@ export class SettingsManager {
 		return this.settings.branchSummary?.skipPrompt ?? false;
 	}
 
-	getRetryEnabled(): boolean {
-		return this.settings.retry?.enabled ?? true;
+	/**
+	 * The retry policy for the next request.
+	 *
+	 * Read through the registry so `retry.maxRetries`, `retry.maxDelayMs`, and
+	 * `retry.waitForUsageReset` are the authority — typed, validated, layered, and
+	 * visible to a mid-session change — instead of raw fields on the settings tree.
+	 * Fields with no descriptor (`enabled`, `baseDelayMs`, `maxAgentDelayMs`) keep
+	 * reading the legacy tree.
+	 */
+	getRetryPolicy(): RetryPolicyResolution {
+		return resolveRetryPolicy({
+			registered: (key) => this.getSetting(key),
+			legacy: this.settings.retry,
+		});
 	}
 
 	setRetryEnabled(enabled: boolean): void {
@@ -1370,15 +1364,6 @@ export class SettingsManager {
 		this.globalSettings.retry.enabled = enabled;
 		this.markModified("retry", "enabled");
 		this.save();
-	}
-
-	getRetrySettings(): { enabled: boolean; maxRetries: number; baseDelayMs: number; maxAgentDelayMs: number } {
-		return {
-			enabled: this.getRetryEnabled(),
-			maxRetries: this.settings.retry?.maxRetries ?? 3,
-			baseDelayMs: this.settings.retry?.baseDelayMs ?? 2000,
-			maxAgentDelayMs: this.settings.retry?.maxAgentDelayMs ?? DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
-		};
 	}
 
 	/**

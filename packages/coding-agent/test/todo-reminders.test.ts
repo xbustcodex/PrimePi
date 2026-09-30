@@ -40,6 +40,22 @@ describe("telling a question from a question mark", () => {
 		expect(result.isQuestion).toBe(false);
 	});
 
+	// Regression: the unmarked-opener branch used the full interrogative list, so
+	// "do the work" read as a question. A reminder is suppressed whenever the
+	// user is classified as mid-question, which meant the ordinary imperative
+	// request — the most common prompt there is — silenced every reminder.
+	it("does not treat an imperative as a question", () => {
+		expect(classifyPromptLine("do the work").isQuestion).toBe(false);
+		expect(classifyPromptLine("make it so").isQuestion).toBe(false);
+		expect(classifyPromptLine("will check the logs").isQuestion).toBe(false);
+	});
+
+	// The narrow set is not so narrow that a genuine unmarked question is lost.
+	it("still recognises an unmarked question fragment", () => {
+		expect(classifyPromptLine("what about the pool").isQuestion).toBe(true);
+		expect(classifyPromptLine("is the migration reversible").isQuestion).toBe(true);
+	});
+
 	it("does not treat a URL query as a question", () => {
 		expect(classifyPromptLine("fetch https://example.test/search?q=what").isQuestion).toBe(false);
 	});

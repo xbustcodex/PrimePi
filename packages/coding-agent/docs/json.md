@@ -163,11 +163,13 @@ See [Compaction and Branch Summaries](compaction.md) for result semantics.
 Assistant-turn retry emits:
 
 ```json
-{"type":"auto_retry_start","attempt":1,"maxAttempts":3,"delayMs":2000,"errorMessage":"529 overloaded"}
+{"type":"auto_retry_start","attempt":1,"maxAttempts":3,"delayMs":2000,"errorMessage":"529 overloaded","waitingForUsageReset":false}
 {"type":"auto_retry_end","success":true,"attempt":2}
 ```
 
-On final failure, `auto_retry_end` has `success: false` and a `finalError` string.
+`waitingForUsageReset` is `true` when the wait is for a provider-reported reset window rather than ordinary exponential backoff.
+
+On final failure, `auto_retry_end` has `success: false` and a `finalError` string. When the retries stopped because the budget was spent rather than because the provider gave a non-retryable error, `reason` is `"retries_exhausted"` and `finalError` names the budget (`retry.maxRetries`) along with the last provider error.
 
 Compaction and branch-summary retry emit:
 

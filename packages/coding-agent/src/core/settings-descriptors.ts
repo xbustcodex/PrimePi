@@ -12,6 +12,7 @@
 
 import { DEFAULT_COMPACTION_METHOD_ORDER, parseConfiguredThinkingLevel } from "@earendil-works/pi-ai";
 import { registerSetting } from "./settings-registry.ts";
+import { parseApprovalPatterns } from "./shell/approval-patterns.ts";
 
 /**
  * Cache-warming profile. "idle" also warms between agent runs.
@@ -1909,11 +1910,34 @@ export const ttsrBuiltinRules = registerSetting({
 		control: "cycle",
 	},
 });
+/**
+ * Ordered bash approval rules, e.g.
+ * `[{ "match": "rm -rf *", "approval": "deny" }]`.
+ *
+ * An `objectList`, and that is load-bearing rather than cosmetic. Declared as a
+ * `record`, the registry required every value to be a string and refused the
+ * array the setting documents — so `bash.patterns` was a setting that could be
+ * written but never populated, and the pattern rules downstream of it judged
+ * an empty list no matter what the user configured.
+ *
+ * `parse` normalises each entry through the same parser the approval authority
+ * uses, so a malformed rule is dropped here for the same reason and by the same
+ * code that would have dropped it there. One bad rule must not disable the rules
+ * around it, so an entry that survives the array check but not the entry schema
+ * still leaves the list usable.
+ */
 export const bashPatterns = registerSetting({
 	key: "bash.patterns",
-	type: "record",
-	default: {},
-	parse: (raw) => (typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : undefined),
+	type: "objectList",
+	default: [],
+	parse: (raw) => {
+		if (!Array.isArray(raw)) return undefined;
+		const kept: Record<string, unknown>[] = [];
+		for (const entry of parseApprovalPatterns(raw)) kept.push({ ...entry });
+		// Rules that do not survive the entry schema are dropped rather than
+		// rejecting the whole list, matching the authority's own tolerance.
+		return kept;
+	},
 	ui: {
 		label: "Bash Approval Patterns",
 		description:
@@ -3670,7 +3694,12 @@ export const bankStoreScoping = registerSetting({
 export const retryMaxRetries = registerSetting({
 	key: "retry.maxRetries",
 	type: "number",
-	default: 0,
+	// The documented default (`docs/settings.md`) and the value the session has
+	// always used. It was `0` here, which matched neither: any consumer trusting
+	// the descriptor would silently disable every retry. OMP ships 10, which this
+	// fork deliberately narrows — raising the budget is a spend decision, not a
+	// wiring fix.
+	default: 3,
 	ui: {
 		label: "Max Retries",
 		description: "Number of automatic retries before the turn is abandoned",

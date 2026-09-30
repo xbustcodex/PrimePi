@@ -42,7 +42,6 @@ import {
 	isCredentialFree,
 	resolveRoleCandidates,
 	resolveRoleChain,
-	retryDelayMs,
 	selectFailoverCandidate,
 	type TurnRequirements,
 	validateProviderLimits,
@@ -75,6 +74,7 @@ import { getAgentDir } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
+import { getShellConfig } from "../utils/shell.ts";
 import { sleep } from "../utils/sleep.ts";
 import { normalizeToolResultImages } from "../utils/tool-result-images.ts";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.ts";
@@ -159,9 +159,11 @@ import { TaskRunner } from "./orchestration/task-runner.js";
 import { WorktreeManager } from "./orchestration/worktree-manager.js";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import { planRetryAttempt } from "./retry-policy.ts";
 import { type ApprovalGateOptions, decideToolApproval, toBeforeToolCallResult } from "./security/approval-gate.ts";
 import { redactMessages, restoreToolArguments } from "./security/secret-transform.ts";
 import { collectEnvSecrets, detectSecrets, SecretRedactor } from "./security/secrets.ts";
+import type { CommandApprovalRules } from "./security/tool-approval.ts";
 import { tierForTool } from "./security/tool-classification.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
@@ -173,6 +175,7 @@ import {
 	SessionManager,
 } from "./session-manager.ts";
 import type { CacheWarmingMode, SettingsManager } from "./settings-manager.ts";
+import { parseApprovalPatterns } from "./shell/approval-patterns.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 import {
@@ -182,6 +185,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "./system-prompt.ts";
+import { TODO_REMINDER_TYPE, TodoReminderController } from "./todo/todo-reminder.ts";
 import { createApplyPatchTool, createApplyPatchToolDefinition } from "./tools/apply-patch.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createGitToolDefinitions, createGitTools, type GitToolOperations } from "./tools/git.ts";
@@ -246,7 +250,15 @@ export type AgentSessionEvent =
 			willRetry: boolean;
 			errorMessage?: string;
 	  }
-	| { type: "auto_retry_start"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
+	| {
+			type: "auto_retry_start";
+			attempt: number;
+			maxAttempts: number;
+			delayMs: number;
+			errorMessage: string;
+			/** The wait is for a provider-reported reset, not ordinary backoff. */
+			waitingForUsageReset: boolean;
+	  }
 	| { type: "auto_failover"; text: string; noticeKey: string; from: string; to: string }
 	| {
 			type: "auto_failover_failed";
@@ -255,7 +267,14 @@ export type AgentSessionEvent =
 			freeRequired: boolean;
 			blocked: string[];
 	  }
-	| { type: "auto_retry_end"; success: boolean; attempt: number; finalError?: string }
+	| {
+			type: "auto_retry_end";
+			success: boolean;
+			attempt: number;
+			finalError?: string;
+			/** Present only when the budget, not the provider, ended the retries. */
+			reason?: "retries_exhausted";
+	  }
 	| {
 			type: "summarization_retry_scheduled";
 			attempt: number;
@@ -515,6 +534,12 @@ export class AgentSession {
 	private _retryAbortController: AbortController | undefined = undefined;
 	private _retryAttempt = 0;
 	/**
+	 * Set when the retry budget, not the provider, ended the retries. Held until
+	 * the run reports its outcome so the terminal failure can name the budget
+	 * instead of repeating a provider error the user cannot act on.
+	 */
+	private _retryExhaustion: { attempts: number; message: string } | undefined = undefined;
+	/**
 	 * Replacement model for exactly the next request, spent by `prepareRequest`.
 	 * Held separately from `agent.state.model` so a failover never rewrites the
 	 * user's configured model or the session transcript.
@@ -613,6 +638,14 @@ export class AgentSession {
 		getCurrentUsage: () => this._currentGoalUsage(),
 	});
 	private _unsubscribeGoalSetting?: () => void;
+	/**
+	 * The per-cycle todo reminder budget.
+	 *
+	 * Per session rather than global, so one session's reminders cannot spend
+	 * another's budget and a disposed session leaves nothing behind.
+	 */
+	private readonly _todoReminder = new TodoReminderController();
+	private _unsubscribeTodoSetting?: () => void;
 	/**
 	 * The delegation engine and its job substrate.
 	 *
@@ -736,6 +769,11 @@ export class AgentSession {
 		// because a toggle that applies only on next launch is not a live setting.
 		this._unsubscribeGoalSetting = this.settingsManager.onEffectiveChange(["goal.enabled"], () => {
 			this._applyGoalSettingToToolSelection();
+		});
+		// `todo.enabled` decides whether the `todo` tool exists at all, for the same
+		// reason and in the same both-directions form as `goal.enabled` above.
+		this._unsubscribeTodoSetting = this.settingsManager.onEffectiveChange(["todo.enabled"], () => {
+			this._applyTodoSettingToToolSelection();
 		});
 
 		// Before `_buildRuntime`, because that is what builds the system prompt from
@@ -1647,6 +1685,35 @@ ${context}`
 	}
 
 	/**
+	 * Whether the todo subsystem is on.
+	 *
+	 * Read at every use rather than captured, so a flip takes effect on the next
+	 * turn instead of at the next launch. It gates two things and neither is
+	 * optional: the `todo` tool's presence in the registry, and whether a
+	 * reminder may fire. A tool the user turned off that still answered, and a
+	 * reminder about a plan the user can no longer see, are both the same bug.
+	 */
+	private _todoEnabled(): boolean {
+		return this.settingsManager.getSetting("todo.enabled")?.value === true;
+	}
+
+	/**
+	 * Adds or removes `todo` from the active selection as `todo.enabled` flips.
+	 *
+	 * The same both-directions reasoning as the goal tool: refusing to register
+	 * on the next build would leave a tool the user switched off still callable
+	 * in this one.
+	 */
+	private _applyTodoSettingToToolSelection(): void {
+		const active = this.getActiveToolNames();
+		const enabled = this._todoEnabled();
+		if (enabled === active.includes("todo")) return;
+		this._refreshToolRegistry({
+			activeToolNames: enabled ? [...active, "todo"] : active.filter((name) => name !== "todo"),
+		});
+	}
+
+	/**
 	 * The session's cumulative token counters, in the shape goal accounting reads.
 	 *
 	 * Cumulative over all entries, which is what makes a turn's cost a difference
@@ -1839,6 +1906,41 @@ ${context}`
 						return answer;
 					}
 				: undefined,
+			command: this._commandApprovalRules(),
+		};
+	}
+
+	/**
+	 * The shell approval rules, read fresh for every call.
+	 *
+	 * ## Why this is here and not in the gate
+	 *
+	 * The gate is the authority and reads the command out of the arguments, but
+	 * the *rules* are configuration, and configuration is this session's to read.
+	 * The gate therefore stays pure and host-agnostic: an RPC host supplies its
+	 * own rules through the same option, and neither can be tricked into judging
+	 * a command it was not asked to judge.
+	 *
+	 * ## Why an empty pattern list still returns rules
+	 *
+	 * With no patterns, `decideChain` reports `no rule matched` for every command,
+	 * which the resolver already treats as "no opinion" and falls through to the
+	 * mode ceiling. So the unconfigured case is unchanged — but the compound
+	 * flag still has to be passed for the ceiling path to stay identical, and
+	 * returning `undefined` here would mean the gate silently skipped command
+	 * judgement altogether.
+	 */
+	private _commandApprovalRules(): CommandApprovalRules {
+		const patterns = this.settingsManager.getSetting("bash.patterns")?.value;
+		const compoundAllowed = this.settingsManager.getSetting("bash.allowCompoundCommands")?.value === true;
+		// The shell decides whether `&&` chaining is even meaningful here, so a
+		// PowerShell session is never asked to segment a POSIX chain. `decideChain`
+		// checks the name itself, and passing the resolved path rather than a
+		// literal keeps that check honest about a custom `shellPath`.
+		return {
+			patterns: parseApprovalPatterns(patterns),
+			compoundAllowed,
+			shell: getShellConfig(this.settingsManager.getShellPath()).shell,
 		};
 	}
 
@@ -1959,11 +2061,18 @@ ${context}`
 		const previousFinishTurn = this.agent.finishTurn;
 		this.agent.finishTurn = async (turn, signal) => {
 			this._boundaryDispatchedMessages.add(turn.message);
+			for (const result of turn.toolResults) this._todoReminder.noteToolResult(result.toolName, result.isError);
 			const loopGuard = this._evaluateToolCallLoopGuard(turn);
+			// Asked last, and only when nothing else already scheduled a turn. A
+			// continuation the loop guard or an extension asked for is itself the
+			// answer to "keep going", and adding a reminder on top would run two
+			// turns off one completed one and charge the user for both.
 			const extensionContinue = loopGuard || (await this._dispatchTurnEndBoundary(turn.message, turn.toolResults));
+			const todoReminder = extensionContinue ? false : this._dispatchTodoReminder(turn);
 			const previousDecision = await previousFinishTurn?.(turn, signal);
 			if (previousDecision?.action === "end") return previousDecision;
-			if (extensionContinue || previousDecision?.action === "continue") return { action: "continue" };
+			if (extensionContinue || todoReminder || previousDecision?.action === "continue")
+				return { action: "continue" };
 			return undefined;
 		};
 	}
@@ -2010,6 +2119,82 @@ ${context}`
 			return true;
 		}
 		return false;
+	}
+
+	/**
+	 * Appends a todo reminder for a finished turn, and reports whether to continue.
+	 *
+	 * The message goes into stored history rather than the live message array,
+	 * for the same reason the loop guard's redirect does: the next provider
+	 * request reads the projection, so a message that is only pushed onto a
+	 * detached array would be invisible and would remind nothing.
+	 *
+	 * The budget, the outstanding items, and every guard live in the controller,
+	 * so this method only supplies session facts and performs the append.
+	 */
+	private _dispatchTodoReminder(turn: AgentTurnContext): boolean {
+		if (turn.message.stopReason === "error" || turn.message.stopReason === "aborted") return false;
+		const reminder = this._todoReminder.evaluate({
+			todosEnabled: this._todoEnabled(),
+			remindersEnabled: this.settingsManager.getSetting("todo.reminders")?.value === true,
+			reminderLimit: this._todoReminderLimit(),
+			todo: this._orchestration.todo,
+			lastUserLines: this._lastUserPromptLines(),
+			writeBarrierActive: this._orchestration.writeBarrierActive,
+			touchedPlanThisTurn: turn.toolResults.some((result) => result.toolName === "todo"),
+		});
+		if (!reminder) return false;
+		this.sessionManager.appendMessage(
+			createCustomMessage(
+				TODO_REMINDER_TYPE,
+				reminder.text,
+				false,
+				{
+					outstanding: reminder.outstanding,
+					attempt: reminder.attempt,
+					maxAttempts: reminder.maxAttempts,
+					items: reminder.items,
+				},
+				Date.now(),
+			),
+		);
+		return true;
+	}
+
+	/**
+	 * `todo.remindersMax`, clamped to something a budget can actually be spent
+	 * against.
+	 *
+	 * A zero or negative limit would mean "never nag", which is what
+	 * `todo.reminders: false` already says; reading it as a plan-size ceiling of
+	 * zero would instead make every plan larger than nothing ineligible.
+	 */
+	private _todoReminderLimit(): number {
+		const value = this.settingsManager.getSetting("todo.remindersMax")?.value;
+		return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.trunc(value)) : 5;
+	}
+
+	/**
+	 * The lines of the most recent user message.
+	 *
+	 * Read from the transcript rather than from the prompt argument, because the
+	 * question this answers — "is the user waiting for an answer?" — is about the
+	 * message the model is currently answering, and by the time a turn ends the
+	 * prompt that started it is no longer in scope.
+	 */
+	private _lastUserPromptLines(): string[] {
+		const messages = this.agent.state.messages;
+		for (let index = messages.length - 1; index >= 0; index--) {
+			const message = messages[index];
+			if (!message || message.role !== "user") continue;
+			// A user message's content is a content-part array, not a string. Reading
+			// it as a string yielded "" for every prompt, so the user-question guard
+			// saw an empty transcript and never suppressed a reminder.
+			return contentText(message.content, "")
+				.split("\n")
+				.filter((line) => line.trim().length > 0);
+		}
+		return [];
 	}
 
 	private _createToolCallLoopGuard(): CrossTurnLoopGuard {
@@ -2312,6 +2497,7 @@ ${context}`
 						attempt: this._retryAttempt,
 					});
 					this._retryAttempt = 0;
+					this._retryExhaustion = undefined;
 					// A turn completed, so the failover cycle is over. Clearing the
 					// attempted set here is what bounds the cycle and lets a future
 					// failure legitimately retry a model that failed earlier.
@@ -2333,8 +2519,8 @@ ${context}`
 
 	private _willRetryAfterAgentEnd(event: Extract<AgentEvent, { type: "agent_end" }>): boolean {
 		if (this._agentRunAbortRequested) return false;
-		const settings = this.settingsManager.getRetrySettings();
-		if (!settings.enabled || this._retryAttempt >= settings.maxRetries) {
+		const policy = this.settingsManager.getRetryPolicy();
+		if (!policy.enabled || this._retryAttempt >= policy.maxRetries) {
 			return false;
 		}
 
@@ -2609,6 +2795,7 @@ ${context}`
 		// A disposed session must stop reacting to settings: the listener rebuilds
 		// the tool registry, which belongs to a session nobody is using any more.
 		this._unsubscribeGoalSetting?.();
+		this._unsubscribeTodoSetting?.();
 		this._eventListeners = [];
 		if (this._cacheWarmer) {
 			this._cacheWarmer.onWarmed = undefined;
@@ -3032,6 +3219,11 @@ ${context}`
 	private async _runAgentPrompt(messages: AgentMessage | AgentMessage[]): Promise<void> {
 		this._agentRunAbortRequested = false;
 		this._isAgentRunActive = true;
+		// A new prompt is a new reminder budget. This is the seam rather than
+		// `agent_start`, because `agent_start` also fires for the continuations this
+		// loop issues — including the one a reminder itself caused — and resetting
+		// there would make the per-cycle cap unreachable within the cycle it bounds.
+		this._todoReminder.beginCycle();
 		try {
 			await this.agent.prompt(messages);
 			while (!this._agentRunAbortRequested) {
@@ -3085,14 +3277,20 @@ ${context}`
 			return false;
 		}
 
-		if (message.stopReason === "error" && this._retryAttempt > 0) {
+		// A spent budget is reported as itself. Emitting the provider's text here
+		// would tell the user their model is broken when in fact the retry ceiling
+		// was reached, which is a different problem with a different fix.
+		const exhaustion = this._retryExhaustion;
+		if (message.stopReason === "error" && (this._retryAttempt > 0 || exhaustion !== undefined)) {
 			this._emit({
 				type: "auto_retry_end",
 				success: false,
 				attempt: this._retryAttempt,
-				finalError: message.errorMessage,
+				finalError: exhaustion?.message ?? message.errorMessage,
+				...(exhaustion ? { reason: "retries_exhausted" as const } : {}),
 			});
 			this._retryAttempt = 0;
+			this._retryExhaustion = undefined;
 		}
 
 		if (await this._checkCompaction(message, true, toolResults)) {
@@ -3968,7 +4166,7 @@ ${context}`
 			this.thinkingLevel,
 			this.agent.streamFunction,
 			env,
-			this.settingsManager.getRetrySettings(),
+			this.settingsManager.getRetryPolicy(),
 			this._summarizationRetryCallbacks({ source: "compaction", reason }),
 			undefined, // sessionId
 		);
@@ -4526,6 +4724,21 @@ ${context}`
 		return this.settingsManager.getCompactionEnabled();
 	}
 
+	/**
+	 * Whether the current goal belongs in the status footer.
+	 *
+	 * Both settings are read on every call rather than cached, so a flip shows on
+	 * the next repaint rather than at the next launch — the same reason
+	 * `goal.enabled` needs a live subscription to move the tool in and out of the
+	 * registry. The feature gate is checked first: with goal mode off there is
+	 * nothing to show, and a display preference is not a request to display a
+	 * feature that is not on.
+	 */
+	get goalStatusVisible(): boolean {
+		if (!this._goalAccountingEnabled()) return false;
+		return this.settingsManager.getSetting("goal.statusInFooter")?.value !== false;
+	}
+
 	async bindExtensions(bindings: ExtensionBindings): Promise<void> {
 		if (bindings.uiContext !== undefined) {
 			this._extensionUIContext = bindings.uiContext;
@@ -4814,7 +5027,11 @@ ${context}`
 				});
 			}
 		}
-		if (isAllowedTool("todo") && isSelected("todo")) {
+		// `todo.enabled` is the first clause for the same reason it is the third
+		// clause on `goal` below: a tool the user turned off must not be declared to
+		// the model, and must not be registered, or it stays callable in the one
+		// build that was supposed to exclude it.
+		if (this._todoEnabled() && isAllowedTool("todo") && isSelected("todo")) {
 			definitionRegistry.set("todo", {
 				definition: createTodoToolDefinition({
 					get: () => this._orchestration.todo,
@@ -4888,7 +5105,7 @@ ${context}`
 				toolRegistry.set(gitTool.name, gitTool);
 			}
 		}
-		if (isAllowedTool("todo") && isSelected("todo")) {
+		if (this._todoEnabled() && isAllowedTool("todo") && isSelected("todo")) {
 			const todoTool = createTodoTool({
 				get: () => this._orchestration.todo,
 				set: (state) => this._orchestration.setTodo(state),
@@ -5073,6 +5290,7 @@ ${context}`
 		if (this._retryAttempt === 0) return;
 		const attempt = this._retryAttempt;
 		this._retryAttempt = 0;
+		this._retryExhaustion = undefined;
 		this._emit({
 			type: "auto_retry_end",
 			success: false,
@@ -5086,8 +5304,8 @@ ${context}`
 	 * @returns true if the caller should continue the agent, false otherwise
 	 */
 	private async _prepareRetry(message: AssistantMessage): Promise<boolean> {
-		const settings = this.settingsManager.getRetrySettings();
-		if (!settings.enabled) {
+		const policy = this.settingsManager.getRetryPolicy();
+		if (!policy.enabled) {
 			return false;
 		}
 
@@ -5117,6 +5335,7 @@ ${context}`
 				// Conclusively unavailable until a known reset and nothing eligible is
 				// left. Stop cleanly and explain, rather than retrying or spending money.
 				this._retryAttempt = 0;
+				this._retryExhaustion = undefined;
 				this._emit({ type: "auto_failover_failed", ...failover.explanation });
 				return false;
 			}
@@ -5126,22 +5345,34 @@ ${context}`
 			this._availability.record({ ...failure, now: Date.now() });
 		}
 
-		this._retryAttempt++;
-
-		if (this._retryAttempt > settings.maxRetries) {
-			// Preserve the completed attempt count so post-run handling can emit the final failure.
-			this._retryAttempt--;
+		// The budget is resolved before the wait, so a request can never sleep its way
+		// past the ceiling it was given, and the wait itself is computed from the same
+		// policy that bounded it.
+		const decision = planRetryAttempt({
+			policy,
+			attempt: this._retryAttempt + 1,
+			resetAtMs: failure?.resetAtMs,
+			errorMessage: message.errorMessage,
+		});
+		if (decision.kind === "disabled") return false;
+		if (decision.kind === "exhausted") {
+			// The completed count is preserved so post-run handling still emits the
+			// failure, and the reason is recorded so that failure names the budget
+			// rather than blaming the provider for a limit nobody set.
+			this._retryAttempt = decision.attempts;
+			this._retryExhaustion = { attempts: decision.attempts, message: decision.message };
 			return false;
 		}
-
-		const delayMs = retryDelayMs(settings, this._retryAttempt);
+		this._retryAttempt = decision.attempt;
+		const { delayMs } = decision;
 
 		this._emit({
 			type: "auto_retry_start",
-			attempt: this._retryAttempt,
-			maxAttempts: settings.maxRetries,
-			delayMs,
+			attempt: decision.attempt,
+			maxAttempts: policy.maxRetries,
+			delayMs: decision.delayMs,
 			errorMessage: message.errorMessage || "Unknown error",
+			waitingForUsageReset: decision.waitingForUsageReset,
 		});
 
 		// Keep the failed attempt in raw history while durably omitting it from model projection.
@@ -5400,7 +5631,7 @@ ${context}`
 
 	/** Whether auto-retry is enabled */
 	get autoRetryEnabled(): boolean {
-		return this.settingsManager.getRetryEnabled();
+		return this.settingsManager.getRetryPolicy().enabled;
 	}
 
 	/**
@@ -5653,7 +5884,7 @@ ${context}`
 					replaceInstructions,
 					reserveTokens: branchSummarySettings.reserveTokens,
 					streamFn: this.agent.streamFunction,
-					retry: this.settingsManager.getRetrySettings(),
+					retry: this.settingsManager.getRetryPolicy(),
 					callbacks: this._summarizationRetryCallbacks({ source: "branchSummary" }),
 				});
 				if (result.aborted) {
@@ -5923,7 +6154,7 @@ ${context}`
 			signal: options.signal,
 			thinkingLevel: this.thinkingLevel,
 			streamFn: this.agent.streamFunction,
-			retry: this.settingsManager.getRetrySettings(),
+			retry: this.settingsManager.getRetryPolicy(),
 			sessionId: this.sessionId,
 		});
 	}

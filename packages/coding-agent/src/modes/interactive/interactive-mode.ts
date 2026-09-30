@@ -4541,8 +4541,22 @@ export class InteractiveMode {
 	// UI helpers
 	// =========================================================================
 
+	/**
+	 * Clears the composer, keeping what it held for recall when the setting says so.
+	 *
+	 * This is the ctrl+c clear: the user is discarding a half-written thought, not
+	 * submitting it, which is exactly the case `composer.recallClearedDrafts`
+	 * describes. The flag is read here rather than captured, so a change applies
+	 * to the next clear rather than needing a restart.
+	 *
+	 * A custom editor component need not implement `clearDraft`; falling back to
+	 * `setText("")` is a plain discard, which is the honest behaviour for a
+	 * component that has no draft store to give back from.
+	 */
 	clearEditor(): void {
-		this.editor.setText("");
+		const recall = this.settingsManager.getSetting("composer.recallClearedDrafts")?.value === true;
+		if (this.editor.clearDraft) this.editor.clearDraft({ recall });
+		else this.editor.setText("");
 		this.ui.requestRender();
 	}
 

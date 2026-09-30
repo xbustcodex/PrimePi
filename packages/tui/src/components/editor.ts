@@ -2,6 +2,7 @@ import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocompl
 import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
+import { type ComposerContents, DraftHistory } from "../prompt/draft-history.ts";
 import {
 	type Component,
 	CURSOR_MARKER,
@@ -345,6 +346,58 @@ export class Editor implements Component, Focusable {
 	private history: string[] = [];
 	private historyIndex: number = -1; // -1 = not browsing, 0 = most recent, 1 = older, etc.
 	private historyDraft: EditorState | null = null;
+	/**
+	 * Drafts thrown away by a clear, kept so a discarded half-written thought is
+	 * reachable. Distinct from `history`: a submitted prompt is something the
+	 * user sent, a draft is something they abandoned, and only the former should
+	 * be re-sent by accident.
+	 */
+	private readonly drafts = new DraftHistory();
+
+	/**
+	 * The list arrow-up and arrow-down walk.
+	 *
+	 * Submitted prompts first, then discarded drafts, each newest first. The two
+	 * groups are kept in that order rather than interleaved by time because they
+	 * answer different questions: the prompt history is what the user sent, and
+	 * the drafts below it are what they threw away and may want back. Merging
+	 * them would make a recovered draft indistinguishable from a prompt about to
+	 * be re-sent.
+	 */
+	private browsableEntries(): string[] {
+		const drafts = this.drafts.entries();
+		const draftTexts: string[] = [];
+		for (let index = drafts.length - 1; index >= 0; index--) {
+			const entry = drafts[index];
+			if (entry) draftTexts.push(entry.text);
+		}
+		return [...this.history, ...draftTexts];
+	}
+
+	/**
+	 * The composer contents, as the draft history records them.
+	 *
+	 * PrimePi's editor holds text and nothing else, so the attachment lists are
+	 * empty rather than absent: `DraftHistory` decides whether a clear discarded
+	 * anything, and that decision must not depend on a field this editor lacks.
+	 */
+	private composerContents(): ComposerContents {
+		return { text: this.getText(), images: [], imageLinks: [], texts: [] };
+	}
+
+	/**
+	 * Clears the composer, optionally keeping what it held for recall.
+	 *
+	 * The `recall` flag is read here, at the moment of the clear, so turning the
+	 * setting off governs future clears and does not retroactively empty drafts
+	 * the user already discarded while it was on. Calling this on an empty
+	 * composer records nothing: there was nothing to discard, and an empty entry
+	 * in recall history is a blank the user has to arrow past.
+	 */
+	clearDraft(options: { recall: boolean }): void {
+		this.drafts.clear(this.composerContents(), { recall: options.recall, at: Date.now() });
+		this.setText("");
+	}
 
 	// Kill ring for Emacs-style kill/yank operations
 	private killRing = new KillRing();
@@ -454,10 +507,14 @@ export class Editor implements Component, Focusable {
 
 	private navigateHistory(direction: 1 | -1): void {
 		this.lastAction = null;
-		if (this.history.length === 0) return;
+		// Read through the combined list rather than `history` directly, so a
+		// recalled draft is reachable by the same arrow keys a submitted prompt is
+		// and needs no separate gesture the user has to learn.
+		const entries = this.browsableEntries();
+		if (entries.length === 0) return;
 
 		const newIndex = this.historyIndex - direction; // Up(-1) increases index, Down(1) decreases
-		if (newIndex < -1 || newIndex >= this.history.length) return;
+		if (newIndex < -1 || newIndex >= entries.length) return;
 
 		// Capture state when first entering history browsing mode
 		if (this.historyIndex === -1 && newIndex >= 0) {
@@ -480,7 +537,7 @@ export class Editor implements Component, Focusable {
 				this.setTextInternal("");
 			}
 		} else {
-			this.setTextInternal(this.history[this.historyIndex] || "", direction === -1 ? "start" : "end");
+			this.setTextInternal(entries[this.historyIndex] || "", direction === -1 ? "start" : "end");
 		}
 	}
 

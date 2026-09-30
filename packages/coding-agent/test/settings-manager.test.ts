@@ -355,18 +355,48 @@ describe("SettingsManager", () => {
 	});
 
 	describe("retry settings", () => {
-		it("defaults and overrides agent retry delay cap", () => {
-			expect(SettingsManager.inMemory().getRetrySettings()).toEqual({
+		it("resolves the retry policy through the registry, keeping documented defaults", () => {
+			expect(SettingsManager.inMemory().getRetryPolicy()).toEqual({
 				enabled: true,
 				maxRetries: 3,
 				baseDelayMs: 2000,
 				maxAgentDelayMs: 60000,
+				maxDelayMs: 0,
+				waitForUsageReset: true,
 			});
 			expect(
 				SettingsManager.inMemory({
 					retry: { enabled: true, maxRetries: 10, baseDelayMs: 500, maxAgentDelayMs: 5000 },
-				}).getRetrySettings(),
-			).toEqual({ enabled: true, maxRetries: 10, baseDelayMs: 500, maxAgentDelayMs: 5000 });
+				}).getRetryPolicy(),
+			).toEqual({
+				enabled: true,
+				maxRetries: 10,
+				baseDelayMs: 500,
+				maxAgentDelayMs: 5000,
+				maxDelayMs: 0,
+				waitForUsageReset: true,
+			});
+		});
+
+		it("lets the registered keys outrank the legacy retry tree", () => {
+			const manager = SettingsManager.inMemory({
+				retry: { maxRetries: 10, maxDelayMs: 1_000, waitForUsageReset: false },
+			});
+			manager.setSetting("retry.maxRetries", 1);
+			manager.setSetting("retry.waitForUsageReset", true);
+
+			expect(manager.getRetryPolicy()).toMatchObject({
+				maxRetries: 1,
+				maxDelayMs: 1_000,
+				waitForUsageReset: true,
+			});
+		});
+
+		it("keeps retry.maxDelayMs in the settings tree instead of migrating it away", () => {
+			const manager = SettingsManager.inMemory({ retry: { maxDelayMs: 250_000 } });
+
+			expect(manager.getSetting("retry.maxDelayMs")?.value).toBe(250_000);
+			expect(manager.getRetryPolicy().maxDelayMs).toBe(250_000);
 		});
 	});
 

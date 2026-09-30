@@ -4424,7 +4424,7 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		],
 		status: "wired",
 		piKey: "retry.maxRetries",
-		note: "registered with the typed registry; the retry policy consumes it",
+		note: "read by the session's resolved retry policy, which bounds automatic retries per request",
 	},
 	{
 		id: "retry.maxDelayMs",
@@ -4432,12 +4432,12 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		group: "Retry & Fallback",
 		label: "Max Retry Delay",
 		description:
-			"Maximum wait between retries, in ms. When the provider asks us to wait longer than this and no credential or model fallback succeeds, the request fails fast instead of sleeping (e.g. 3-hour Anthropic rate-limit windows). 0 disables the ceiling — to let the session auto-resume through provider-stated quota resets.",
+			"Ceiling on a single retry wait. When a provider asks us to wait longer than this — a 3-hour rate-limit window, say — the wait is bounded rather than taken, and the turn either retries on a shorter backoff or fails fast with the budget named. 0 applies no extra ceiling beyond the agent backoff cap.",
 		type: "number",
-		default: "5 * 60 * 1000",
+		default: "0",
 		status: "wired",
 		piKey: "retry.maxDelayMs",
-		note: "registered with the typed registry; the retry policy consumes it",
+		note: "read by the session's resolved retry policy; it caps both the exponential backoff and a waited-out usage window",
 	},
 	{
 		id: "retry.waitForUsageReset",
@@ -4448,7 +4448,7 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		default: "false",
 		status: "wired",
 		piKey: "retry.waitForUsageReset",
-		note: "consumed when a rate limit reports a reset time, so the turn waits instead of failing",
+		note: "read by the session's resolved retry policy; a rate limit that reports a reset time is waited out instead of retried into, bounded by retry.maxDelayMs",
 	},
 	{
 		id: "retry.modelFallback",

@@ -39,6 +39,16 @@ export interface EditorComponent extends Component {
 	/** Add text to history for up/down navigation */
 	addToHistory?(text: string): void;
 
+	/**
+	 * Clear the composer, optionally keeping what it held for recall.
+	 *
+	 * The flag is supplied by the host rather than read here, because the setting
+	 * that governs it lives in the application, not in the widget. A component
+	 * that does not implement this is cleared with `setText("")` and simply has
+	 * nothing to give back.
+	 */
+	clearDraft?(options: { recall: boolean }): void;
+
 	// =========================================================================
 	// Advanced text manipulation (optional)
 	// =========================================================================
