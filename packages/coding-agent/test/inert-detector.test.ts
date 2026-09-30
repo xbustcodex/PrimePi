@@ -57,6 +57,11 @@ beforeAll(() => {
 
 /** Symbols whose production reachability was established by hand. */
 const KNOWN_REACHABLE = [
+	// Wired since this list was written. Kept here rather than removed, because a
+	// symbol that was once inert and is now reachable is the shape worth pinning: a
+	// fixture that merely deletes such a case loses the regression it was there for.
+	{ name: "decideChain", file: "packages/coding-agent/src/core/shell/compound-commands.ts" },
+	{ name: "parseApprovalPatterns", file: "packages/coding-agent/src/core/shell/approval-patterns.ts" },
 	{ name: "editToolSystemPromptContribution", file: "packages/coding-agent/src/core/tools/edit.ts" },
 	{ name: "spillOutput", file: "packages/ai/src/utils/output-spill.ts" },
 	{ name: "checkEditFreshness", file: "packages/ai/src/utils/edit-guards.ts" },
@@ -66,10 +71,29 @@ const KNOWN_REACHABLE = [
 	{ name: "admitRequest", file: "packages/ai/src/utils/provider-limits.ts" },
 ];
 
-/** Symbols established by hand as having no production caller. */
+/**
+ * Symbols established by hand as having no production caller.
+ *
+ * Verified against the tree: each of these was reported inert by this scan, and a
+ * caller was confirmed absent. If one becomes wired, it moves to KNOWN_REACHABLE
+ * rather than being deleted — see the note there.
+ */
 const KNOWN_INERT = [
-	{ name: "decideChain", file: "packages/coding-agent/src/core/shell/compound-commands.ts" },
-	{ name: "parseApprovalPatterns", file: "packages/coding-agent/src/core/shell/approval-patterns.ts" },
+	// Verified against the tree, not remembered: each was reported inert by this scan
+	// and the absence of a caller confirmed by hand. A symbol that becomes wired moves
+	// to KNOWN_REACHABLE rather than being deleted from this list — see the note there.
+	{ name: "AdvisorEmissionGuard", file: "packages/agent/src/advisor/emission-guard.ts" },
+	{ name: "advisorSeverityRank", file: "packages/agent/src/advisor/emission-guard.ts" },
+	{ name: "resolveCodeMode", file: "packages/agent/src/code-mode.ts" },
+	{ name: "buildToolNamespacesInfo", file: "packages/agent/src/code-mode.ts" },
+	{ name: "mergeEvalTools", file: "packages/agent/src/eval-tools.ts" },
+	{ name: "renderEvalResult", file: "packages/agent/src/eval-tools.ts" },
+	{ name: "resolveRequestedTools", file: "packages/agent/src/eval-tools.ts" },
+	{ name: "stripHarnessIntent", file: "packages/agent/src/eval-tools.ts" },
+	// An earlier revision of this file listed `recallForTurn` as *reachable*. It is
+	// not: its only occurrence in `src` is its own declaration. Asserting otherwise
+	// would be a fixture proving a falsehood, which is precisely how a broken
+	// detector keeps reading as a healthy one.
 	{ name: "recallForTurn", file: "packages/coding-agent/src/core/memory/auto-memory.ts" },
 ];
 
@@ -90,11 +114,20 @@ describe("intra-file references are references", () => {
 });
 
 describe("documentation is not a reference", () => {
+	// These two name a symbol that is genuinely inert today. They used to name
+	// `decideChain`, which is now wired by production code — so the assertion kept
+	// passing for the wrong reason once the wiring landed, which is worse than the
+	// original defect it was pinning. The symbol is a live fact, not a constant.
+	const inertExample = (): Flagged => {
+		const entry = flagged((candidate) => candidate.productionRefs === 0 && candidate.testRefs > 0)[0];
+		expect(entry, "some symbol is tested but never wired").toBeDefined();
+		return entry!;
+	};
+
 	it("does not let the parity ledger vouch for a row", () => {
 		// The strongest form of the defect: a claim being used as its own evidence.
 		// The ledger's notes name the consumer each setting is supposed to have.
-		const entry = flagged((candidate) => candidate.name === "decideChain")[0];
-		expect(entry, "decideChain must be reported as having no production reference").toBeDefined();
+		expect(inertExample().productionRefs).toBe(0);
 	});
 
 	it("keeps the parity tables out of the reference corpus entirely", () => {
@@ -102,7 +135,7 @@ describe("documentation is not a reference", () => {
 		// constant once and is a predicate now, and a test that pins the spelling would
 		// fail for a reason that has nothing to do with the detector being correct.
 		const ledger = "packages/tui/src/overlays/settings-parity-rows.ts";
-		expect(flagged((candidate) => candidate.declaredIn.endsWith("compound-commands.ts"))).not.toEqual([]);
+		expect(flagged((candidate) => candidate.declaredIn.endsWith("code-mode.ts"))).not.toEqual([]);
 		expect(ledger).toMatch(/parity-rows/);
 	});
 });
@@ -125,8 +158,9 @@ describe("the detector reports what it classified and why", () => {
 	it("separates test-only references from no references at all", () => {
 		// The two mean different things: the first is implemented and tested with no
 		// runtime path, the second may not have been wired yet. Collapsing them loses
-		// the distinction that makes the list actionable.
-		const inert = flagged((candidate) => candidate.name === "decideChain")[0]!;
+		// the distinction that makes the list actionable. Read off the scan rather than
+		// off a hard-coded name, for the reason given in the documentation describe above.
+		const inert = flagged((candidate) => candidate.productionRefs === 0 && candidate.testRefs > 0)[0]!;
 		expect(inert.testRefs).toBeGreaterThan(0);
 		expect(inert.productionRefs).toBe(0);
 	});
