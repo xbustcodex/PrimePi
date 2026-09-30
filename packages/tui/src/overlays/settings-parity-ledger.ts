@@ -142,6 +142,11 @@ const BEHAVIOURALLY_VERIFIED = new Set<string>([
 	"secrets.enabled",
 	"memory.backend",
 	"todo.enabled",
+	// Both proven in test/image-settings-wiring.test.ts: each is written to a
+	// real settings.json, parsed by the registry, and observed on the messages
+	// the provider is handed — not on a tool's return value.
+	"images.autoResize",
+	"images.blockImages",
 ]);
 
 /**

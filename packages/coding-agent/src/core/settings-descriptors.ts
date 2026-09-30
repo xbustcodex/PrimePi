@@ -2601,7 +2601,13 @@ export const securityEnabled = registerSetting({
 	default: false,
 	ui: {
 		label: "Security",
-		description: "Enable the read-only security:// resource namespace and security scan planning",
+		// Says what is true today. The earlier text promised a security://
+		// namespace and scan planning; neither exists in PrimePi (there is no
+		// internal-urls layer and no scanner), so a user toggling this got
+		// nothing and was not told so. Registered rather than removed, so the
+		// parity panel still renders the row at its reference location.
+		description:
+			"Reserved: the security:// namespace and security scan planning are not implemented in PrimePi, so this setting currently has no effect",
 		tab: "tools",
 		group: "Available Tools",
 		control: "cycle",

@@ -205,14 +205,35 @@ function helperLiterals(source: ts.SourceFile): string[] {
  * written across a member chain, which is why no literal string exists for it.
  * Only chains rooted at the settings object are considered; an arbitrary member
  * chain would resolve keys that are not settings at all.
+ *
+ * ## Why a leading `this` is stripped
+ *
+ * Every `SettingsManager` getter writes `this.settings.<group>.<key>`, so
+ * keeping the `this` segment made the root test fail and the whole chain was
+ * dropped. The accessor then indexed zero keys, never entered the accessor
+ * index, and every *call site* of that accessor produced no edge either —
+ * `getImageAutoResize` and `getBlockImages` were both reported as having no
+ * production read while three and one call sites respectively read them.
+ *
+ * Stripping the receiver is the whole correction. It is additive: a chain that
+ * already resolved still resolves, so this can only add edges, never remove
+ * them. A bare `this.foo` stays rejected, since there is no settings root in
+ * it to resolve.
  */
 function nestedPathKeys(source: ts.SourceFile): string[] {
 	const found: string[] = [];
 	const walk = (node: ts.Node) => {
 		if (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) {
+			// A `this.settings.x` chain and a bare `settings.x` chain name the same
+			// key; only the receiver differs, and the receiver is not part of it.
 			const chain = memberChain(node);
 			if (chain && chain.length >= 2) {
-				const [root, ...rest] = chain;
+				const rooted = chain[0] === "this" ? chain.slice(1) : chain;
+				if (rooted.length < 2) {
+					ts.forEachChild(node, walk);
+					return;
+				}
+				const [root, ...rest] = rooted;
 				const isSettingsRoot =
 					root === "settings" ||
 					root === "globalSettings" ||

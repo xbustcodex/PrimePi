@@ -276,12 +276,20 @@ export function configurePrimePiBackends(options: {
 		localStore: options.localStore
 			? { ...primePiOptions?.localStore, ...options.localStore }
 			: primePiOptions?.localStore,
-		// Merged the same way, for the same reason. Omitting this line looked like it
-		// worked - the descriptor still resolved - but every call without an
-		// explicit `agentDir` silently produced a store with no root, and the
-		// backend reported itself unavailable for a reason that named neither the
-		// missing field nor the caller that omitted it.
-		bankStore: options.bankStore ? { ...primePiOptions?.bankStore, ...options.bankStore } : primePiOptions?.bankStore,
+		// Replaced, not merged, and this is the one asymmetry in the function.
+		//
+		// `bankStore` carries the *session's* `cwd`, which is the project identity the
+		// whole isolation guarantee rests on. Merging it meant a second session in the
+		// same process inherited the first session's `bank`, `scoping` and `root`: two
+		// sessions asking for different projects silently shared one, and the store
+		// wrote the second project's memories under the first project's bank name.
+		// That is exactly the leak `bank-scope.ts` exists to prevent, arriving
+		// through the configuration layer rather than through the store.
+		//
+		// Replacing does not reintroduce the missing-`agentDir` problem the merge was
+		// added for: the bank-store descriptor falls back to `agentDir` for its root
+		// independently, so a caller that passes only `cwd` still gets a usable store.
+		bankStore: options.bankStore ? { ...options.bankStore } : primePiOptions?.bankStore,
 	} as typeof primePiOptions;
 }
 
