@@ -5,6 +5,7 @@ import {
 	TIMEOUT_AUTO,
 	timeoutSecondsToMs,
 	withStreamWatchdog,
+	withWatchdogFetch,
 } from "../src/utils/stream-watchdog.ts";
 
 /**
@@ -139,7 +140,7 @@ describe("the first-event watchdog", () => {
 		// A generous first-event budget against a fast first chunk: the point of the
 		// case is that the watchdog is *disarmed* after the first event, not that
 		// it is slow, so the margins are wide enough not to be a timing race.
-		const guarded = withStreamWatchdog(openStream(["a","b","c"], 5, true), {
+		const guarded = withStreamWatchdog(openStream(["a", "b", "c"], 5, true), {
 			firstEventTimeoutMs: 400,
 			idleTimeoutMs: undefined,
 			onTimeout: (kind) => fired.push(kind),
@@ -177,7 +178,7 @@ describe("the idle watchdog", () => {
 		// Eight chunks every 20ms: the whole run is longer than the 60ms budget,
 		// but no single *gap* is. The budget is per gap, not per request, so a long
 		// healthy generation is never touched.
-		const guarded = withStreamWatchdog(openStream(["a","b","c","d","e","f","g","h"], 20), {
+		const guarded = withStreamWatchdog(openStream(["a", "b", "c", "d", "e", "f", "g", "h"], 20), {
 			firstEventTimeoutMs: undefined,
 			idleTimeoutMs: 60,
 			onTimeout: (_kind, ms) => firedAt.push(Date.now() - started),
@@ -203,5 +204,63 @@ describe("the idle watchdog", () => {
 		await new Promise((resolve) => setTimeout(resolve, 150));
 		// Both watchdogs are armed; one stall is one failure, not two.
 		expect(count).toBe(1);
+	});
+});
+
+describe("withWatchdogFetch", () => {
+	/** A body that emits `head` and then never ends, released by the caller. */
+	function openBody(head: string): { body: ReadableStream<Uint8Array>; finish: () => void } {
+		let finish = (): void => {};
+		const body = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(encoder.encode(head));
+				finish = () => {
+					try {
+						controller.enqueue(encoder.encode("done"));
+						controller.close();
+					} catch {}
+				};
+			},
+		});
+		return { body, finish: () => finish() };
+	}
+
+	it("returns null when nothing is armed, so an unset fetch stays unset", () => {
+		expect(withWatchdogFetch(undefined, {})).toBeNull();
+		// Zero is *disabled*, not "fire immediately" (see the three-states note).
+		expect(withWatchdogFetch(undefined, { idleTimeoutMs: 0, firstEventTimeoutMs: 0 })).toBeNull();
+	});
+
+	it("errors the body with a message naming the setting, and never a credential", async () => {
+		const source = openBody("head");
+		const guardedFetch = withWatchdogFetch(async () => new Response(source.body), { idleTimeoutMs: 20 });
+		expect(guardedFetch).not.toBeNull();
+		const response = await (guardedFetch as typeof globalThis.fetch)("https://example.invalid/v1");
+		const reader = response.body!.getReader();
+		await reader.read();
+
+		const failure = await reader.read().then(
+			(result) => (result.done ? new Error("stream ended instead of failing") : new Error("chunk arrived")),
+			(error: unknown) => error,
+		);
+		expect(failure).toBeInstanceOf(Error);
+		const message = failure instanceof Error ? failure.message : "";
+		expect(message).toContain("idle watchdog");
+		expect(message).toContain("providers.streamIdleTimeoutSeconds");
+		// The wrapper sits below the auth layer and never sees a header, so it has
+		// nothing to leak; the assertion pins that rather than assuming it.
+		expect(message).not.toMatch(/Bearer|sk-|api[-_]?key/i);
+		source.finish();
+	});
+
+	it("passes a healthy stream through untouched when the budget is generous", async () => {
+		const source = openBody("head");
+		const guardedFetch = withWatchdogFetch(async () => new Response(source.body), { idleTimeoutMs: 5000 });
+		const response = await (guardedFetch as typeof globalThis.fetch)("https://example.invalid/v1");
+		const reader = response.body!.getReader();
+		expect(await reader.read()).toMatchObject({ done: false });
+		source.finish();
+		const rest = await reader.read();
+		expect(decoder.decode(rest.value)).toBe("done");
 	});
 });

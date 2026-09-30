@@ -34,7 +34,9 @@
  * emits steadily for ten minutes is never touched.
  */
 
-import type { ReadableStream } from "node:stream/web";
+import type { ReadableStream, TransformStreamDefaultController } from "node:stream/web";
+import { TransformStream } from "node:stream/web";
+import type { FetchFunction } from "../types.ts";
 
 /** Sentinel meaning "use the provider or environment default". */
 export const TIMEOUT_AUTO = -1;
@@ -155,4 +157,97 @@ export function withStreamWatchdog<T extends Uint8Array>(
 			},
 		}),
 	);
+}
+
+/**
+ * Arms a watchdog budget, or reports that there is nothing to arm.
+ *
+ * `undefined` and `0` are both "no watchdog" — see the three-states note at the
+ * top of this file — so a caller that has not been given a budget gets a
+ * `null` back and must leave the transport exactly as it found it.
+ */
+function armedBudget(value: number | undefined): number | null {
+	return typeof value === "number" && value > 0 ? value : null;
+}
+
+/** The budgets a {@link withWatchdogFetch} installation needs. */
+export interface WatchdogFetchBudgets {
+	readonly firstEventTimeoutMs?: number;
+	readonly idleTimeoutMs?: number;
+}
+
+/**
+ * Wraps a `fetch` so a stalled response body fails instead of hanging.
+ *
+ * ## Why the transport and not each adapter
+ *
+ * A stall is a property of the bytes, not of any provider's event grammar, so
+ * the watchdog belongs where every HTTP-streaming adapter's body passes: the
+ * fetch itself. Nine adapters call `buildBaseOptions`, which calls this once.
+ * An adapter that issues no HTTP body — Bedrock, Vertex, the Codex WebSocket
+ * path — is not covered here; those carry their own timers.
+ *
+ * ## Why `null` rather than an identity wrapper
+ *
+ * Several adapters branch on `options.fetch === globalThis.fetch` to detect an
+ * injected implementation. Returning `null` when nothing is armed keeps that
+ * comparison exact, so a default install is byte-for-byte the previous
+ * transport.
+ *
+ * ## The error, not a silent end
+ *
+ * `withStreamWatchdog` reports a timeout through a callback because it has no
+ * error channel of its own. A transport does: the guarded body is errored, so
+ * the adapter's own stream handler sees a rejected read and emits its normal
+ * `stopReason: "error"` terminal message. The message names the watchdog and
+ * the gap. It never names a header, a URL, or a credential — the wrapper sees
+ * only the response body, which is the point of putting the watchdog here
+ * rather than in a layer that also handles authentication.
+ */
+export function withWatchdogFetch(
+	base: FetchFunction | undefined,
+	budgets: WatchdogFetchBudgets,
+): FetchFunction | null {
+	const firstEventTimeoutMs = armedBudget(budgets.firstEventTimeoutMs);
+	const idleTimeoutMs = armedBudget(budgets.idleTimeoutMs);
+	if (firstEventTimeoutMs === null && idleTimeoutMs === null) return null;
+	const inner = base ?? globalThis.fetch;
+
+	return async (input: Parameters<FetchFunction>[0], init?: Parameters<FetchFunction>[1]): Promise<Response> => {
+		const response = await inner(input, init);
+		const body = response.body;
+		// A null body is a bodiless response (204, or a runtime with no streams).
+		// There is nothing to watch and nothing to break.
+		if (!body) return response;
+
+		// The bridge exists so the watchdog callback can error the body from
+		// outside. `controller.error` on the bridge's writable side errors its
+		// readable side, which the watchdog pipes through, so the failure
+		// reaches the adapter as a rejected read.
+		let bridge: TransformStreamDefaultController<Uint8Array> | undefined;
+		const source = body.pipeThrough(
+			new TransformStream<Uint8Array, Uint8Array>({
+				start(controller) {
+					bridge = controller;
+				},
+			}),
+		);
+		const guarded = withStreamWatchdog(source, {
+			firstEventTimeoutMs: firstEventTimeoutMs ?? undefined,
+			idleTimeoutMs: idleTimeoutMs ?? undefined,
+			onTimeout: (kind, waitedMs) => {
+				const error = new Error(
+					`Stream ${kind === "first-event" ? "first-event" : "idle"} watchdog fired after ${waitedMs}ms. ` +
+						"Raise providers.streamFirstEventTimeoutSeconds or providers.streamIdleTimeoutSeconds, " +
+						"or set the matching value to 0 to disable that watchdog.",
+				);
+				bridge?.error(error);
+			},
+		});
+		return new Response(guarded, {
+			status: response.status,
+			statusText: response.statusText,
+			headers: response.headers,
+		});
+	};
 }

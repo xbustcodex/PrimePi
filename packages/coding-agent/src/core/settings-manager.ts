@@ -16,7 +16,7 @@ import { normalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { DEFAULT_HTTP_IDLE_TIMEOUT_MS, parseHttpIdleTimeoutMs } from "./http-dispatcher.ts";
 import { type RetryPolicyResolution, resolveRetryPolicy } from "./retry-policy.ts";
-import { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
+import type { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 import {
 	allSettings,
 	hasPath,
@@ -1423,8 +1423,11 @@ export class SettingsManager {
 
 	/** Read from global settings only because warming costs money. */
 	getCacheWarmingMode(): CacheWarmingMode {
-		const mode = this.globalSettings.cacheWarming;
-		return mode !== undefined && CACHE_WARMING_MODES.includes(mode) ? mode : "streaming";
+		// The registry has already parsed the value against the descriptor's
+		// `values`, applied its `globalOnly` scope, and supplied its default, so
+		// nothing here re-encodes the enum or the default. The `??` covers only an
+		// unregistered key, which `cacheWarming` is not.
+		return this.getSetting<CacheWarmingMode>("cacheWarming")?.value ?? "streaming";
 	}
 
 	setCacheWarmingMode(mode: CacheWarmingMode): void {

@@ -2622,23 +2622,6 @@ export const providersCacheRetention = registerSetting({
 		control: "submenu",
 	},
 });
-
-export const providersCacheWarming = registerSetting({
-	key: "providers.cacheWarming",
-	type: "enum",
-	default: "idle",
-	values: ["off", "streaming", "idle"],
-	parse: (raw) => (raw === "off" || raw === "streaming" || raw === "idle" ? raw : undefined),
-	ui: {
-		label: "Cache Warming",
-		description:
-			"Keep prompt-cache entries warm while the session is idle, so a long retention is not paid for on the next request",
-		tab: "providers",
-		group: "Protocol",
-		control: "submenu",
-	},
-});
-
 export const providersOpenaiWebsockets = registerSetting({
 	key: "providers.openaiWebsockets",
 	type: "enum",
@@ -2657,12 +2640,14 @@ export const providersOpenaiWebsockets = registerSetting({
 export const openrouterVariant = registerSetting({
 	key: "providers.openrouterVariant",
 	type: "enum",
-	default: "auto",
-	values: ["auto", "strict", "flex"],
-	parse: (raw) => (raw === "auto" || raw === "strict" || raw === "flex" ? raw : undefined),
+	default: "default",
+	values: ["default", "nitro", "floor", "online", "exacto"],
+	parse: (raw) =>
+		raw === "default" || raw === "nitro" || raw === "floor" || raw === "online" || raw === "exacto" ? raw : undefined,
 	ui: {
 		label: "OpenRouter Routing",
-		description: "Which upstream providers OpenRouter may route a request to",
+		description:
+			"Routing-variant suffix appended to OpenRouter model ids. default sends no suffix; a model id that already names a variant is left alone",
 		tab: "providers",
 		group: "Protocol",
 		control: "submenu",

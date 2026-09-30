@@ -8,6 +8,7 @@ import type {
 	TranscriptContext,
 } from "../types.ts";
 import { estimateContextTokens } from "../utils/estimate.ts";
+import { withWatchdogFetch } from "../utils/stream-watchdog.ts";
 
 const CONTEXT_SAFETY_TOKENS = 4096;
 const MIN_MAX_TOKENS = 1;
@@ -28,6 +29,13 @@ export function buildBaseOptions(
 		model.samplingParams || options?.samplingParams
 			? { ...model.samplingParams, ...options?.samplingParams }
 			: undefined;
+	// One watchdog installation per request, shared by whichever adapter runs it.
+	// `null` (nothing armed) leaves `fetch` exactly as the caller supplied it, so
+	// adapters that compare against `globalThis.fetch` still see an unset fetch.
+	const watchdogFetch = withWatchdogFetch(options?.fetch, {
+		firstEventTimeoutMs: options?.streamFirstEventTimeoutMs,
+		idleTimeoutMs: options?.streamIdleTimeoutMs,
+	});
 	return {
 		temperature: options?.temperature,
 		samplingParams,
@@ -35,7 +43,7 @@ export function buildBaseOptions(
 		signal: options?.signal,
 		telemetryContext: options?.telemetryContext,
 		apiKey: apiKey || options?.apiKey,
-		fetch: options?.fetch,
+		fetch: watchdogFetch ?? options?.fetch,
 		transport: options?.transport,
 		cacheRetention: options?.cacheRetention,
 		sessionId: options?.sessionId,
@@ -44,6 +52,9 @@ export function buildBaseOptions(
 		onResponse: options?.onResponse,
 		onProviderStreamEvent: options?.onProviderStreamEvent,
 		timeoutMs: options?.timeoutMs,
+		streamFirstEventTimeoutMs: options?.streamFirstEventTimeoutMs,
+		streamIdleTimeoutMs: options?.streamIdleTimeoutMs,
+		openrouterVariant: options?.openrouterVariant,
 		websocketConnectTimeoutMs: options?.websocketConnectTimeoutMs,
 		maxRetries: options?.maxRetries,
 		maxRetryDelayMs: options?.maxRetryDelayMs,

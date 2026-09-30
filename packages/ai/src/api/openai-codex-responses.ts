@@ -319,7 +319,11 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 									stream.push({ type: "start", partial: output });
 								}
 							},
-							httpTimeoutMs,
+							// The WebSocket path has no Response body for the fetch-level
+							// watchdog to watch, so its per-gap budget is fed here instead.
+							// A configured idle timeout wins; otherwise the request timeout
+							// keeps governing, as it always has.
+							options?.streamIdleTimeoutMs ?? httpTimeoutMs,
 							websocketConnectTimeoutMs,
 							cacheSessionId,
 							accountId,

@@ -14,6 +14,11 @@ import { isProviderUsable } from "./model/provider-usability.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
+import {
+	applyProviderProtocolSettings,
+	protocolSettingsReader,
+	resolveProviderProtocolSettings,
+} from "./provider-protocol.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.ts";
@@ -341,8 +346,16 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
 		const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
 		const headerRunner = extensionRunnerRef.current;
+		// `providers.*` protocol settings, read per request through the settings
+		// registry and applied after the caller's own options, which always win.
+		// The result is the request `ModelRuntime.streamSimple` actually sends.
+		const protocol = applyProviderProtocolSettings(
+			options,
+			resolveProviderProtocolSettings(protocolSettingsReader(settingsManager)),
+			requestModel,
+		);
 		return {
-			...options,
+			...protocol,
 			timeoutMs: options.timeoutMs ?? providerRetrySettings.timeoutMs ?? effectiveTimeoutMs,
 			websocketConnectTimeoutMs: options.websocketConnectTimeoutMs ?? settingsManager.getWebSocketConnectTimeoutMs(),
 			maxRetries: options.maxRetries ?? providerRetrySettings.maxRetries,

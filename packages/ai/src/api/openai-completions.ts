@@ -63,6 +63,7 @@ import {
 } from "./constrained-sampling.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
+import { resolveOpenRouterWireModelId } from "./openrouter-routing.ts";
 import { buildBaseOptions, clampThinkingBudgetToAnswerRoom, thinkingBudgetForLevel } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
@@ -833,7 +834,12 @@ function buildParams(
 	const cacheControl = getCompatCacheControl(compat, cacheRetention);
 
 	const params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
-		model: model.id,
+		model: resolveOpenRouterWireModelId({
+			modelId: model.id,
+			provider: model.provider,
+			baseUrl: model.baseUrl,
+			variant: options?.openrouterVariant,
+		}),
 		messages,
 		stream: true,
 		prompt_cache_key:

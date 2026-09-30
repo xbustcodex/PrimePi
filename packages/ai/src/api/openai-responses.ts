@@ -26,6 +26,7 @@ import { createGrammarToolInputProperties } from "./constrained-sampling.ts";
 import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.ts";
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import { convertResponsesMessages, convertResponsesTools, processResponsesStream } from "./openai-responses-shared.ts";
+import { resolveOpenRouterWireModelId } from "./openrouter-routing.ts";
 import { buildBaseOptions } from "./simple-options.ts";
 
 const OPENAI_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
@@ -310,8 +311,13 @@ function buildParams(
 	const params: ResponseCreateParamsStreaming & {
 		prompt_cache_options?: { mode?: "explicit"; ttl?: "30m" };
 	} = {
-		model: model.id,
 		input: messages,
+		model: resolveOpenRouterWireModelId({
+			modelId: model.id,
+			provider: model.provider,
+			baseUrl: model.baseUrl,
+			variant: options?.openrouterVariant,
+		}),
 		stream: true,
 		prompt_cache_key: cacheRetention === "none" ? undefined : clampOpenAIPromptCacheKey(options?.sessionId),
 		prompt_cache_retention: getPromptCacheRetention(compat, cacheRetention),

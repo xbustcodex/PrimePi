@@ -234,6 +234,29 @@ export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
 	 * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
 	 */
 	metadata?: Record<string, unknown>;
+	/**
+	 * Milliseconds to wait for the first event of a model stream.
+	 *
+	 * `undefined` and `0` both mean "no watchdog", so a provider default or the
+	 * environment keeps applying unless the caller arms one explicitly. The
+	 * budget is wall-clock from the first byte of the response body, not from
+	 * the request, so a slow-but-healthy connect is not charged for it.
+	 */
+	streamFirstEventTimeoutMs?: number;
+	/**
+	 * Milliseconds a running model stream may stay silent between events.
+	 *
+	 * The budget is per *gap*, not per request, so a long but steady
+	 * generation is never aborted. `undefined` and `0` mean "no watchdog".
+	 */
+	streamIdleTimeoutMs?: number;
+	/**
+	 * OpenRouter routing variant appended to the wire model id as `:<variant>`.
+	 *
+	 * Ignored by every non-OpenRouter endpoint, and never applied to a model id
+	 * that already names a variant (a colon after the last `/`).
+	 */
+	openrouterVariant?: string;
 }
 
 export type ProviderStreamOptions = StreamOptions & Record<string, unknown>;
