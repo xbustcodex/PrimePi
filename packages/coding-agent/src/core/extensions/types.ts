@@ -13,6 +13,7 @@ import type {
 	AgentToolResult,
 	AgentToolUpdateCallback,
 	ThinkingLevel,
+	ToolApproval,
 	ToolExecutionMode,
 } from "@earendil-works/pi-agent-core";
 import type {
@@ -475,6 +476,24 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 	constrainedSampling?: false | ConstrainedSamplingConfig;
 	/** Controls whether ToolExecutionComponent renders the standard colored shell or the tool renders its own framing. */
 	renderShell?: "default" | "self";
+
+	/**
+	 * What this tool declares about itself for approval purposes.
+	 *
+	 * A bare tier is a static classification. The object form additionally states a
+	 * policy, which lets a tool refuse outright or force a prompt regardless of the
+	 * mode's ceiling — so a dangerous tool cannot be made safe by a permissive
+	 * setting, only by editing the tool.
+	 *
+	 * This field was absent from the interface while the runtime already read it,
+	 * and `wrapToolDefinition` silently dropped it on the way to the approval gate.
+	 * A tool declaring `policy: "deny"` therefore executed normally. See
+	 * `tool-definition-wrapper.ts` and
+	 * `test/agent-tool-approval-projection.test.ts`.
+	 */
+	approval?: ToolApproval;
+	/** Renders the arguments an operator is asked to approve. */
+	formatApprovalDetails?: (args: unknown) => string | string[] | undefined;
 
 	/** Optional compatibility shim to prepare raw tool call arguments before schema validation. Must return an object conforming to TParams. */
 	prepareArguments?: (args: unknown) => Static<TParams>;
