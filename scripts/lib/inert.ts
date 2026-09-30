@@ -55,8 +55,33 @@ const MODULE_ROOTS = [
 	"packages/tui/test",
 ];
 
-/** Files that declare no capability of their own. */
+/**
+ * Files that declare no capability of their own.
+ *
+ * `settings-parity-*` matters here: the parity ledger holds *note strings* naming the
+ * consumer each setting is supposed to have. Those notes are the exact claims this
+ * audit exists to check, so counting them as references would let a row vouch for
+ * itself — which is how `decideChain` read as consumed while its only mentions were
+ * two sentences describing it.
+ */
 const NOT_CAPABILITIES = new Set(["types.ts"]);
+
+/**
+ * Files whose mentions of a symbol are documentation or assertion, not a use.
+ *
+ * The parity ledger holds *note strings* naming the consumer each setting is
+ * supposed to have. Those notes are the claims this audit exists to check, so
+ * counting them let a row vouch for itself: `decideChain` read as consumed while
+ * its only mentions were two sentences describing it.
+ *
+ * A file that asserts *about* this audit is in the same position — it names
+ * symbols without using them. The rule matches that role rather than one
+ * filename, because naming a file is the exemption this audit exists to avoid.
+ */
+function isMentionOnly(file: string): boolean {
+	if (/settings-parity-(rows|ledger)\.ts$/.test(file)) return true;
+	return /audit-inert-capabilities|find-unreferenced|inert-detector/.test(file);
+}
 
 /** Test paths: a symbol imported only from a test may be inert at runtime. */
 function isTestPath(file: string): boolean {
@@ -140,7 +165,8 @@ function exportsOf(file: string): { name: string; kind: UnreferencedSymbol["kind
 		if (name !== undefined && name.length > 0 && !name.startsWith("_")) found.push({ name, kind });
 	};
 	const walk = (node: ts.Node) => {
-		const exported = node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword);
+		const modifiers = ("modifiers" in node ? node.modifiers : undefined) as ts.ModifierLike[] | undefined;
+		const exported = modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) === true;
 		if (exported) {
 			if (ts.isFunctionDeclaration(node)) add(node.name?.text, "function");
 			else if (ts.isClassDeclaration(node)) add(node.name?.text, "class");
@@ -234,7 +260,7 @@ export function findUnreferencedCapabilities(root: string): UnreferencedSymbol[]
 							(isBarrel(other) && starExports(text, file, dirOf(other)));
 				if (!referenced) continue;
 				if (isTestPath(other)) testRefs++;
-				else productionRefs++;
+				else if (!isMentionOnly(other)) productionRefs++;
 			}
 			if (productionRefs === 0) {
 				results.push({ name: exported.name, declaredIn: file, productionRefs, testRefs, kind: exported.kind });
