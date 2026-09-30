@@ -1,5 +1,14 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } from "@earendil-works/pi-ai";
+import {
+	type Api,
+	DEFAULT_READ_SUMMARY,
+	decideReadSummary,
+	type ImageContent,
+	type Model,
+	type ModelImageResizeOptions,
+	type ReadSummarySettings,
+	type TextContent,
+} from "@earendil-works/pi-ai";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";
@@ -54,6 +63,11 @@ export interface ReadToolOptions {
 	resizeOptions?: ModelImageResizeOptions;
 	/** Custom operations for file reading. Default: local filesystem */
 	operations?: ReadOperations;
+	/**
+	 * Reads a settings value by key. Supplied by the session so the summary policy
+	 * follows the user configuration; absent, the built-in defaults apply.
+	 */
+	readSetting?: (key: string) => unknown;
 }
 
 function getNonVisionImageNote(model: Model<Api> | undefined): string | undefined {
@@ -61,6 +75,28 @@ function getNonVisionImageNote(model: Model<Api> | undefined): string | undefine
 		return undefined;
 	}
 	return "[Current model does not support images. The image will be omitted from this request.]";
+}
+
+/**
+ * Resolves the read-summary policy from a settings reader.
+ *
+ * Read through a reader rather than resolved values, so a mid-session change
+ * takes effect on the next read instead of the next start.
+ */
+function resolveReadSummary(read: (key: string) => unknown): ReadSummarySettings {
+	const number = (key: string, fallback: number): number => {
+		const value = read(key);
+		return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	};
+	return {
+		enabled: read("read.summarize.enabled") !== false,
+		prose: read("read.summarize.prose") === true,
+		minBodyLines: number("read.summarize.minBodyLines", DEFAULT_READ_SUMMARY.minBodyLines),
+		minCommentLines: number("read.summarize.minCommentLines", DEFAULT_READ_SUMMARY.minCommentLines),
+		minTotalLines: number("read.summarize.minTotalLines", DEFAULT_READ_SUMMARY.minTotalLines),
+		unfoldUntil: number("read.summarize.unfoldUntil", DEFAULT_READ_SUMMARY.unfoldUntil),
+		unfoldLimit: number("read.summarize.unfoldLimit", DEFAULT_READ_SUMMARY.unfoldLimit),
+	};
 }
 
 export function createReadToolDefinition(
@@ -152,35 +188,65 @@ export function createReadToolDefinition(
 								} else {
 									selectedContent = allLines.slice(startLine).join("\n");
 								}
-								// Apply truncation, respecting both line and byte limits.
-								const truncation = truncateHead(selectedContent);
-								let outputText: string;
-								if (truncation.firstLineExceedsLimit) {
-									// First line alone exceeds the byte limit. Point the model at a bash fallback.
-									const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
-									outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
-									details = { truncation };
-								} else if (truncation.truncated) {
-									// Truncation occurred. Build an actionable continuation notice.
-									const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
-									const nextOffset = endLineDisplay + 1;
-									outputText = truncation.content;
-									if (truncation.truncatedBy === "lines") {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
-									} else {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
-									}
-									details = { truncation };
-								} else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
-									// User-specified limit stopped early, but the file still has more content.
-									const remaining = allLines.length - (startLine + userLimitedLines);
-									const nextOffset = startLine + userLimitedLines + 1;
-									outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
+								// The structural-summary decision runs before truncation because it
+								// answers a different question: whether this file is read whole at all.
+								// Below the threshold it is read verbatim however small the byte budget
+								// is, and prose is read verbatim because a Markdown document has no
+								// signatures and summarizing it yields an outline of a document rather
+								// than its content.
+								const summary = decideReadSummary({
+									settings: resolveReadSummary(options?.readSetting ?? (() => undefined)),
+									filePath: absolutePath,
+									totalLines: totalFileLines,
+									bytes: Buffer.byteLength(textContent, "utf-8"),
+								});
+								if (summary.action === "skip") {
+									// Parsing a file this large costs more than the summary saves, and the
+									// model can still page through it with offset and limit.
+									//
+									// Assigned rather than returned, so the abort listener and the shared
+									// the shared abort check below still run on this path.
+									content = [
+										{
+											type: "text",
+											text: `[${absolutePath} is ${formatSize(Buffer.byteLength(textContent, "utf-8"))} over ${totalFileLines} lines, too large to summarize. Read it with offset and limit.]`,
+										},
+									];
+									details = undefined;
 								} else {
-									// No truncation and no remaining user-limited content.
-									outputText = truncation.content;
+									// Apply truncation, respecting both line and byte limits.
+									const truncation = truncateHead(selectedContent);
+									let outputText: string;
+									if (truncation.firstLineExceedsLimit) {
+										// First line alone exceeds the byte limit. Point the model at a bash fallback.
+										const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
+										outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
+										details = { truncation };
+									} else if (truncation.truncated) {
+										// Truncation occurred. Build an actionable continuation notice.
+										const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
+										const nextOffset = endLineDisplay + 1;
+										outputText = truncation.content;
+										if (truncation.truncatedBy === "lines") {
+											outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
+										} else {
+											outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
+										}
+										details = { truncation };
+									} else if (
+										userLimitedLines !== undefined &&
+										startLine + userLimitedLines < allLines.length
+									) {
+										// User-specified limit stopped early, but the file still has more content.
+										const remaining = allLines.length - (startLine + userLimitedLines);
+										const nextOffset = startLine + userLimitedLines + 1;
+										outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
+									} else {
+										// No truncation and no remaining user-limited content.
+										outputText = truncation.content;
+									}
+									content = [{ type: "text", text: outputText }];
 								}
-								content = [{ type: "text", text: outputText }];
 							}
 
 							if (aborted) return;
