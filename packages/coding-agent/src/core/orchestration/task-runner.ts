@@ -28,6 +28,12 @@ import type { Api, Model } from "@earendil-works/pi-ai";
 import { redactMessages } from "../security/secret-transform.ts";
 import type { SecretRedactor } from "../security/secrets.ts";
 import {
+	DEFAULT_ISOLATION,
+	decideIntegration,
+	type IsolationDecision,
+	type IsolationSettings,
+} from "../task/isolation.ts";
+import {
 	type AgentOutcomeReason,
 	type AgentRef,
 	AgentRegistry,
@@ -141,6 +147,11 @@ export interface TaskRunnerOptions {
 	/** Workspace provisioning, for a child that asked for its own worktree. */
 	worktrees?: WorktreeManager;
 	/**
+	 * Reads a settings value by key. Supplied by the host so the isolation policy
+	 * follows the user's configuration; absent, the documented defaults apply.
+	 */
+	readSetting?: (key: string) => unknown;
+	/**
 	 * Runs the child. Supplied by the host, because constructing a child means
 	 * constructing an Agent, which needs a stream function and a tool set.
 	 */
@@ -171,6 +182,34 @@ const RUNTIME_TIMEOUT = "runtime-limit";
  * tree-wide rather than per-tool-instance, and every spawn in the session goes
  * through it — OMP has two spawn routes that skip its semaphore entirely.
  */
+/**
+ * Reads the isolation policy from a settings reader.
+ *
+ * Each field falls back independently, so a user who sets only `apply` gets the
+ * documented defaults for the rest rather than a whole default policy that
+ * silently discards their one deliberate choice.
+ *
+ * `apply` defaults to **false**, a deliberate divergence from OMP's true. An
+ * automatic merge can collide with work the user has done since the child
+ * started; returning a reference is safe where merging is not. The decision is
+ * still computed and recorded either way, so enabling it is a setting change
+ * rather than a code change.
+ */
+function resolveIsolationSettings(read: ((key: string) => unknown) | undefined): IsolationSettings {
+	const enabled = read?.("task.isolation.enabled");
+	const merge = read?.("task.isolation.merge");
+	const commits = read?.("task.isolation.commits");
+	const apply = read?.("task.isolation.apply");
+	return {
+		enabled: typeof enabled === "boolean" ? enabled : DEFAULT_ISOLATION.enabled,
+		merge: merge === "branch" || merge === "patch" ? merge : DEFAULT_ISOLATION.merge,
+		commits: commits === "ai" || commits === "generic" ? commits : DEFAULT_ISOLATION.commits,
+		apply: typeof apply === "boolean" ? apply : DEFAULT_ISOLATION.apply,
+		clone: DEFAULT_ISOLATION.clone,
+		cleanSource: DEFAULT_ISOLATION.cleanSource,
+	};
+}
+
 export class TaskRunner {
 	readonly registry: AgentRegistry;
 	readonly #budgets: DelegationBudgets;
@@ -178,7 +217,26 @@ export class TaskRunner {
 	readonly #options: TaskRunnerOptions;
 	/** Abort controllers by child id, so cancellation reaches a running child. */
 	readonly #running = new Map<string, AbortController>();
+	/**
+	 * The integration decision per task id.
+	 *
+	 * Recorded before the workspace is released, so the outcome stays readable
+	 * after the workspace itself is gone. Exposed through `integrationFor` because
+	 * the alternative is a log line nobody correlates with a task.
+	 */
+	readonly #integration = new Map<string, IsolationDecision>();
 	#cancelled = false;
+
+	/**
+	 * What was decided for a finished task's isolated changes.
+	 *
+	 * Undefined for a task that never had a workspace, or one that has not finished
+	 * yet. A caller that wants the workspace kept must consult this before it is
+	 * released; a `discard` has already removed it by the time this returns.
+	 */
+	integrationFor(taskId: string): IsolationDecision | undefined {
+		return this.#integration.get(taskId);
+	}
 
 	constructor(options: TaskRunnerOptions) {
 		this.#options = options;
@@ -275,6 +333,9 @@ export class TaskRunner {
 		// Provisioned before the child runs and released on every exit path below, so
 		// a failure or a cancellation cannot leak a workspace.
 		let workspace: WorktreeHandle | undefined;
+		// Set once the child produced a result; read by the integration decision in the
+		// finally below, so it is declared alongside the workspace handle.
+		let taskSucceeded = false;
 		if (request.isolation === "worktree") {
 			const refused = (detail: string) => {
 				release();
@@ -367,6 +428,7 @@ export class TaskRunner {
 
 			// A result is recorded once and marked delivered once, so a duplicated
 			// completion is observable rather than silently overwriting.
+			taskSucceeded = true;
 			this.registry.setResult(ref.id, result);
 			this.registry.finish(ref.id, { state: "completed", reason: "completed", at: Date.now() });
 			this.registry.markDelivered(ref.id);
@@ -410,10 +472,17 @@ export class TaskRunner {
 			clearTimeout(timer);
 			this.#running.delete(ref.id);
 			release();
-			// Released last, so a child that ignored its signal still had the chance
-			// to finish writing before its workspace is removed. Ownership is checked
-			// again inside, so a path belonging to another task is never touched.
-			if (workspace && this.#options.worktrees) this.#options.worktrees.release(ref.id);
+			if (workspace && this.#options.worktrees) {
+				// The decision is computed before the release, because releasing first
+				// would destroy the work the decision is about. A discard removes the
+				// workspace; a merge or a required approval keeps it, so the result
+				// stays reachable.
+				const decision = decideIntegration(resolveIsolationSettings(this.#options.readSetting), {
+					taskSucceeded: taskSucceeded === true,
+				});
+				this.#integration.set(ref.id, decision);
+				if (decision.action === "discard") this.#options.worktrees.release(ref.id);
+			}
 		}
 	}
 
