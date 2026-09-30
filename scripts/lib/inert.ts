@@ -157,6 +157,45 @@ function exportsOf(file: string): { name: string; kind: UnreferencedSymbol["kind
 }
 
 /**
+ * Character spans each export declaration occupies, keyed by name.
+ *
+ * A name can appear in its own doc comment and a signature can span lines, so
+ * removing the declaration line by line is not reliable. The AST knows the exact
+ * span, and using it is what keeps a documented-but-unused helper from looking
+ * used by its own documentation.
+ */
+function spansOf(file: string): Map<string, [number, number]> {
+	const spans = new Map<string, [number, number]>();
+	let source: ts.SourceFile;
+	try {
+		source = ts.createSourceFile(file, fs.readFileSync(file, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+	} catch {
+		return spans;
+	}
+	const record = (node: ts.Node, name: string | undefined) => {
+		if (name === undefined) return;
+		spans.set(name, [node.getFullStart(), node.getEnd()]);
+	};
+	const walk = (node: ts.Node) => {
+		if (ts.isFunctionDeclaration(node) && node.name) record(node, node.name.text);
+		else if (ts.isClassDeclaration(node) && node.name) record(node, node.name.text);
+		else if (ts.isVariableStatement(node)) {
+			for (const declaration of node.declarationList.declarations) {
+				if (ts.isIdentifier(declaration.name)) record(node, declaration.name.text);
+			}
+		}
+		ts.forEachChild(node, walk);
+	};
+	walk(source);
+	return spans;
+}
+
+/** A file with one declaration span removed, for same-file reference counting. */
+function stripDeclarationSpans(text: string, span: [number, number]): string {
+	return text.slice(0, span[0]) + text.slice(span[1]);
+}
+
+/**
  * Finds exported capabilities that no production file imports.
  *
  * Reported in two groups, because they mean different things: a symbol nothing
@@ -167,6 +206,9 @@ export function findUnreferencedCapabilities(root: string): UnreferencedSymbol[]
 	const allFiles = collectFiles(root, MODULE_ROOTS);
 	const corpus = new Map(allFiles.map((file) => [file, fs.readFileSync(path.join(root, file), "utf8")] as const));
 
+	// Declaration spans per file, so a name inside its own declaration or its doc
+	// comment is not counted as a use.
+	const declarationSpans = new Map(allFiles.map((file) => [file, spansOf(path.join(root, file))] as const));
 	const results: UnreferencedSymbol[] = [];
 	for (const file of allFiles) {
 		if (isTestPath(file) || NOT_CAPABILITIES.has(path.basename(file)) || isBarrel(file)) continue;
@@ -175,9 +217,21 @@ export function findUnreferencedCapabilities(root: string): UnreferencedSymbol[]
 			let testRefs = 0;
 			const pattern = new RegExp(`\\b${exported.name}\\b`);
 			for (const [other, text] of corpus) {
-				// The declaring file is not a reference to itself.
-				if (other === file) continue;
-				const referenced = pattern.test(text) || (isBarrel(other) && starExports(text, file, dirOf(other)));
+				// A declaration is not a use. The declaring line is removed first, and what
+				// remains is a real reference — including one in the same file, which is the
+				// common case for a helper a tool file consumes itself.
+				//
+				// The earlier version built this pattern with doubled backslashes, so the
+				// declaration was never stripped, every symbol matched itself, and the scan
+				// reported zero unreferenced capabilities.
+				// The declaring file is handled by span exclusion: a doc comment mentioning
+				// the name, and a multi-line signature, both survive a line-level regex.
+				const declarationSpan = other === file ? declarationSpans.get(other)?.get(exported.name) : undefined;
+				const referenced =
+					declarationSpan === undefined
+						? pattern.test(text)
+						: pattern.test(stripDeclarationSpans(text, declarationSpan)) ||
+							(isBarrel(other) && starExports(text, file, dirOf(other)));
 				if (!referenced) continue;
 				if (isTestPath(other)) testRefs++;
 				else productionRefs++;
