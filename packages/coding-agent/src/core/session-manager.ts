@@ -1,4 +1,5 @@
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
+import { chooseSessionToResume, type JsonlSessionMetadata } from "@earendil-works/pi-agent-core/harness/session";
 import {
 	type AssistantMessage,
 	getCurrentSystemMessage,
@@ -745,26 +746,81 @@ function sessionCwdMatches(cwd: string | undefined, resolvedCwd: string): boolea
 	return cwd !== undefined && cwd !== "" && resolvePath(cwd) === resolvedCwd;
 }
 
-/** Exported for testing */
+/**
+ * The newest session file for this project, whether or not it holds anything.
+ *
+ * This is the raw "newest file" answer, kept for callers that deliberately want
+ * it — session pickers, which show the user every session including empty ones.
+ * Auto-resume must NOT use this: it wants the newest session *with content*, which
+ * is {@link SessionManager.continueRecent} and the policy behind it.
+ */
 export function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
+	return listResumeCandidates(sessionDir, cwd ? resolvePath(cwd) : undefined)[0]?.path ?? null;
+}
+
+/**
+ * Every session file for this project, newest first, in the shape the resume
+ * policy reads.
+ *
+ * Ordering is by mtime, descending, because the policy's last case is "the most
+ * recently modified session for this project" and it takes the first usable entry
+ * from a list that arrives sorted. `hasContent` is deliberately not computed
+ * here: reading every entry of every candidate to decide a resume would cost more
+ * than the resume. The policy takes it as a predicate and consults it only for the
+ * candidate it is actually considering, so the common case — the newest session
+ * has content — reads one file.
+ */
+function listResumeCandidates(sessionDir: string, projectCwd?: string): JsonlSessionMetadata[] {
 	const resolvedSessionDir = normalizePath(sessionDir);
-	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
 	try {
-		const files = readdirSync(resolvedSessionDir)
+		return readdirSync(resolvedSessionDir)
 			.filter((file) => file.endsWith(".jsonl"))
 			.map((file) => join(resolvedSessionDir, file))
 			.map((path) => ({ path, mtime: statSync(path).mtimeMs }))
-			.sort((a, b) => b.mtime - a.mtime);
-
-		for (const { path } of files) {
-			const header = readSessionHeaderForDiscovery(path);
-			if (header && (!resolvedCwd || sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd))) return path;
-		}
-		return null;
+			.sort((a, b) => b.mtime - a.mtime)
+			.map(({ path, mtime }) => ({ path, header: readSessionHeaderForDiscovery(path), mtime }))
+			.filter(
+				(entry): entry is { path: string; header: SessionHeader; mtime: number } =>
+					entry.header !== null &&
+					(projectCwd === undefined || sessionCwdMatches(getSessionHeaderCwd(entry.header), projectCwd)),
+			)
+			.map(({ path, header, mtime }) => {
+				const created = Date.parse(header.timestamp);
+				return {
+					id: header.id,
+					// A header with an unreadable timestamp still names a real session, and the
+					// policy only compares paths and asks about content, so a zero here costs
+					// nothing. Inventing a plausible date would hide the gap instead.
+					createdAt: Number.isNaN(created) ? 0 : created,
+					storageVersion: header.version ?? 1,
+					cwd: getSessionHeaderCwd(header) ?? "",
+					path,
+					modifiedAt: mtime,
+				};
+			});
 	} catch {
 		// Directory access and stat races make recent-session discovery unavailable.
-		return null;
+		return [];
 	}
+}
+
+/**
+ * Whether a session file holds a message.
+ *
+ * "Empty" here means the transcript a run produced was never written, so resuming
+ * it yields a conversation that looks like the user's work was lost when in fact
+ * it never existed. A header alone is exactly that state: the session was created
+ * and the process ended before anything was appended.
+ */
+function sessionFileHasContent(path: string): boolean {
+	try {
+		for (const entry of loadEntriesFromFile(path)) {
+			if (entry.type === "message") return true;
+		}
+	} catch {
+		// An unreadable session is not a session, so it is not a resume candidate.
+	}
+	return false;
 }
 
 function isMessageWithContent(message: AgentMessage): message is Message {
@@ -1790,9 +1846,19 @@ export class SessionManager {
 	static continueRecent(cwd: string, sessionDir?: string): SessionManager {
 		const dir = sessionDir ? normalizePath(sessionDir) : getDefaultSessionDir(cwd);
 		const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-		const mostRecent = findMostRecentSession(dir, filterCwd ? cwd : undefined);
-		if (mostRecent) {
-			return new SessionManager(cwd, dir, mostRecent, true);
+		const resolvedCwd = resolvePath(cwd);
+		const candidates = listResumeCandidates(dir, filterCwd ? resolvedCwd : undefined);
+
+		// The policy owns the decision, so the rule that a session holding nothing is
+		// skipped lives in one place rather than being re-derived here. It is asked
+		// for content per candidate rather than up front, because reading every
+		// session to pick one would cost more than the resume.
+		const decision = chooseSessionToResume({
+			sessions: candidates,
+			hasContent: (candidate) => sessionFileHasContent(candidate.path),
+		});
+		if (decision.metadata) {
+			return new SessionManager(cwd, dir, decision.metadata.path, true);
 		}
 		return new SessionManager(cwd, dir, undefined, true);
 	}
