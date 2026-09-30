@@ -11,6 +11,7 @@
 - Added a show/hide toggle (`H`) in HTML exports for custom messages marked `display: false`. Messages remain hidden by default and can also be revealed from the sidebar ([#8896](https://github.com/earendil-works/pi/issues/8896)).
 - Added a free-only filter to the model picker: free-tier models show a `free` badge, and `app.models.freeOnly` (`ctrl+f`, `alt+f` on Windows) narrows the list to free models.
 - Added per-turn tool-result pruning. A `read` result that a later read of the same target has superseded, and a result carrying no information, are replaced in context by a short notice before each compaction decision. Rewrites are persisted as `context_edit` entries, so the raw result stays in the journal. Gated on `compaction.supersedeReads` and `compaction.dropUseless`; the newest read of a target, skill reads, and artifact recovery reads are never elided.
+- Added a session goal subsystem: a `goal` tool tracks one explicit objective against a token budget, each turn's tokens are charged to it through the session's real usage counters, and the status footer shows the goal with its spend. A goal is additive — adding or completing one never rewrites an approved plan. Gated on `goal.enabled` (which registers and withdraws the tool live) and `goal.statusInFooter`. An absent budget is unbounded rather than empty, a budget limit is reached only by accounted usage and never by elapsed time, and a dropped goal is neither resumable nor shown again.
 
 ### Fixed
 

@@ -193,6 +193,17 @@ export class Orchestration {
 		this.#state.goal = addGoal(this.#state.goal, input);
 	}
 
+	/**
+	 * Replaces the goal state wholesale.
+	 *
+	 * The write path the accounting and the `goal` tool both use, so neither can
+	 * hold a second copy of the state that drifts from this one. Never touches
+	 * plan state, for the same reason `addGoal` does not.
+	 */
+	setGoalState(state: GoalState): void {
+		this.#state.goal = snapshotGoalState(state);
+	}
+
 	/** Removes the current goal. Never touches plan state. */
 	clearGoal(): void {
 		this.#state.goal = { ...INITIAL_GOAL_STATE };

@@ -147,6 +147,7 @@ export type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep
 export type ActiveToolName =
 	| ToolName
 	| "todo"
+	| "goal"
 	| "task"
 	| "git_inspect"
 	| "git_stage"

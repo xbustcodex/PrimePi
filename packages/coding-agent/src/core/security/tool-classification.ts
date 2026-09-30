@@ -68,6 +68,13 @@ export const BUILT_IN_TOOL_TIERS: Readonly<Record<string, ToolRiskTier>> = Objec
 	// would make routine progress tracking unusable under a strict approval mode.
 	todo: "write",
 
+	// `goal` mutates structured session state exactly as `todo` does — an
+	// objective, a status, a token ceiling — and runs nothing, so it is `write`
+	// for the same reason and not `exec`. It is not `read`: setting a budget the
+	// agent will then be held to is a change to what the session may spend, and
+	// an approval authority that let that through silently would be wrong.
+	goal: "write",
+
 	// Delegation.
 	//
 	// `task` is `exec`, matching OMP's own classification. It can start a child
