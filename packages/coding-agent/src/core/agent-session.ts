@@ -121,6 +121,7 @@ import {
 	wrapRegisteredTools,
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
+import { type ChainState, parseRouteSelector, resolveFallbackChain } from "./failover/chain.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
@@ -477,6 +478,11 @@ export class AgentSession {
 	private _lastAssistantMessage: AssistantMessage | undefined;
 	private _lastAssistantToolResults: AgentMessage[] = [];
 	private _lastActivityOutcome: AgentActivityOutcome = "completed";
+	/**
+	 * Where a configured fallback chain currently sits, so the next failure
+	 * resumes after the entry that just failed instead of restarting the chain.
+	 */
+	private _fallbackChain: ChainState | undefined;
 	/** Lazily built; the settings it reads can change after construction. */
 	private _toolCallLoopGuard: CrossTurnLoopGuard | undefined;
 	private _isBeforeSettle = false;
@@ -4570,6 +4576,66 @@ ${context}`
 		const available = this.modelRuntime.getAvailableSnapshot();
 		const attempted = this._failoverAttempted;
 		attempted.add(`${failed?.provider}:${failed?.id}`);
+
+		// A configured chain is a *preference order*, consulted first. It is not a
+		// permission: `resolveFallbackChain` runs every candidate it proposes through
+		// `selectFailoverCandidate` itself, so a chain naming a paid model cannot route
+		// around a free-only policy. With no chain configured this block is skipped and
+		// the behaviour below is unchanged.
+		const chains = this.settingsManager.getRetryFallbackChains();
+		if (Object.keys(chains).length > 0 && failed) {
+			const primary = parseRouteSelector(`${failed.provider}/${failed.id}`);
+			if (primary === undefined) {
+				// A model whose provider/id cannot form a selector has no chain entry to
+				// walk; the broad scan below still applies.
+			} else {
+				const resolved = resolveFallbackChain({
+					failed,
+					// The chain key. `default` always exists as a last resort, so a session
+					// with no configured role still has a chain to walk.
+					role: "default",
+					primary: primary,
+					chains,
+					lookup: (provider, id) => available.find((model) => model.provider === provider && model.id === id),
+					policy,
+					requirements: this._turnRequirements(),
+					cooldowns: this._availability,
+					// Chain entries are spelled provider/id; the session's attempt set uses
+					// provider:id, so it is translated rather than duplicated.
+					attempted: new Set([...attempted].map((key) => key.replace(":", "/"))),
+					state: this._fallbackChain,
+					now: Date.now(),
+				});
+				if (resolved.ok) {
+					const replacement = resolved.decision.model;
+					attempted.add(`${replacement.provider}:${replacement.id}`);
+					this._fallbackChain = {
+						chainKey: resolved.chainKey,
+						index: resolved.index,
+						primary: primary,
+						served: false,
+						reason: failure.reason,
+					};
+					return {
+						model: replacement,
+						notice: {
+							text: `falling back via ${resolved.chainKey}[${resolved.index}] to ${replacement.provider}/${replacement.id}`,
+							noticeKey: `chain:${resolved.chainKey}:${resolved.index}`,
+							from: `${failed.provider}/${failed.id}`,
+							to: `${replacement.provider}/${replacement.id}`,
+						},
+						explanation: {
+							reason: `chain ${resolved.chainKey}[${resolved.index}] proposed it`,
+							considered: 1,
+							freeRequired: policy === "free-only",
+							blocked: [],
+						},
+					};
+				}
+			}
+			// The chain proposed nothing usable. The broad scan below still runs, so a
+			// chain that is exhausted or fully blocked does not end the session.
+		}
 
 		const decision = selectFailoverCandidate({
 			failed: failed as Model<Api>,
