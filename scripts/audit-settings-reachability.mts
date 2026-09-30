@@ -73,4 +73,4 @@ console.log("\n=== ledger evidence classes, with the measured index installed ==
 const summary = reconcileLedger();
 for (const [name, count] of Object.entries(summary.byEvidence)) console.log(`  ${String(count).padStart(3)}  ${name}`);
 console.log(`\n  unresolved (no proven path): ${unreachable.length}`);
-console.log(`  invariants: unreconciled=${summary.unreconciled.length} registeredWithoutKey=${summary.registeredWithoutKey.length} liveWithoutBehaviour=${summary.liveWithoutBehaviour.length} reachableWithoutSite=${summary.reachableWithoutSite.length}`);
+console.log(`  invariants: unreconciled=${summary.unreconciled.length} registeredWithoutKey=${summary.registeredWithoutKey.length} liveWithoutBehaviour=${summary.liveWithoutBehaviour.length} reachableWithoutSite=${summary.reachableWithoutSite.length} liveWithoutSite=${summary.liveWithoutSite.length}`);

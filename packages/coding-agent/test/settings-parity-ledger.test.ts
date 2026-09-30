@@ -77,6 +77,19 @@ describe("the evidence classes mean what they say", () => {
 		expect(reconcileLedger().reachableWithoutSite).toEqual([]);
 	});
 
+	it("never claims live verification with no proven production read", () => {
+		// The strongest false claim available: a row listed as live-verified asserts the
+		// behaviour was exercised through a real runtime path the analysis cannot find.
+		// With the measured index installed the claim is only honoured for rows the
+		// analysis can see a production read for; with no index every row falls back to
+		// `registered` and the list is empty by construction, because no row can reach a
+		// class that asserts a site.
+		expect(reconcileLedger().liveWithoutSite).toEqual([]);
+		// And the set is not silently discarded: a row whose claim is unmet is recorded.
+		const unreachableLive = buildLedger().filter((entry) => entry.evidence === "live-verified");
+		for (const entry of unreachableLive) expect(entry.consumedBy?.length ?? 0, entry.id).toBeGreaterThan(0);
+	});
+
 	it("never claims live verification without behavioural verification", () => {
 		// The corrected form of the old LIVE_VERIFIED subset WIRED invariant. Live is
 		// strictly stronger than behavioural, so the reverse cannot hold.
@@ -128,7 +141,10 @@ describe("the reachability index is injected, measured", () => {
 	});
 
 	it("attributes a row to runtime-reachable once a site is installed", () => {
-		const key = OMP_PARITY_ROWS.find((row) => row.piKey)?.piKey!;
+		const key = OMP_PARITY_ROWS.find((row) => row.piKey)?.piKey;
+		// A row with no key is unregistered and asserts nothing, so the fixture needs one
+		// that declares a key to attribute reachability to.
+		if (key === undefined) throw new Error("no registered row to attribute reachability to");
 		setConsumptionIndex(new Map([[key, [{ site: "packages/example/src/consumer.ts", via: "direct" }]]]));
 		const entry = buildLedger().find((candidate) => candidate.piKey === key);
 		expect(entry?.evidence).toBe("runtime-reachable");

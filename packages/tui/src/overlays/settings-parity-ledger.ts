@@ -216,9 +216,14 @@ export function buildLedger(): readonly LedgerEntry[] {
 		// weaker one. Behavioural evidence without a proven consumption site would mean
 		// a test demonstrated a difference through a path production never takes, which
 		// is not evidence of integration — so reachability gates the rest.
+		// A live claim is only honoured when a production read is proven. The set is
+		// retained as a record of what the program intended to verify; the class is
+		// what it can currently back.
 		if (sites !== undefined && sites.length > 0) {
 			evidence = BEHAVIOURALLY_VERIFIED.has(row.id) ? "behaviourally-verified" : "runtime-reachable";
-			if (evidence === "behaviourally-verified" && LIVE_VERIFIED.has(row.id)) evidence = "live-verified";
+			if (evidence === "behaviourally-verified" && LIVE_VERIFIED.has(row.id) && sites.length > 0) {
+				evidence = "live-verified";
+			}
 		}
 		return {
 			id: row.id,
@@ -248,6 +253,15 @@ export interface LedgerSummary {
 	readonly liveWithoutBehaviour: readonly string[];
 	/** Rows claiming runtime reachability with no proven consumption site. Must be empty. */
 	readonly reachableWithoutSite: readonly string[];
+	/**
+	 * Rows claiming live verification with no proven consumption site. Must be empty.
+	 *
+	 * Live verification is the strongest claim in the model and the easiest to make
+	 * by hand: a row listed in `LIVE_VERIFIED` reads as proven even when nothing
+	 * reads the setting. This check is what keeps that claim honest, and it is the
+	 * check the pre-September model lacked entirely.
+	 */
+	readonly liveWithoutSite: readonly string[];
 }
 
 function emptyEvidence(): Record<EvidenceClass, number> {
@@ -280,6 +294,7 @@ export function reconcileLedger(): LedgerSummary {
 	const registeredWithoutKey: string[] = [];
 	const liveWithoutBehaviour: string[] = [];
 	const reachableWithoutSite: string[] = [];
+	const liveWithoutSite: string[] = [];
 
 	for (const entry of entries) {
 		byEvidence[entry.evidence] += 1;
@@ -303,6 +318,12 @@ export function reconcileLedger(): LedgerSummary {
 		if (entry.evidence !== "unregistered" && entry.evidence !== "registered") {
 			if ((entry.consumedBy?.length ?? 0) === 0) reachableWithoutSite.push(entry.id);
 		}
+		// A live claim with no proven production read is the strongest false claim
+		// available: it asserts the behaviour was exercised through a real runtime path
+		// that the analysis cannot find. Reported rather than assumed away.
+		if (entry.evidence === "live-verified" && (entry.consumedBy?.length ?? 0) === 0) {
+			liveWithoutSite.push(entry.id);
+		}
 	}
 
 	const referenceRows = entries.filter((entry) => entry.state !== "pi-specific");
@@ -319,6 +340,7 @@ export function reconcileLedger(): LedgerSummary {
 		registeredWithoutKey,
 		liveWithoutBehaviour,
 		reachableWithoutSite,
+		liveWithoutSite,
 	};
 }
 
