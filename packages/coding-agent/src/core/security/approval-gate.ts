@@ -24,12 +24,29 @@ import type {
 } from "@earendil-works/pi-agent-core";
 import {
 	buildApprovalRequest,
+	type CommandApprovalRules,
 	describeDenial,
 	type ResolvedToolApproval,
 	resolveToolApproval,
 	type ToolApprovalPolicies,
 } from "./tool-approval.ts";
 
+/**
+ * Whether these arguments carry a command the rules should judge.
+ *
+ * Read from the arguments, never from the tool. A tool that could name its own
+ * command would be able to withhold one the user's rules would have refused, so
+ * the authority has to be the one holding the string that will actually run.
+ *
+ * Only a string counts: a missing, non-string, or blank `command` is not a
+ * command, and inventing one would let an unrelated tool be denied for text the
+ * model never asked to execute.
+ */
+function commandFrom(args: unknown): string | undefined {
+	if (!args || typeof args !== "object" || !("command" in args)) return undefined;
+	const command = args.command;
+	return typeof command === "string" && command.trim().length > 0 ? command : undefined;
+}
 /** How the gate is configured for a session. */
 export interface ApprovalGateOptions {
 	mode: ToolApprovalMode;
@@ -44,6 +61,14 @@ export interface ApprovalGateOptions {
 	prompt?: ToolApprovalPrompt;
 	/** For diagnostics: where the mode came from. */
 	modeSource?: string;
+	/**
+	 * Command-level rules for a shell tool, from `bash.patterns`.
+	 *
+	 * Omit for a tool that takes no command. The gate reads the command out of the
+	 * arguments rather than asking the tool for it, so a tool cannot describe a
+	 * command the rules would not have judged.
+	 */
+	command?: CommandApprovalRules;
 }
 
 /** What the gate decided about one call. */
@@ -83,10 +108,17 @@ export async function decideToolApproval(input: {
 	const { tool, args, options } = input;
 	const hasPrompt = typeof options.prompt === "function";
 
+	// The command rules reach the resolver HERE, or they do not reach it at all.
+	// `resolveToolApproval` is the only production caller of `resolveCommandApproval`,
+	// so omitting these two fields left `bash.patterns` configured but inert: the
+	// gate resolved every shell call as though no pattern existed.
+	const commandText = options.command === undefined ? undefined : commandFrom(args);
 	const resolved: ResolvedToolApproval = resolveToolApproval(tool as never, args, {
 		mode: options.mode,
 		policies: options.policies,
 		hasPrompt,
+		...(options.command === undefined ? {} : { command: options.command }),
+		...(commandText === undefined ? {} : { commandText }),
 	});
 
 	if (resolved.policy === "deny") {

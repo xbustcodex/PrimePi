@@ -16,7 +16,24 @@
  * unchanged and remain in `SettingsManager`.
  */
 
-export type SettingValue = boolean | string | number | Record<string, string> | string[] | Record<string, string[]>;
+export type SettingValue =
+	| boolean
+	| string
+	| number
+	| Record<string, string>
+	| string[]
+	| Record<string, string[]>
+	| SettingObjectList;
+
+/**
+ * A list of structured entries, e.g. bash approval rules.
+ *
+ * Distinct from `stringList` because the entries are objects, and from
+ * `stringListMap` because there is no key: order is the meaning, so a keyed map
+ * would lose it. `bash.patterns` is the reason this exists — a `record` cannot
+ * hold it, since the registry requires every value in a record to be a string.
+ */
+export type SettingObjectList = Record<string, unknown>[];
 
 /**
  * A map whose values are lists of strings, e.g. `{ smol: ["@tiny", "xai/grok-4.5"] }`.
@@ -84,7 +101,7 @@ export interface SettingUiSpec {
 export interface SettingDescriptor<T extends SettingValue = SettingValue> {
 	/** Dotted path into the persisted settings object, e.g. `terminal.showImages`. */
 	key: string;
-	type: "boolean" | "string" | "number" | "enum" | "record" | "stringList" | "stringListMap";
+	type: "boolean" | "string" | "number" | "enum" | "record" | "stringList" | "stringListMap" | "objectList";
 	/** Value used when no layer supplies one. */
 	default: T;
 	/** Permitted values for `enum`, and the cycle order for a `cycle` control. */
@@ -191,6 +208,15 @@ export class SettingHandle<T extends SettingValue = SettingValue> {
 					break;
 				}
 				return Object.fromEntries(entries) as T;
+			}
+			case "objectList": {
+				// An object list accepts only arrays of plain objects. Each entry's own
+				// fields are validated by that setting's `parse`, which is the only place
+				// that knows the entry shape — this branch just refuses a scalar or a
+				// nested list, which no entry schema would accept anyway.
+				if (!Array.isArray(raw)) break;
+				if (raw.some((entry) => typeof entry !== "object" || entry === null || Array.isArray(entry))) break;
+				return raw.map((entry) => ({ ...entry })) as T;
 			}
 		}
 		throw new SettingRegistrationError(`Invalid value for setting ${this.id}: ${JSON.stringify(raw)}`);

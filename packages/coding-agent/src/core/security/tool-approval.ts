@@ -98,9 +98,9 @@ export function resolveCommandApproval(command: string, rules: CommandApprovalRu
 	});
 
 	if (decision.kind === "deny") return { kind: "deny", reason: decision.reason };
-// Escalation is surfaced as a prompt rather than an allow: a critical pattern must
-// never become a permission, and `always-ask` is the strictest thing available
-// that still lets the operator decide.
+	// Escalation is surfaced as a prompt rather than an allow: a critical pattern must
+	// never become a permission, and `always-ask` is the strictest thing available
+	// that still lets the operator decide.
 	if (decision.kind === "escalate") return { kind: "prompt", reason: decision.reason };
 	if (decision.kind === "prompt") return { kind: "prompt", reason: decision.reason };
 	// `allow` means the rules vouch for the command. The caller's mode ceiling still
@@ -166,7 +166,6 @@ export interface ToolApprovalContext {
 	 * could describe its own command would be able to bypass the user's rules.
 	 */
 	commandText?: string;
-
 }
 
 /**
@@ -285,7 +284,10 @@ export function resolveToolApproval(
 	// A deny here is final; a prompt here forces the question even below the
 	// ceiling, which is how an operator asks to be consulted for a command they
 	// usually do not want to see unprompted.
-	const command = context.commandText === undefined ? { kind: "unspecified" as const } : resolveCommandApproval(context.commandText, context.command);
+	const command =
+		context.commandText === undefined
+			? { kind: "unspecified" as const }
+			: resolveCommandApproval(context.commandText, context.command);
 	if (command.kind === "deny") {
 		return { policy: "deny", tier, source: "user", override, reason: command.reason, policyKey: "command" };
 	}
@@ -382,6 +384,17 @@ export function describeDenial(toolName: string, resolved: ResolvedToolApproval)
 		return resolved.reason
 			? `Tool "${toolName}" is blocked by tool policy. Reason: ${resolved.reason}`
 			: `Tool "${toolName}" is blocked by tool policy.`;
+	}
+	// A command denial comes from `bash.patterns`, not from `tools.approval`, so
+	// telling the operator to delete a `tools.approval` entry sends them to edit a
+	// file that cannot express it. The reason carries the pattern that fired, which
+	// is the part the operator actually has to find.
+	if (resolved.policyKey === "command") {
+		return (
+			`Tool "${toolName}" is blocked by a bash approval pattern.\n` +
+			`Reason: ${resolved.reason ?? "no reason recorded"}.\n` +
+			`To allow it, narrow or remove the matching rule in the "bash.patterns" setting.`
+		);
 	}
 	const key = resolved.policyKey ?? toolName;
 	return (
