@@ -427,9 +427,24 @@ export async function createSessionManager(
 			stopThemeWatcher();
 		}
 	}
-
 	if (parsed.continue) {
 		return SessionManager.continueRecent(cwd, sessionDir);
+	}
+
+	// Auto-resume: behave like --continue when the setting is on and a prior session
+	// exists. Marking `parsed.continue` also makes buildSessionOptions restore the
+	// session's model and thinking level instead of overriding them with the CLI
+	// defaults — the part that is easy to miss, because resuming the transcript but
+	// resetting the model silently changes which model answers it.
+	//
+	// Off by default. A tool resuming a session the user did not ask to resume is a
+	// surprising thing to do on its own.
+	if (settingsManager.getSetting("autoResume")?.value === true) {
+		const manager = await SessionManager.continueRecent(cwd, sessionDir);
+		if (manager.getEntries().length > 0) {
+			parsed.continue = true;
+			return manager;
+		}
 	}
 
 	if (parsed.sessionId) {
