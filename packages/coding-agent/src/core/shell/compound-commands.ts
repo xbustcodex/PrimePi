@@ -1,3 +1,5 @@
+import { commandMatches } from "./approval-patterns.ts";
+
 /**
  * Compound shell commands: what a `&&` chain actually asks for, and how approval
  * decides on it.
@@ -208,16 +210,40 @@ export type ChainDecision =
 	| { readonly kind: "prompt"; readonly reason: string }
 	| { readonly kind: "allow"; readonly reason: string };
 
-/** Whether a rule's pattern matches a command. */
+/**
+ * Whether a rule's pattern matches a command.
+ *
+ * ## The pattern is a glob, and this used to treat it as a regex
+ *
+ * This compiled `rule.match` directly as a regular expression, contradicting both
+ * the setting's documented contract ("only * wildcards are supported") and the
+ * sibling `commandMatches` in `approval-patterns.ts`. The consequences were not
+ * subtle:
+ *
+ *     "rm *"       vs "charm setup"     -> matched
+ *     "rm *"       vs "confirm --force" -> matched
+ *     "npm run *"  vs "npm runbuild"    -> matched
+ *     "git status" vs "git   status"    -> did not match
+ *
+ * `\ *` is a regex quantifier, so `rm *` means "rm" followed by zero or more
+ * spaces, matching any command *containing* those letters rather than one
+ * *starting* with `rm`. A user writing that rule to refuse deletes would instead
+ * refuse `charm setup`, and a deny rule for `git status` would miss the spaced
+ * spelling.
+ *
+ * So the glob matcher is used, which anchors at both ends and escapes every regex
+ * metacharacter, making the two entry points agree.
+ */
 export function matches(rule: ApprovalRule, text: string): boolean {
+	// `*` is a real catch-all in both dialects; short-circuiting it keeps the
+	// empty-pattern guard below meaningful.
 	if (rule.match === "*") return true;
-	try {
-		return new RegExp(rule.match).test(text);
-	} catch {
-		// A malformed pattern must not silently allow. Treating it as a non-match
-		// would drop a restriction the user wrote on purpose.
-		return true;
-	}
+	// An empty pattern matches nothing rather than everything. A rule with no text is
+	// a mistake, and reading it as a catch-all would be the unsafe direction.
+// `patternToRegExp` cannot throw — it escapes everything but `*` — so a denial is
+// never silently dropped here, which the previous try/catch was guarding against.
+	if (rule.match.trim().length === 0) return false;
+	return commandMatches(text, rule.match);
 }
 
 /** The first rule matching a command, in order. */

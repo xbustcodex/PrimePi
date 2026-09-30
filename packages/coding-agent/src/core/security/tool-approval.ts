@@ -32,6 +32,82 @@ import {
 	type ToolRiskTier,
 } from "@earendil-works/pi-agent-core";
 
+import { decideChain } from "../shell/compound-commands.ts";
+
+/**
+ * Command-level approval rules, as a user writes them.
+ *
+ * The reference's `bash.patterns` is an ordered list of `{ match, approval }`,
+ * glob-matched and anchored. It is a *narrowing* mechanism: it can refuse a
+ * command the mode would have allowed, and it can turn one the mode would prompt
+ * for into a definite answer.
+ *
+ * It cannot widen past the mode's ceiling, and that is enforced by ordering
+ * rather than by a check here: this runs before the tier comparison, so a
+ * permissive pattern never gets the chance to override `always-ask`.
+ */
+export interface CommandApprovalRules {
+	readonly patterns: readonly { match: string; approval: "allow" | "deny" | "prompt"; chainOnly?: boolean }[];
+	/**
+	 * Whether a literal `&&` chain may be segmented and judged per part.
+	 *
+	 * Segmentation is the difference between approving a read and running a delete,
+	 * so it is a separate decision from the patterns and defaults to off.
+	 */
+	readonly compoundAllowed: boolean;
+	/** Shell the command will run under. Only POSIX shells segment. */
+	readonly shell?: string;
+}
+
+/**
+ * What the command itself asks for, before the mode's ceiling applies.
+ *
+ * `unspecified` means the command carries no opinion, which is the common case:
+ * most commands have no rule and fall through to their tier.
+ */
+export type CommandApproval =
+	| { readonly kind: "unspecified" }
+	| { readonly kind: "allow"; readonly reason: string }
+	| { readonly kind: "deny"; readonly reason: string }
+	| { readonly kind: "prompt"; readonly reason: string }
+	| { readonly kind: "escalate"; readonly reason: string };
+
+/**
+ * Asks the command rules what they think of one command.
+ *
+ * With no rules the answer is `unspecified` rather than `allow`, so a missing
+ * configuration cannot silently become a permission.
+ *
+ * ## Why this delegates rather than reimplements
+ *
+ * `decideChain` already carries the security properties this needs, and they are
+ * the ones that are easy to get subtly wrong: anchoring, per-segment judgement
+ * of a segmentable chain, refusal to segment anything the tokenizer cannot
+ * account for, a whole-chain deny outranking every segment allow, and a catch-all
+ * allow being unable to vouch for a chain it could not take apart. A second
+ * implementation would be a second set of those properties to keep correct.
+ */
+export function resolveCommandApproval(command: string, rules: CommandApprovalRules | undefined): CommandApproval {
+	if (rules === undefined || rules.patterns.length === 0) return { kind: "unspecified" };
+
+	const decision = decideChain({
+		command,
+		rules: rules.patterns,
+		compoundAllowed: rules.compoundAllowed,
+		...(rules.shell === undefined ? {} : { shell: rules.shell }),
+	});
+
+	if (decision.kind === "deny") return { kind: "deny", reason: decision.reason };
+// Escalation is surfaced as a prompt rather than an allow: a critical pattern must
+// never become a permission, and `always-ask` is the strictest thing available
+// that still lets the operator decide.
+	if (decision.kind === "escalate") return { kind: "prompt", reason: decision.reason };
+	if (decision.kind === "prompt") return { kind: "prompt", reason: decision.reason };
+	// `allow` means the rules vouch for the command. The caller's mode ceiling still
+	// applies afterwards, so this cannot defeat `always-ask`.
+	return { kind: "allow", reason: decision.reason };
+}
+
 /** A tool as far as approval is concerned: the fields this module reads. */
 export interface ApprovableTool {
 	name: string;
@@ -74,6 +150,23 @@ export interface ToolApprovalContext {
 	 * `prompt` becomes `denied` rather than `approved`.
 	 */
 	hasPrompt: boolean;
+	/**
+	 * Command-level rules for a shell tool, or undefined for a tool that takes no
+	 * command.
+	 *
+	 * Deliberately per-call rather than per-tool: `bash` and `edit` both reach
+	 * {@link resolveToolApproval}, and only the shell one has a command to judge.
+	 * Attaching it to the tool would mean the shell rules applied to an edit.
+	 */
+	command?: CommandApprovalRules;
+	/**
+	 * The command itself, when the tool takes one.
+	 *
+	 * Read from the arguments rather than declared by the tool, because a tool that
+	 * could describe its own command would be able to bypass the user's rules.
+	 */
+	commandText?: string;
+
 }
 
 /**
@@ -181,7 +274,26 @@ export function resolveToolApproval(
 		};
 	}
 
-	// 3. The mode ceiling auto-approves anything at or below it.
+	// 3. The command's own rules, for a shell tool.
+	//
+	// Placed after the two denials and before the mode ceiling, which is what makes
+	// a pattern a narrowing mechanism rather than a second authority:
+	//
+	// - after a tool or user denial, so a pattern cannot un-deny;
+	// - before the ceiling, so an `allow` pattern still cannot defeat `always-ask`.
+	//
+	// A deny here is final; a prompt here forces the question even below the
+	// ceiling, which is how an operator asks to be consulted for a command they
+	// usually do not want to see unprompted.
+	const command = context.commandText === undefined ? { kind: "unspecified" as const } : resolveCommandApproval(context.commandText, context.command);
+	if (command.kind === "deny") {
+		return { policy: "deny", tier, source: "user", override, reason: command.reason, policyKey: "command" };
+	}
+	if (command.kind === "prompt" && modeApprovesTier(context.mode, tier)) {
+		return { policy: "prompt", tier, source: "user", override, reason: command.reason, policyKey: "command" };
+	}
+
+	// 4. The mode ceiling auto-approves anything at or below it.
 	//
 	// `yolo` is handled by `modeApprovesTier` returning true for every tier, so
 	// there is no separate branch and no way for the two to disagree.
@@ -194,7 +306,14 @@ export function resolveToolApproval(
 		return { policy: "allow", tier, source: "mode", override: false, policyKey: objectForm?.policyKey };
 	}
 
-	// 4. Below the ceiling is impossible here, so everything remaining is a prompt.
+	// A command rule that allows the command does not reach here: below the ceiling
+	// nothing is auto-approved, and an `allow` pattern is explicitly not a licence to
+	// skip the question. The user policy below is the only thing that can.
+	if (command.kind === "allow") {
+		return { policy: "prompt", tier, source: "user", override: false, reason: command.reason, policyKey: "command" };
+	}
+
+	// 5. Below the ceiling is impossible here, so everything remaining is a prompt.
 	//
 	// An explicit tool `allow` cannot outrank a mode that asked to be consulted:
 	// otherwise `always-ask` could be defeated by any tool that declared itself
