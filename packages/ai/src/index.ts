@@ -75,6 +75,13 @@ export {
 	selectCompactionMethod,
 } from "./utils/compaction-methods.ts";
 export * from "./utils/diagnostics.ts";
+export {
+	checkEditAllowed,
+	checkEditFreshness,
+	contentDigest,
+	type SeenDigest,
+	type StalenessDecision,
+} from "./utils/edit-guards.ts";
 export * from "./utils/event-stream.ts";
 export {
 	type FailoverCandidateInput,
