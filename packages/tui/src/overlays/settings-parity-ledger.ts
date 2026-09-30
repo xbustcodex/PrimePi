@@ -367,14 +367,14 @@ const WIRED_ROWS: Readonly<Record<string, string>> = {
 	"tasks.todoClearDelay": "consumed when a plan completes, as the delay before it is cleared from the panel",
 	// Tools tab, Output Limits: bounding a tool result without losing it.
 	"tools.artifactSpillThreshold":
-		"consumed by planSpill as the byte threshold above which the full output is saved and only head and tail stay inline",
+		"consumed by spillOutput as the byte threshold above which a result is not returned inline in full; it admits, and the budgets then decide how much survives",
 	"tools.artifactHeadBytes":
-		"consumed by planSpill; 0 makes the inline view tail-only, which is right when the end of a result matters and the start is noise",
-	"tools.artifactTailBytes": "consumed by planSpill as the byte budget for the tail view",
+		"consumed by spillOutput; 0 makes the inline view tail-only, which is right when the end of a result matters and the start is noise",
+	"tools.artifactTailBytes": "consumed by spillOutput as the byte budget for the retained tail",
 	"tools.artifactTailLines":
-		"consumed before the tail byte budget, so the line count a reader sees does not change with the byte setting",
+		"consumed by spillOutput before the tail byte budget, so the line count a reader sees does not change with the byte setting",
 	"tools.outputMaxColumns":
-		"consumed by clampLineWidth; 0 disables the clamp and a clamp of 1 still keeps one character",
+		"consumed by clipColumns; 0 or less disables the clip rather than erasing every line",
 	// Providers and tools tabs: web search and URL fetching.
 	"web_search.enabled":
 		"consumed by resolveSearchProvider; a disabled search resolves to nothing even with credentials present",

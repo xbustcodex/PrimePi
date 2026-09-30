@@ -1,5 +1,6 @@
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
+import { DEFAULT_OUTPUT_SPILL, type OutputSpillSettings, spillOutput } from "@earendil-works/pi-ai";
 import { spawn } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
@@ -8,7 +9,7 @@ import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
 import { pathExists, resolveToCwd } from "./path-utils.ts";
 import { findRenderers } from "./renderers/find.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from "./truncate.ts";
+import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult } from "./truncate.ts";
 
 /** Relativize a find result against the search root and normalize it to posix separators. */
 export function relativizeFindResultPath(
@@ -65,6 +66,44 @@ const defaultFindOperations: FindOperations = {
 export interface FindToolOptions {
 	/** Custom operations for find. Default: local filesystem plus fd */
 	operations?: FindOperations;
+	/**
+	 * Reads a settings value by key. Supplied by the session so the output limits
+	 * follow the user's configuration; absent, the built-in defaults apply.
+	 */
+	readSetting?: (key: string) => unknown;
+}
+
+/**
+ * Applies the configured output limits to a joined result list.
+ *
+ * A glob result is a list of paths, so the useful part is at both ends and the
+ * middle is elision. The hard-coded `DEFAULT_MAX_BYTES` this replaces ignored
+ * every `tools.artifact*` setting, so a user who raised or lowered a limit saw
+ * no change at all.
+ */
+function resolveOutputSpill(read: (key: string) => unknown): OutputSpillSettings {
+	const number = (key: string, fallback: number): number => {
+		const value = read(key);
+		return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	};
+	return {
+		spillThresholdKb: number("tools.artifactSpillThreshold", DEFAULT_OUTPUT_SPILL.spillThresholdKb),
+		headBytes: number("tools.artifactHeadBytes", DEFAULT_OUTPUT_SPILL.headBytes),
+		tailBytes: number("tools.artifactTailBytes", DEFAULT_OUTPUT_SPILL.tailBytes),
+		tailLines: number("tools.artifactTailLines", DEFAULT_OUTPUT_SPILL.tailLines),
+		maxColumns: number("tools.outputMaxColumns", DEFAULT_OUTPUT_SPILL.maxColumns),
+	};
+}
+
+function applyOutputLimits(
+	rawOutput: string,
+	readSetting: ((key: string) => unknown) | undefined,
+): {
+	content: string;
+	truncated: boolean;
+} {
+	const result = spillOutput(rawOutput, resolveOutputSpill(readSetting ?? (() => undefined)));
+	return { content: result.content, truncated: result.spilled };
 }
 
 export function createFindToolDefinition(
@@ -149,17 +188,16 @@ export function createFindToolDefinition(
 							const resultLimitReached = relativized.length > effectiveLimit;
 							if (resultLimitReached) relativized.length = effectiveLimit;
 							const rawOutput = relativized.join("\n");
-							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-							let resultOutput = truncation.content;
+							const limited = applyOutputLimits(rawOutput, options?.readSetting);
+							let resultOutput = limited.content;
 							const details: FindToolDetails = {};
 							const notices: string[] = [];
 							if (resultLimitReached) {
 								notices.push(`${effectiveLimit} results limit reached`);
 								details.resultLimitReached = effectiveLimit;
 							}
-							if (truncation.truncated) {
+							if (limited.truncated) {
 								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-								details.truncation = truncation;
 							}
 							if (notices.length > 0) {
 								resultOutput += `\n\n[${notices.join(". ")}]`;
@@ -284,8 +322,8 @@ export function createFindToolDefinition(
 							const resultLimitReached = relativized.length > effectiveLimit;
 							if (resultLimitReached) relativized.length = effectiveLimit;
 							const rawOutput = relativized.join("\n");
-							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-							let resultOutput = truncation.content;
+							const limited = applyOutputLimits(rawOutput, options?.readSetting);
+							let resultOutput = limited.content;
 							const details: FindToolDetails = {};
 							const notices: string[] = [];
 							if (resultLimitReached) {
@@ -294,9 +332,8 @@ export function createFindToolDefinition(
 								);
 								details.resultLimitReached = effectiveLimit;
 							}
-							if (truncation.truncated) {
+							if (limited.truncated) {
 								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-								details.truncation = truncation;
 							}
 							if (notices.length > 0) {
 								resultOutput += `\n\n[${notices.join(". ")}]`;

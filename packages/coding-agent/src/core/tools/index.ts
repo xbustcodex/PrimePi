@@ -71,6 +71,49 @@ export {
 	truncateLine,
 	truncateTail,
 } from "./truncate.ts";
+
+import {
+	clipColumns,
+	DEFAULT_OUTPUT_SPILL,
+	type OutputSpillSettings,
+	type SpillDirection,
+	type SpillResult,
+	spillOutput,
+} from "@earendil-works/pi-ai";
+
+export {
+	clipColumns,
+	DEFAULT_OUTPUT_SPILL,
+	type OutputSpillSettings,
+	spillOutput,
+	type SpillDirection,
+	type SpillResult,
+};
+
+/**
+ * Resolves the output-spill policy from a settings reader.
+ *
+ * Tools that format large results take a reader rather than resolved values, so
+ * a user who changes a limit mid-session gets the new number on the next tool
+ * call instead of at the next start.
+ *
+ * Every value is clamped at the point of use rather than at registration,
+ * because a settings file is user input and a negative budget would otherwise
+ * make "keep the first N bytes" mean "keep none".
+ */
+export function resolveOutputSpill(read: (key: string) => unknown): OutputSpillSettings {
+	const number = (key: string, fallback: number): number => {
+		const value = read(key);
+		return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+	};
+	return {
+		spillThresholdKb: number("tools.artifactSpillThreshold", DEFAULT_OUTPUT_SPILL.spillThresholdKb),
+		headBytes: number("tools.artifactHeadBytes", DEFAULT_OUTPUT_SPILL.headBytes),
+		tailBytes: number("tools.artifactTailBytes", DEFAULT_OUTPUT_SPILL.tailBytes),
+		tailLines: number("tools.artifactTailLines", DEFAULT_OUTPUT_SPILL.tailLines),
+		maxColumns: number("tools.outputMaxColumns", DEFAULT_OUTPUT_SPILL.maxColumns),
+	};
+}
 export {
 	createWriteTool,
 	createWriteToolDefinition,

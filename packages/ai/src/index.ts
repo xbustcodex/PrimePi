@@ -119,6 +119,15 @@ export {
 	splitThinkingSuffix,
 	THINKING_LEVELS,
 } from "./utils/model-roles.ts";
+export {
+	clipColumns,
+	countOutputLines,
+	DEFAULT_OUTPUT_SPILL,
+	type OutputSpillSettings,
+	type SpillDirection,
+	type SpillResult,
+	spillOutput,
+} from "./utils/output-spill.ts";
 export * from "./utils/overflow.ts";
 export {
 	assembleContext,
