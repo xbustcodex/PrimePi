@@ -15,6 +15,7 @@
 
 import { readFileSync } from "node:fs";
 import { basename, dirname } from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
 	Agent,
 	AgentContext,
@@ -125,6 +126,9 @@ import {
 } from "./extensions/index.ts";
 import { emitSessionShutdownEvent } from "./extensions/runner.ts";
 import { type ChainState, parseRouteSelector, resolveFallbackChain } from "./failover/chain.ts";
+import { DiagnosticsLedger, type DiagnosticsSnapshot, diagnosticsSnapshot } from "./lsp/integration.ts";
+import { LspManager, type LspServerConfig } from "./lsp/manager.ts";
+import { describeSeverity, type LspDiagnostic } from "./lsp/operations.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
@@ -495,6 +499,16 @@ export class AgentSession {
 	 * one increment corresponds to one request actually on the wire.
 	 */
 	private readonly _providerInFlight = new Map<string, number>();
+	/**
+	 * The workspace's language servers, built on first use.
+	 *
+	 * Lazy because a session with `lsp.enabled` false must spawn nothing at all: a
+	 * language server is a process, and starting one the user disabled is not a cost
+	 * the setting is asking them to pay.
+	 */
+	private _lsp: LspManager | undefined;
+	/** Published diagnostics by URI, newest publication per file winning. */
+	private readonly _diagnosticsLedger = new DiagnosticsLedger();
 	private _isBeforeSettle = false;
 	private _abortDuringBeforeSettle = false;
 	private _isEmittingAgentSettled = false;
@@ -651,6 +665,91 @@ export class AgentSession {
 	 * Idempotent: wrapping an already-wrapped stream is a no-op, so repeated
 	 * installs do not double-count.
 	 */
+	/**
+	 * The workspace's language servers, or undefined when the feature is off.
+	 *
+	 * Built with the *session's* root and trust state rather than the process's, so a
+	 * delegated worktree gets its own clients and a server configured by an untrusted
+	 * project never runs. The manager keys its clients by root, which is what makes
+	 * worktree isolation structural rather than a convention.
+	 */
+	private get lsp(): LspManager | undefined {
+		if (this.settingsManager.getSetting("lsp.enabled")?.value !== true) return undefined;
+		if (this._lsp === undefined) {
+			this._lsp = new LspManager({
+				root: this.sessionManager.getCwd(),
+				servers: (this.settingsManager.getSetting("lsp.servers")?.value as LspServerConfig[] | undefined) ?? [],
+				// A project-provided server is code the repository chose to run, so it
+				// runs only in a trusted project — the same authority that governs hooks,
+				// read here rather than re-derived.
+				projectTrusted: this.settingsManager.isProjectTrusted(),
+			});
+		}
+		return this._lsp;
+	}
+
+	/** The server claiming a file, or undefined when LSP is off or none claims it. */
+	private lspServerForFile(filePath: string): ReturnType<LspManager["serverForFile"]> {
+		return this.lsp?.serverForFile(filePath);
+	}
+
+	/**
+	 * Records what a language server published for a file.
+	 *
+	 * Newest publication wins, and a file the model just changed is dropped so it
+	 * reports `pending` rather than carrying diagnostics computed against content
+	 * that no longer exists.
+	 */
+	publishDiagnostics(filePath: string, diagnostics: readonly LspDiagnostic[]): void {
+		this._diagnosticsLedger.publish(pathToFileURL(filePath).href, diagnostics);
+	}
+
+	/** Forgets a file's diagnostics after a write, pending the server's next publication. */
+	invalidateDiagnostics(filePath: string): void {
+		this._diagnosticsLedger.drop(pathToFileURL(filePath).href);
+	}
+
+	/**
+	 * The published diagnostics for a file, as the model should be told.
+	 *
+	 * Returns a *freshness* rather than a bare list, because three of the four
+	 * outcomes are claims about the tooling and not about the code. "No diagnostics"
+	 * for a server that has not finished teaches the model the file is clean when
+	 * nothing has looked at it.
+	 */
+	diagnosticsForFile(filePath: string): DiagnosticsSnapshot {
+		const server = this.lspServerForFile(filePath);
+		// The resolver already records why a server is unavailable; reconstructing a
+		// reason here would drift from it.
+		const unavailable =
+			server !== undefined && server.available !== true && server.reason !== undefined
+				? { reason: server.reason }
+				: {};
+		return diagnosticsSnapshot({
+			ledger: this._diagnosticsLedger,
+			uri: pathToFileURL(filePath).href,
+			server: {
+				claimed: this.lsp !== undefined && server !== undefined,
+				usable: server?.available === true,
+				...unavailable,
+			},
+			// Resolved against the path the caller asked about rather than the URI the
+			// server published under, so a path outside the workspace still renders.
+			resolve: (uri, published) =>
+				published.map((entry) => ({
+					uri,
+					displayPath: filePath,
+					range: entry.range,
+					message: entry.message,
+					severity: describeSeverity(entry.severity),
+					...(entry.source ? { source: entry.source } : {}),
+					...(entry.code !== undefined ? { code: entry.code } : {}),
+					line: entry.range.start.line + 1,
+					column: entry.range.start.character + 1,
+				})),
+		});
+	}
+
 	private _installProviderRequestGate(): void {
 		const agent = this.agent as unknown as { streamFunction: StreamFn & { providerLimited?: true } };
 		if (agent.streamFunction.providerLimited) return;
