@@ -34,16 +34,20 @@ import {
 	CombinedAutocompleteProvider,
 	type Component,
 	Container,
+	formatTitle,
 	fuzzyFilter,
 	getCapabilities,
 	hyperlink,
 	Markdown,
 	matchesKey,
+	nextFrame,
 	Spacer,
 	setCapabilityOverrides,
 	setKeybindings,
 	type Terminal,
 	Text,
+	type TitleSpinner,
+	type TitleState,
 	TruncatedText,
 	type TUI,
 	TuiAltScreen,
@@ -449,6 +453,8 @@ export class InteractiveMode {
 	private workingMessage: string | undefined = undefined;
 	private workingVisible = true;
 	private workingIndicatorOptions: WorkingIndicatorOptions | undefined = undefined;
+	/** Spinner frame for the terminal title; advanced only while a turn is running. */
+	private titleFrame = 0;
 	private readonly defaultWorkingMessage = "Working";
 	private readonly defaultHiddenThinkingLabel = "Thinking...";
 	private hiddenThinkingLabel = this.defaultHiddenThinkingLabel;
@@ -1063,16 +1069,49 @@ export class InteractiveMode {
 	}
 
 	/**
-	 * Update terminal title with session name and cwd.
+	 * Update the terminal title with the run state, session name and cwd.
+	 *
+	 * The title is the only surface visible when the window is not focused, so it
+	 * carries a one-glyph run state: a taskbar full of identical titles tells the
+	 * user nothing about which one to switch to.
+	 *
+	 * The spinner advances only while a turn is running. A spinner frozen on an idle
+	 * session reads as a *hung* one rather than a quiet one, which is the opposite
+	 * of what it should communicate.
+	 *
+	 * `tui.titleState` off leaves the title to whatever was last set, so a user who
+	 * does not want a run state in their taskbar is not forced to see one.
 	 */
 	private updateTerminalTitle(): void {
+		if (this.settingsManager.getSetting("tui.titleState")?.value === false) return;
+		const configured = this.settingsManager.getSetting("tui.titleSpinner")?.value;
+		const spinner: TitleSpinner =
+			configured === "none" || configured === "pulse" || configured === "dots" || configured === "braille"
+				? configured
+				: "braille";
+		// Only the kinds this mode actually raises. There is no "waiting" indicator
+		// here, so a session awaiting input is simply idle - claiming otherwise would
+		// put a mark in the user taskbar that no code can produce.
+		const indicator = this.activeStatusIndicator?.kind;
+		const state: TitleState = this.session.isStreaming
+			? "working"
+			: indicator === "compaction" || indicator === "branchSummary"
+				? "working"
+				: indicator === "retry"
+					? "waiting"
+					: "idle";
+		if (state === "working") this.titleFrame = nextFrame(this.titleFrame, spinner);
+
 		const cwdBasename = path.basename(this.sessionManager.getCwd());
-		const sessionName = this.sessionManager.getSessionName();
-		if (sessionName) {
-			this.ui.terminal.setTitle(`${APP_TITLE} - ${sessionName} - ${cwdBasename}`);
-		} else {
-			this.ui.terminal.setTitle(`${APP_TITLE} - ${cwdBasename}`);
-		}
+		const label = formatTitle({
+			// The directory disambiguates two sessions with the same name, which is
+			// common when a name is derived from the task.
+			sessionName: `${this.sessionManager.getSessionName() ?? APP_TITLE} - ${cwdBasename}`,
+			state,
+			spinner: state === "working" ? spinner : "none",
+			frame: this.titleFrame,
+		});
+		this.ui.terminal.setTitle(label);
 	}
 
 	/**
