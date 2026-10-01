@@ -6,7 +6,7 @@ import {
 	selectFailoverCandidate,
 } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
 
 /**
  * Integration coverage for the `smol` role as consumed by summarisation.
@@ -204,6 +204,37 @@ describe("modelRoles settings round-trip", () => {
 		const manager = SettingsManager.inMemory();
 		manager.setModelRole("smol", "xai/grok-4.5");
 		manager.setModelRole("smol", undefined);
+		expect(manager.getModelRoles()).toEqual({});
+	});
+
+	it("writes to the project layer when modelRoleStorage asks for it", () => {
+		const storage = new InMemorySettingsStorage();
+		storage.withLock("global", () => JSON.stringify({ modelRoleStorage: "project" }));
+		const manager = SettingsManager.fromStorage(storage, { projectTrusted: true });
+
+		manager.setModelRole("smol", "xai/grok-4.5");
+
+		expect(manager.getProjectSettings().modelRoles).toEqual({ smol: "xai/grok-4.5" });
+		expect(manager.getGlobalSettings().modelRoles).toBeUndefined();
+		expect(manager.getModelRoles()).toEqual({ smol: "xai/grok-4.5" });
+	});
+
+	it("keeps role writes global by default", () => {
+		const storage = new InMemorySettingsStorage();
+		const manager = SettingsManager.fromStorage(storage, { projectTrusted: true });
+
+		manager.setModelRole("smol", "xai/grok-4.5");
+
+		expect(manager.getGlobalSettings().modelRoles).toEqual({ smol: "xai/grok-4.5" });
+		expect(manager.getProjectSettings().modelRoles).toBeUndefined();
+	});
+
+	it("refuses a project-scoped role write while the project is untrusted", () => {
+		const storage = new InMemorySettingsStorage();
+		storage.withLock("global", () => JSON.stringify({ modelRoleStorage: "project" }));
+		const manager = SettingsManager.fromStorage(storage, { projectTrusted: false });
+
+		expect(() => manager.setModelRole("smol", "xai/grok-4.5")).toThrow();
 		expect(manager.getModelRoles()).toEqual({});
 	});
 

@@ -270,7 +270,11 @@ describe("placeholder collision and forgery", () => {
 		expect(r.restore(once)).toBe(`a ${TEST_SECRET}`);
 	});
 
-	it("flags an unterminated placeholder so a stream cannot split one", () => {
+	// The name this test used ("so a stream cannot split one") asserted a property
+	// that does not hold here: neither redaction boundary redacts per delta, so a
+	// stream split cannot produce one. What the method actually answers is whether
+	// text assembled by concatenation ends mid-token.
+	it("flags an unterminated placeholder in concatenated text", () => {
 		const r = redactor();
 		const complete = r.redact(TEST_SECRET);
 		expect(r.hasPartialPlaceholder(complete)).toBe(false);

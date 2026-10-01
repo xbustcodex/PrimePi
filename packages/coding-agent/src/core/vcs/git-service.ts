@@ -509,6 +509,21 @@ export class GitService {
 	 * worktree and its parent are the same repository and different checkouts,
 	 * which is why the checkpoint layer keys on the checkout rather than the
 	 * repository.
+	 *
+	 * ## The returned `gitDir` is the checkout path, not a git directory
+	 *
+	 * Named for shape-compatibility with `RepositoryIdentity`, and it is **not** one:
+	 * `checkoutKey` is `canonical(this.identity.gitDir)` — the `.git` directory — while
+	 * the value below is `canonical(path)`, the working tree root. For the primary
+	 * checkout those differ (`repo` vs `repo/.git`), and for a linked worktree the git
+	 * directory lives inside the parent repository entirely.
+	 *
+	 * Do not feed this into a `checkoutKey` comparison; use
+	 * `discoverRepository(path).checkoutKey` for that. Documented rather than renamed
+	 * because a caller wanting "which checkouts exist" and one wanting "which checkout
+	 * am I" are different questions, and conflating them is the error this prevents.
+	 *
+	 * Nothing in production calls this yet, so no caller is currently misled.
 	 */
 	listCheckouts(): { path: string; gitDir: string; branch?: string }[] {
 		const result = this.#exec(["worktree", "list", "--porcelain"]);

@@ -140,6 +140,12 @@ export interface Settings {
 	defaultModel?: string;
 	defaultThinkingLevel?: ThinkingLevel;
 	modelThinkingLevels?: Record<string, ThinkingLevel>; // per-model default thinking level overrides keyed by "provider/modelId"
+	/**
+	 * Per-role model preferences, keyed by role id. Read through `getModelRoles`, which
+	 * validates the shape; this field is what a raw settings file parses into, so a
+	 * hand-edited file with a non-object value is reachable here.
+	 */
+	modelRoles?: Record<string, string>;
 	transport?: TransportSetting; // default: "auto"
 	steeringMode?: "all" | "one-at-a-time";
 	followUpMode?: "all" | "one-at-a-time";
@@ -888,7 +894,13 @@ export class SettingsManager {
 		return { ...(value as Record<string, string>) };
 	}
 
-	/** Assigns a role's model preference. Pass `undefined` to clear it. */
+	/**
+	 * Assign a role's model preference. Pass `undefined` to clear it.
+	 *
+	 * Writes to the layer `modelRoleStorage` names, so a user who asked for
+	 * project-scoped roles gets them there. Reads go through the merged view
+	 * either way, and a project write is refused while the project is untrusted.
+	 */
 	setModelRole(role: string, value: string | undefined): void {
 		const roles = this.getModelRoles();
 		if (value === undefined) {
@@ -896,7 +908,7 @@ export class SettingsManager {
 		} else {
 			roles[role] = value;
 		}
-		this.setSetting("modelRoles", roles, "global");
+		this.setSetting("modelRoles", roles, this.getModelRoleStorage());
 	}
 
 	/**

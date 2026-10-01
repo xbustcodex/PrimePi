@@ -43,7 +43,6 @@ import { visibleWidth } from "../utils.ts";
 import {
 	ALL_TABS,
 	type AnySettingTab,
-	groupIndex,
 	LABELLED_TAB_COUNT,
 	SETTING_TABS,
 	TAB_GROUPS,
@@ -635,10 +634,5 @@ export class SettingsPanel {
 	/** The labelled-tab count, so a test can assert the reference's layout rule. */
 	static labelledTabCount(): number {
 		return LABELLED_TAB_COUNT;
-	}
-
-	/** Where a group sorts, so a test can assert the unknown-group rule. */
-	static groupSortIndex(tab: AnySettingTab, group: string | undefined): number {
-		return groupIndex(tab, group);
 	}
 }

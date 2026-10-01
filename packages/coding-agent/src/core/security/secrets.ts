@@ -294,11 +294,22 @@ export class SecretRedactor {
 	/**
 	 * True when the text ends inside an unterminated placeholder.
 	 *
-	 * A stream can split a placeholder across deltas, so a trailing `$$…` with no
-	 * closing delimiter must not be emitted where the next delta would complete
-	 * it. Scanning forward from the *first* `$$` and checking whether a closing
-	 * delimiter exists anywhere after it avoids mistaking the closing `$$` of a
-	 * complete token for an opening one.
+	 * **The doc this replaced claimed a stream could split a placeholder across
+	 * deltas.** That is not true of this codebase, and the claim is what kept this
+	 * member looking necessary. The display boundary is
+	 * `AssistantMessageComponent.updateContent`, which redacts the whole accumulated
+	 * message on every `message_update`; the outbound boundary is
+	 * `AgentSession._redactProjection`, which redacts whole messages too. Neither ever
+	 * redacts a single delta, so a split placeholder never reaches either.
+	 *
+	 * The method itself is correct and is retained: text assembled by *concatenation*
+	 * rather than by a re-read of the full message can still land mid-token, and a
+	 * caller that concatenates needs to know. Its justification is now the one that is
+	 * actually true.
+	 *
+	 * Scanning forward from the *first* `$$` and checking whether a closing delimiter
+	 * exists anywhere after it avoids mistaking the closing `$$` of a complete token
+	 * for an opening one.
 	 */
 	hasPartialPlaceholder(text: string): boolean {
 		if (!text) return false;

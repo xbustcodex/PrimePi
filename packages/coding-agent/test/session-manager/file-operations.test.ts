@@ -343,7 +343,11 @@ describe("SessionManager custom flat session directory", () => {
 	});
 });
 
-describe("SessionManager.setSessionFile with corrupted files", () => {
+// Named for the construction path this block actually exercises. It previously read
+// "SessionManager.setSessionFile", which is a public method with no caller anywhere in
+// src — the constructor calls the private _setSessionFile. The label described a method
+// these tests do not touch.
+describe("SessionManager.open with corrupted files", () => {
 	let tempDir: string;
 
 	beforeEach(() => {

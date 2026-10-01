@@ -443,7 +443,18 @@ export class CommitPipeline {
 	/**
 	 * Undoes a selection, leaving the working tree alone.
 	 *
-	 * Exists so a refused or abandoned commit leaves the index as it was found.
+	 * **This does not run when a commit is refused.** The doc this replaced said it
+	 * exists "so a refused or abandoned commit leaves the index as it was found", which
+	 * is the opposite of what the pipeline does, and is pinned that way on purpose:
+	 * `test/vcs-commit-pipeline.test.ts` asserts that a validation-failed commit leaves
+	 * the change *still staged* — "visible, and reversible by hand. A silent rollback
+	 * would be its own surprise." A user who stages a set of files, has one rejected by
+	 * validation, and finds the whole selection silently unstaged would have to redo
+	 * the staging; finding it exactly as left is recoverable by hand.
+	 *
+	 * So this is an explicit operator action, called deliberately, not a compensation
+	 * step on a failure path. Nothing in production calls it: the pipeline does not
+	 * unwind, and the agent-facing tool surface does not expose it either.
 	 */
 	unstage(paths: readonly string[]): GitResult {
 		return this.#service.unstagePaths(paths);

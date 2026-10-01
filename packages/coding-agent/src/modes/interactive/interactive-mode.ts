@@ -1945,6 +1945,30 @@ export class InteractiveMode {
 				);
 				this.loadedResourcesContainer.addChild(new Spacer(1));
 			}
+
+			// A key bound to two actions is detected by `KeybindingsManager` and reported
+			// nowhere. `CustomEditor.handleInput` iterates `actionHandlers` in insertion
+			// order and returns on the first match, so the second action is unreachable
+			// with no indication to the user that it exists at all.
+			//
+			// Verified with the real manager: `{"app.model.select":"ctrl+g",
+			// "app.editor.external":"ctrl+g"}` makes both actions answer
+			// `matches("\u0007") === true`, and `getConflicts()` reports the collision.
+			//
+			// Deliberately a warning and not an error: the user's binding is honoured for
+			// whichever action comes first, and overriding them would be a larger decision
+			// than this fix should make on its own.
+			const keybindingConflicts = this.keybindings.getConflicts();
+			if (keybindingConflicts.length > 0) {
+				const lines = keybindingConflicts.map(
+					(conflict) =>
+						`Key "${conflict.key}" is bound to ${conflict.keybindings.length} actions (${conflict.keybindings.join(", ")}); only the first is reachable.`,
+				);
+				this.loadedResourcesContainer.addChild(
+					new Text(`${theme.fg("warning", "[Keybinding conflicts]")}\n${lines.join("\n")}`, 0, 0),
+				);
+				this.loadedResourcesContainer.addChild(new Spacer(1));
+			}
 		}
 	}
 

@@ -1077,7 +1077,22 @@ export class SessionManager {
 		}
 	}
 
-	/** Switch to a different session file (used for resume and branching) */
+	/**
+	 * Switch to a different session file.
+	 *
+	 * **The doc this replaced said "used for resume and branching". Neither uses this.**
+	 * Resume goes through `AgentSessionRuntime.switchSession` → `SessionManager.open`
+	 * (`core/agent-session-runtime.ts:210`), and branching goes through
+	 * `createBranchedSession` (`:318`). Both construct a *new* manager, and the
+	 * constructor reaches the private `_setSessionFile` directly. So the claim described
+	 * a path that does not exist, and would lead a reader to think an existing manager
+	 * can be repointed at a different file mid-session — which this method does allow,
+	 * but nothing does it, and doing so while a session is live bypasses the lifecycle
+	 * those two paths establish.
+	 *
+	 * Nothing in `src/` calls it. Retained as the public seam it was evidently written
+	 * to be, with the claim corrected rather than the method deleted.
+	 */
 	setSessionFile(sessionFile: string): void {
 		this._setSessionFile(sessionFile);
 	}

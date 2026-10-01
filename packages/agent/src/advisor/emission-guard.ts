@@ -200,7 +200,22 @@ export class AdvisorEmissionGuard {
 	 * would be admitted as new.
 	 */
 	escalatePending(note: string, rank: number): void {
-		this.#recordRank(normalizeAdvisorNote(note), rank);
+		const key = normalizeAdvisorNote(note);
+		this.#recordRank(key, rank);
+		// The slot's rank has to move with the dedupe rank, not just the seen-map.
+		// `admit` displaces by comparing the incoming rank against the *slot's* rank,
+		// so a note escalated from nit to concern and left at nit could be displaced
+		// by another nit — exactly what the escalation exists to prevent.
+		//
+		// Verified before this change: with a budget of one, a nit admitted and then
+		// escalated to concern was displaced by an incoming concern, because the slot
+		// still carried rank 1.
+		//
+		// The slot is not created here. `escalatePending` is documented as not charging
+		// a slot, so an escalation for a note that never took one has nothing to
+		// update — only the dedupe rank moves.
+		const slot = this.#slots.find((entry) => entry.key === key);
+		if (slot) slot.rank = rank;
 	}
 
 	/**
