@@ -1831,7 +1831,10 @@ export const ttsrEnabled = registerSetting({
 	default: false,
 	ui: {
 		label: "TTSR",
-		description: "Inject a rule when the agent output matches its condition",
+		// Off by default, and honest about it: `core/rules/ttsr.ts` is implemented but
+		// has no production importer, so no rule is ever evaluated. A user turning this
+		// on is otherwise told the agent will inject a rule, and nothing happens.
+		description: "Reserved: the TTSR rule engine is not wired in PrimePi, so this setting currently has no effect",
 		tab: "context",
 		group: "Rules (TTSR)",
 		control: "cycle",
