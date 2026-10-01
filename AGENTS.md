@@ -92,6 +92,29 @@ Recovery, if `node`, `npm`, or `pi` goes missing:
 - `remove-store-python-scripts.ps1` in that same directory is the idempotent, self-backing script that strips the Store `Scripts` entry from the machine PATH. It requires an elevated shell and throws if not elevated.
 - Never restore the link by installing pi from npm. Use `npm link` from `packages\coding-agent` (see above), which is offline and needs no registry access.
 
+## Temporary Build and Test Storage
+
+**Before any long autonomous run, read `docs/temp-storage-policy.md`.**
+
+- C: is the smallest and busiest volume on this machine and is reserved for the OS,
+  applications, and authoritative development state. Disposable high-volume build/test
+  scratch goes to `E:\PrimePi-Temp\`, which has ~97 GB free (D: has ~72 GB as a
+  fallback). Re-measure rather than trusting those numbers.
+- Each run gets its own id: `E:\PrimePi-Temp\{runs,tests,build}\<run-id>\`.
+- **On Windows, `os.tmpdir()` reads `TEMP` and `TMP` and ignores `TMPDIR`.** Setting
+  `TMPDIR` alone silently keeps writing to C:. Verified: `TMPDIR` left `os.tmpdir()`
+  pointing at `C:\Users\xkali\AppData\Local\Temp`; `TEMP`/`TMP` redirected it correctly.
+- Create the run directory first — Node resolves the path but does not create it.
+- Verify the redirect took effect by checking the run directory is non-empty after the
+  run. Do not assume it worked.
+- A single long run was observed leaving 3,214 `pi-*` directories in C:'s Temp. That is
+  what this policy exists to prevent.
+- Delete a completed run's disposable data after verifying nothing needs it. After an
+  interrupted run, inspect the directory before deleting — it may hold recovery state.
+- Do not relocate a git worktree on the assumption it gives an independent environment.
+  Absolute-path symlinks back into the original checkout defeat that.
+
+
 ## Dependency and Install Security
 
 - Treat npm dep and lockfile changes as reviewed code. Direct external deps stay pinned to exact versions.
