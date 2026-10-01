@@ -35,7 +35,7 @@
  */
 
 import { existsSync, realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 
 /** One parsed hunk, in original-file coordinates. */
 export interface ParsedHunk {

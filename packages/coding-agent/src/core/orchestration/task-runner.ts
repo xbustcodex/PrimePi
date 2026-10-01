@@ -49,7 +49,7 @@ import {
 	evaluateSpawn,
 	RequestBudget,
 } from "./delegation-budgets.ts";
-import type { WorktreeHandle, WorktreeManager } from "./worktree-manager.js";
+import type { WorktreeHandle, WorktreeManager } from "./worktree-manager.ts";
 
 /** What a caller supplies to run a child. */
 export interface TaskRunRequest {

@@ -34,8 +34,12 @@
  * emits steadily for ten minutes is never touched.
  */
 
-import type { ReadableStream, TransformStreamDefaultController } from "node:stream/web";
-import { TransformStream } from "node:stream/web";
+// `TransformStream`, `ReadableStream` and `TransformStreamDefaultController` are
+// WHATWG globals — present in every supported browser and in Node 18+ with no import
+// at all. They were imported from `node:stream/web`, which broke the browser bundle
+// check: that builds this package for `platform: "browser"`, where a node specifier
+// cannot resolve. Nothing is lost; this file already used `TransformStream` at runtime
+// without owning its definition.
 import type { FetchFunction } from "../types.ts";
 
 /** Sentinel meaning "use the provider or environment default". */

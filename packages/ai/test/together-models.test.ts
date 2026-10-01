@@ -14,7 +14,7 @@ afterEach(() => {
 
 describe("Together models", () => {
 	it("registers the default Kimi K2.6 model via OpenAI-compatible Chat Completions API", () => {
-		const model = getModel("together", "moonshotai/Kimi-K2.6");
+		const model = getModel("together", "moonshotai/Kimi-K3");
 
 		expect(model).toBeDefined();
 		expect(model.api).toBe("openai-completions");

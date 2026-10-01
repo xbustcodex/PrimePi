@@ -181,9 +181,13 @@ describe("the namespace table", () => {
 			directToolNames: new Set(["toString", "__proto__"]),
 		});
 		expect(Object.keys(info.functions.functions).sort()).toEqual(["__proto__", "toString"]);
-		// Indexed through a null-prototype map, so this reads the own entry rather
-		// than the inherited Function.prototype.toString.
-		expect(info.functions.functions["toString"]?.code_mode_name).toBe("toString");
+		// Read it as an own property. `functions` is a null-prototype map, so a property
+		// access on it resolves at the *type* level to `Function.prototype.toString` and is
+		// typed as a function — the very collision this guard exists to prevent. Looking
+		// the descriptor up states what the assertion means and types correctly: this is
+		// the map's own entry, not something inherited.
+		const own = Object.getOwnPropertyDescriptor(info.functions.functions, "toString");
+		expect(own?.value?.code_mode_name).toBe("toString");
 	});
 
 	it("publishes a direct tool under its alias and a bridged one under its own name", () => {

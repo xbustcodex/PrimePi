@@ -181,7 +181,7 @@ describe("the idle watchdog", () => {
 		const guarded = withStreamWatchdog(openStream(["a", "b", "c", "d", "e", "f", "g", "h"], 20), {
 			firstEventTimeoutMs: undefined,
 			idleTimeoutMs: 60,
-			onTimeout: (_kind, ms) => firedAt.push(Date.now() - started),
+			onTimeout: (_kind, _ms) => firedAt.push(Date.now() - started),
 		});
 		void drain(guarded, abort);
 		await new Promise((resolve) => setTimeout(resolve, 130));

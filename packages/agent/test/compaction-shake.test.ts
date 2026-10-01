@@ -1,4 +1,4 @@
-import type { Message, ToolResultMessage } from "@earendil-works/pi-ai";
+import type { Message } from "@earendil-works/pi-ai";
 import { describe, expect, it } from "vitest";
 import {
 	createPlaceholder,
@@ -51,7 +51,7 @@ function fenced(lines: number): string {
 	const body = Array.from({ length: lines }, (_, index) => `\tconst value${index} = compute(${index});`);
 	return [
 		"Here is the relevant output.",
-		FENCE_OPEN + "ts",
+		`${FENCE_OPEN}ts`,
 		...body,
 		FENCE_CLOSE,
 		"Nothing else depends on those lines.",
@@ -185,7 +185,7 @@ describe("the warm prompt-cache prefix is never rewritten", () => {
 	it("leaves a deep block alone when its suffix exceeds the guard", () => {
 		// Mutating a cached message re-writes everything after it at the
 		// cache-write price, which can cost more than the saving.
-		const c = call("bash", {});
+		const _c = call("bash", {});
 		const messages: Message[] = [];
 		for (let index = 0; index < 6; index++) {
 			const each = call("bash", {});

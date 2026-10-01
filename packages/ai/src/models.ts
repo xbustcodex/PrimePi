@@ -36,7 +36,6 @@ import type {
 	ImagesOptions,
 	Model,
 	ModelCostRates,
-	ModelThinkingLevel,
 	ModelType,
 	ModelTypeMap,
 	ProviderClassifier,
@@ -1223,39 +1222,13 @@ export function calculateCost(model: AnyModel, usage: Usage): Usage["cost"] {
 	return usage.cost;
 }
 
-const EXTENDED_THINKING_LEVELS: ModelThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-
-export function getSupportedThinkingLevels<TApi extends Api>(model: Model<TApi>): ModelThinkingLevel[] {
-	if (!model.reasoning) return ["off"];
-
-	return EXTENDED_THINKING_LEVELS.filter((level) => {
-		const mapped = model.thinkingLevelMap?.[level];
-		if (mapped === null) return false;
-		if (level === "xhigh" || level === "max") return mapped !== undefined;
-		return true;
-	});
-}
-
-export function clampThinkingLevel<TApi extends Api>(
-	model: Model<TApi>,
-	level: ModelThinkingLevel,
-): ModelThinkingLevel {
-	const availableLevels = getSupportedThinkingLevels(model);
-	if (availableLevels.includes(level)) return level;
-
-	const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
-	if (requestedIndex === -1) return availableLevels[0] ?? "off";
-
-	for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
-		const candidate = EXTENDED_THINKING_LEVELS[i];
-		if (availableLevels.includes(candidate)) return candidate;
-	}
-	for (let i = requestedIndex - 1; i >= 0; i--) {
-		const candidate = EXTENDED_THINKING_LEVELS[i];
-		if (availableLevels.includes(candidate)) return candidate;
-	}
-	return availableLevels[0] ?? "off";
-}
+// The thinking-level vocabulary and the model-supported-level filter live in
+// `utils/thinking-level.ts` and are re-exported here for the existing public
+// surface. They are pure functions of a `Model` and pull in no other module; keeping
+// them here instead meant `thinking-level.ts` had to import this file, and this file
+// reaches auth, providers and the transcript — so the `./utils/thinking-level`
+// entry point dragged 16 files against a budget of 3.
+export { clampThinkingLevel, getSupportedThinkingLevels } from "./utils/thinking-level.ts";
 
 /**
  * Check if two models are equal by comparing their type, id, and provider.

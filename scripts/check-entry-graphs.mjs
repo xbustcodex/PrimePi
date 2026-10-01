@@ -33,7 +33,21 @@ const WORKSPACE = {
  */
 const BUDGETS = {
 	"packages/ai": {
-		"./utils/*": { maxFiles: 3, forbid: ["providers/", "api/", "index.ts"] },
+		// The ceiling is 4, not 3, because `model-roles` legitimately reaches four files.
+		// Resolving a role must consult the same credential and paid-policy authorities as
+		// failover, or the role layer could be more permissive than the failover path — so
+		// `failover.ts` and `free-model.ts` are genuine dependencies, not incidental ones.
+		// With the leaf thinking-level vocabulary they come to 331 lines of pure policy code.
+		//
+		// That is not the shape this rule exists to catch. The danger is a narrow entry
+		// reaching a barrel (~37 MB of evaluated graph), and the `forbid` list still blocks
+		// `providers/`, `api/` and `index.ts` for every `./utils/*` entry, so raising the
+		// file count does not open the barrel path.
+		//
+		// A per-entry override is not expressible: the exports map declares a single
+		// `./utils/*` wildcard, so the ceiling is shared and is set to the highest
+		// legitimate reach rather than the most common one.
+		"./utils/*": { maxFiles: 4, forbid: ["providers/", "api/", "index.ts"] },
 	},
 	"packages/agent": {
 		"./harness/runtime/reducer": { maxFiles: 1 },

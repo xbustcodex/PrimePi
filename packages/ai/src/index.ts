@@ -115,7 +115,6 @@ export {
 	type IneligibleReason,
 	isModelRole,
 	isRoleAlias,
-	isThinkingLevel,
 	MODEL_ROLE_IDS,
 	MODEL_ROLES,
 	type ModelRole,
@@ -128,12 +127,10 @@ export {
 	type RoleEligibility,
 	type RolePreferences,
 	type RoleResolution,
-	type RoleThinkingLevel,
 	resolveRoleAlias,
 	resolveRoleCandidates,
 	resolveRoleChain,
 	splitThinkingSuffix,
-	THINKING_LEVELS,
 } from "./utils/model-roles.ts";
 export {
 	clipColumns,
@@ -215,6 +212,7 @@ export {
 	shouldDisableReasoning,
 	supportedThinkingLevels,
 } from "./utils/thinking-level.ts";
+export { isThinkingLevel, type RoleThinkingLevel, THINKING_LEVELS } from "./utils/thinking-level-vocab.ts";
 export {
 	detectExactSuffixCycle,
 	EXACT_CHECK_STRIDE,

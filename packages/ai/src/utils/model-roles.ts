@@ -24,6 +24,10 @@
 import type { Api, Model } from "../types.ts";
 import { policyAllowsPaid } from "./failover.ts";
 import { isAnonymouslyAccessible, isCredentialFree } from "./free-model.ts";
+import type { RoleThinkingLevel } from "./thinking-level-vocab.ts";
+// Imported for local use (a re-export does not bind a name in this module) and
+// re-exported below for the existing public surface.
+import { isThinkingLevel } from "./thinking-level-vocab.ts";
 
 /**
  * The complete role vocabulary, declared up front so that adding a consumer later
@@ -541,21 +545,10 @@ export function resolveRoleCandidates(input: RoleResolutionInput): RoleResolutio
 	};
 }
 
-/**
- * Thinking levels Pi can request from a provider.
- *
- * Mirrors `ThinkingLevel` in `@earendil-works/pi-agent-core`, redeclared here to
- * keep this module free of an agent-core dependency: `pi-ai` sits below that
- * package in the dependency graph.
- */
-export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-
-export type RoleThinkingLevel = (typeof THINKING_LEVELS)[number];
-
-/** Whether a string names a thinking level Pi supports. */
-export function isThinkingLevel(value: string): value is RoleThinkingLevel {
-	return (THINKING_LEVELS as readonly string[]).includes(value);
-}
+// `RoleThinkingLevel` is used below, in the resolved-candidate shape. The vocabulary
+// itself is re-exported from `thinking-level-vocab.ts` — a leaf with no imports — so
+// that `thinking-level.ts` can use it without pulling `failover.ts` and
+// `free-model.ts` in through this module. The barrel re-exports it from there.
 
 /**
  * Thinking configuration attached to a resolved candidate.

@@ -35,7 +35,32 @@
  * because the boundary deliberately created it.
  */
 
-import path from "node:path";
+/**
+ * Canonicalise a path for cross-platform comparison, without `node:path`.
+ *
+	return canonicalPath(session.cwd) === canonicalPath(projectCwd);
+ * for `platform: "browser"`, where a node specifier cannot resolve. The only part of
+ * `resolve` this needed was collapsing `.` and `..` segments; absolute-prefix handling
+ * was dead weight, because both sides are repository-recorded cwds that are already
+ * absolute.
+ *
+ * `path.posix.resolve` would not do: the input may use Windows separators, so the
+ * segments have to be split on both before being rejoined.
+ */
+function canonicalPath(value: string): string {
+	const segments = value.split(/[\\/]+/).filter((segment) => segment.length > 0);
+	const out: string[] = [];
+	for (const segment of segments) {
+		if (segment === ".") continue;
+		if (segment === "..") {
+			out.pop();
+			continue;
+		}
+		out.push(segment);
+	}
+	return out.join("/").toLowerCase();
+}
+
 import type { JsonlSessionMetadata } from "./jsonl/types.ts";
 
 /** How a resume decision was reached, for a status line and for tests. */
@@ -164,6 +189,5 @@ export function chooseSessionToResume(inputs: ResumeInputs): ResumeDecision {
  * be listed on another.
  */
 export function isSessionForProject(session: JsonlSessionMetadata, projectCwd: string): boolean {
-	const normalise = (value: string) => path.resolve(value).replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
-	return normalise(session.cwd) === normalise(projectCwd);
+	return canonicalPath(session.cwd) === canonicalPath(projectCwd);
 }

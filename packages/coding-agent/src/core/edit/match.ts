@@ -419,7 +419,6 @@ function describeOccurrences(
 	offsets: readonly number[],
 	occurrences: readonly number[],
 ): MatchFailure {
-	const lines = content.split("\n");
 	const recorded = occurrences.slice(0, MAX_RECORDED_MATCHES);
 	return {
 		occurrences: occurrences.length,
@@ -437,7 +436,7 @@ function describeOccurrences(
  * that adding context lines is the fix, or it will retry the same text and fail
  * the same way.
  */
-export function formatMatchFailure(path: string, target: string, failure: MatchFailure): string {
+export function formatMatchFailure(path: string, _target: string, failure: MatchFailure): string {
 	if (failure.occurrences !== undefined && failure.occurrences > 1) {
 		const shown = failure.occurrenceLines?.length ?? 0;
 		const more = failure.occurrences > shown ? ` (showing the first ${shown} of ${failure.occurrences})` : "";

@@ -100,8 +100,8 @@ describe("name sanitisation and limits", () => {
 	});
 
 	it("keeps truncated names distinct instead of colliding", () => {
-		const a = limitBankName("x".repeat(60) + "-aaaa");
-		const b = limitBankName("x".repeat(60) + "-bbbb");
+		const a = limitBankName(`${"x".repeat(60)}-aaaa`);
+		const b = limitBankName(`${"x".repeat(60)}-bbbb`);
 		expect(a).not.toBe(b);
 		expect(a.length).toBeLessThanOrEqual(64);
 	});

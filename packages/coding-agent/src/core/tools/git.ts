@@ -41,7 +41,7 @@
  */
 
 import { type Static, Type } from "typebox";
-import type { ToolDefinition } from "../extensions/types.js";
+import type { ToolDefinition } from "../extensions/types.ts";
 import { type CheckpointOrigin, type CheckpointStore, UNTRUSTED_CONTENT_NOTICE } from "../vcs/checkpoint-store.ts";
 import type { CommitApprover, CommitPipeline, CommitValidator } from "../vcs/commit-pipeline.ts";
 import { discoverRepository, GIT_SERVICE_BRAND, type GitService } from "../vcs/git-service.ts";

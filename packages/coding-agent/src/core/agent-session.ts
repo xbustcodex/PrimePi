@@ -146,10 +146,10 @@ import {
 	DelegationJournal,
 	type DelegationJournalEntry,
 	type DelegationRecoveryNotice,
-} from "./orchestration/delegation-journal.js";
+} from "./orchestration/delegation-journal.ts";
 import { GoalAccounting } from "./orchestration/goal-accounting.ts";
 import type { UsageLike } from "./orchestration/goal-state.ts";
-import { JobManager } from "./orchestration/job-manager.js";
+import { JobManager } from "./orchestration/job-manager.ts";
 import { Orchestration } from "./orchestration/orchestration.ts";
 import {
 	planRoleEligibility,
@@ -157,8 +157,8 @@ import {
 	resolvePlanModelTransition,
 } from "./orchestration/plan-model-transition.ts";
 import { extractWriteTargetPath, planningApprovalDeclaration } from "./orchestration/planning-barrier.ts";
-import { TaskRunner } from "./orchestration/task-runner.js";
-import { WorktreeManager } from "./orchestration/worktree-manager.js";
+import { TaskRunner } from "./orchestration/task-runner.ts";
+import { WorktreeManager } from "./orchestration/worktree-manager.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
 import { planRetryAttempt } from "./retry-policy.ts";

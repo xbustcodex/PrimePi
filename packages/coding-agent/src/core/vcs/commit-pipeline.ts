@@ -61,8 +61,8 @@
  */
 
 import type { Api, Model } from "@earendil-works/pi-ai";
-import type { Checkpoint } from "./checkpoint-store.js";
-import type { ChangedFile, DiffResult, GitResult, GitService } from "./git-service.js";
+import type { Checkpoint } from "./checkpoint-store.ts";
+import type { ChangedFile, DiffResult, GitResult, GitService } from "./git-service.ts";
 
 /** What the pipeline was asked to do. */
 export interface CommitRequest {

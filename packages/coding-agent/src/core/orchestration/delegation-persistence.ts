@@ -32,7 +32,7 @@
  */
 
 import type { AgentRef } from "./agent-registry.ts";
-import type { JobRecord, JobState } from "./job-manager.js";
+import type { JobRecord, JobState } from "./job-manager.ts";
 
 /**
  * A job's state as it is recoverable after a restart.

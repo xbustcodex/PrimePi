@@ -6,7 +6,6 @@ import {
 	MAX_TITLE_LENGTH,
 	nextFrame,
 	TITLE_SPINNERS,
-	type TitleSpinner,
 	type TitleState,
 } from "../src/status-line/title.ts";
 

@@ -12,7 +12,7 @@ import {
 	truncateRecallQuery,
 } from "../src/core/memory/auto-memory.ts";
 import type { BankStoreBackend } from "../src/core/memory/bank-store.ts";
-import { configurePrimePiBackends, registerPrimePiBackend } from "../src/core/memory/registry.ts";
+import { configurePrimePiBackends } from "../src/core/memory/registry.ts";
 import { SessionMemory } from "../src/core/memory/session.ts";
 
 /**

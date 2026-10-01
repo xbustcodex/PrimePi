@@ -47,7 +47,7 @@ import {
 	reviveJob,
 	toPersistedJob,
 } from "./delegation-persistence.ts";
-import type { JobRecord } from "./job-manager.js";
+import type { JobRecord } from "./job-manager.ts";
 
 /** The custom entry type a delegation snapshot is written under. */
 export const DELEGATION_JOURNAL_ENTRY_TYPE = "pi.delegation-journal";

@@ -6,6 +6,7 @@ import * as Diff from "diff";
 import { constants } from "fs";
 import { access, readFile } from "fs/promises";
 import { splitBom } from "../../utils/text.ts";
+import { findMatch, formatMatchFailure } from "../edit/match.ts";
 import { resolveToCwd } from "./path-utils.ts";
 
 export function detectLineEnding(content: string): "\r\n" | "\n" {
@@ -272,14 +273,30 @@ function getNotFoundError(path: string, editIndex: number, totalEdits: number): 
 	);
 }
 
-function getDuplicateError(path: string, editIndex: number, totalEdits: number, occurrences: number): Error {
-	if (totalEdits === 1) {
-		return new Error(
-			`Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
-		);
-	}
+function getDuplicateError(
+	path: string,
+	editIndex: number,
+	totalEdits: number,
+	occurrences: number,
+	oldText: string,
+	content: string,
+): Error {
+	// The refusal used to say only "provide more context to make it unique". That is
+	// advice, not information: the model cannot act on it without re-reading the file,
+	// and in practice it retries the same text. `findMatch` already knows *where*
+	// each occurrence is and what the file says around it, so the refusal now names
+	// the lines and previews them.
+	//
+	// This is the only production caller of `core/edit/match.ts`. The module was
+	// complete, exported and unit-tested with no production reader — the same shape
+	// of defect as the unfed edit-staleness guard, and fixed the same way: wired at
+	// the point where its answer is actually needed.
+	const outcome = findMatch(content, oldText);
+	const diagnosis = outcome.failure ? formatMatchFailure(path, oldText, outcome.failure) : undefined;
+	const where = diagnosis ? `\n\n${diagnosis}` : "";
+	const which = totalEdits === 1 ? "" : ` of edits[${editIndex}]`;
 	return new Error(
-		`Found ${occurrences} occurrences of edits[${editIndex}] in ${path}. Each oldText must be unique. Please provide more context to make it unique.`,
+		`Found ${occurrences} occurrences of the text${which} in ${path}. The text must be unique. Please provide more context to make it unique.${where}`,
 	);
 }
 
@@ -338,7 +355,7 @@ export function applyEditsToNormalizedContent(
 
 		const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
 		if (occurrences > 1) {
-			throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
+			throw getDuplicateError(path, i, normalizedEdits.length, occurrences, edit.oldText, replacementBaseContent);
 		}
 
 		matchedEdits.push({

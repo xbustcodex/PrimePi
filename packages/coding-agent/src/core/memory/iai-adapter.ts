@@ -39,7 +39,7 @@
 
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { once } from "node:events";
-import type { MemoryBackend, MemoryCandidate, MemoryHit, MemoryQuery, MemoryRecord } from "./backend.js";
+import type { MemoryBackend, MemoryCandidate, MemoryHit, MemoryQuery, MemoryRecord } from "./backend.ts";
 
 /** One JSON-RPC message on the engine's stdio surface. */
 interface JsonRpcMessage {

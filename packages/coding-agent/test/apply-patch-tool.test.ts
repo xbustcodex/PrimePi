@@ -1,6 +1,6 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, relative } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { BUILT_IN_TOOL_TIERS, unclassifiedTools } from "../src/core/security/tool-classification.ts";
 import { type ApplyPatchToolDetails, createApplyPatchToolDefinition } from "../src/core/tools/apply-patch.ts";

@@ -24,18 +24,18 @@
 
 import type { Static } from "typebox";
 import { Type } from "typebox";
-import type { ToolDefinition } from "../extensions/types.js";
-import type { AgentRef } from "../orchestration/agent-registry.js";
+import type { ToolDefinition } from "../extensions/types.ts";
+import type { AgentRef } from "../orchestration/agent-registry.ts";
 import {
 	describeRecovery,
 	type PersistedJob,
 	type RecoveredDelegation,
 	recoverDelegation,
-} from "../orchestration/delegation-persistence.js";
-import type { JobHandle, JobRecord } from "../orchestration/job-manager.js";
-import type { TaskRunner, TaskRunRequest, TaskRunResult } from "../orchestration/task-runner.js";
-import type { WorktreeManager } from "../orchestration/worktree-manager.js";
-import { wrapToolDefinition } from "./tool-definition-wrapper.js";
+} from "../orchestration/delegation-persistence.ts";
+import type { JobHandle, JobRecord } from "../orchestration/job-manager.ts";
+import type { TaskRunner, TaskRunRequest, TaskRunResult } from "../orchestration/task-runner.ts";
+import type { WorktreeManager } from "../orchestration/worktree-manager.ts";
+import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 /** What the tool needs from its session. Injected, so no global state. */
 export interface TaskOperations {

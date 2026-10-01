@@ -34,11 +34,66 @@
  * than being clamped to the model's lowest reasoning level.
  */
 
-import { getSupportedThinkingLevels } from "../models.ts";
+// `getSupportedThinkingLevels` is declared below in this file. It used to be
+// imported from `models.ts`, which is now a re-export of this module — importing it
+// back would be a cycle, and `models.ts` reaches auth, providers and the transcript.
 import type { Api, Model, ModelThinkingLevel, ThinkingLevel } from "../types.ts";
-import { isThinkingLevel, THINKING_LEVELS } from "./model-roles.ts";
+import { isThinkingLevel, THINKING_LEVELS } from "./thinking-level-vocab.ts";
 
 export { isThinkingLevel, THINKING_LEVELS };
+
+/**
+ * The levels a model will accept, most to least reasoning.
+ *
+ * `xhigh` and `max` are opt-in per model: absent from `thinkingLevelMap` means the
+ * provider does not offer them, so they must not be requested on the strength of
+ * `reasoning: true` alone. An explicit `null` is a provider saying "this level is
+ * not available for this model", which is stronger than absence.
+ *
+ * Lives here rather than in `models.ts` so that this module stays a leaf over the
+ * model vocabulary. `models.ts` reaches auth, providers and the transcript, and a
+ * `./utils/*` entry point that pulls it in breaches the entry-graph budget.
+ */
+const EXTENDED_THINKING_LEVELS = THINKING_LEVELS;
+
+export function getSupportedThinkingLevels<TApi extends Api>(model: Model<TApi>): ModelThinkingLevel[] {
+	if (!model.reasoning) return ["off"];
+
+	return EXTENDED_THINKING_LEVELS.filter((level) => {
+		const mapped = model.thinkingLevelMap?.[level];
+		if (mapped === null) return false;
+		if (level === "xhigh" || level === "max") return mapped !== undefined;
+		return true;
+	});
+}
+
+/**
+ * Clamps a requested level to the nearest one the model actually supports.
+ *
+ * Prefers clamping down, then falls back up: a model that supports nothing below
+ * the request resolves to its lowest supported level rather than refusing, because a
+ * model that can reason at all should reason.
+ */
+export function clampThinkingLevel<TApi extends Api>(
+	model: Model<TApi>,
+	level: ModelThinkingLevel,
+): ModelThinkingLevel {
+	const availableLevels = getSupportedThinkingLevels(model);
+	if (availableLevels.includes(level)) return level;
+
+	const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
+	if (requestedIndex === -1) return availableLevels[0] ?? "off";
+
+	for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
+		const candidate = EXTENDED_THINKING_LEVELS[i];
+		if (availableLevels.includes(candidate)) return candidate;
+	}
+	for (let i = requestedIndex - 1; i >= 0; i--) {
+		const candidate = EXTENDED_THINKING_LEVELS[i];
+		if (availableLevels.includes(candidate)) return candidate;
+	}
+	return availableLevels[0] ?? "off";
+}
 
 /** The sentinel meaning "use the model's or role's own value". */
 export const AUTO_THINKING = "auto";

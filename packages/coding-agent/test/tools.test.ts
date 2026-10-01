@@ -1217,6 +1217,32 @@ describe("edit tool fuzzy matching", () => {
 		).rejects.toThrow(/Found 2 occurrences/);
 	});
 
+	it("should name where the duplicates are, not just that they exist", async () => {
+		const testFile = join(testDir, "dup-diagnosis.txt");
+		writeFileSync(testFile, ["const alpha = 1;", "const beta = 2;", "const alpha = 1;", ""].join("\n"));
+
+		// "Found 2 occurrences ... provide more context" is advice the model cannot act
+		// on without re-reading the file, and in practice it retries the same text. The
+		// refusal has to carry the occurrence lines and their surrounding text, because
+		// that is what lets it pick one on the next attempt. This is the only production
+		// reader of `core/edit/match.ts`; if the wiring is dropped, this fails.
+		const error = await editTool
+			.execute("test-dup-diagnosis", {
+				path: testFile,
+				edits: [{ oldText: "const alpha = 1;", newText: "const alpha = 9;" }],
+			})
+			.then(
+				() => undefined,
+				(e: unknown) => (e instanceof Error ? e.message : String(e)),
+			);
+
+		expect(error).toBeDefined();
+		expect(error).toContain("Found 2 occurrences");
+		expect(error).toMatch(/more context/i);
+		// The distinguishing line: the refusal shows the file around each occurrence.
+		expect(error).toContain("const beta = 2;");
+	});
+
 	it("should support fuzzy matching in multi-edit mode", async () => {
 		const testFile = join(testDir, "fuzzy-multi.txt");
 		writeFileSync(testFile, "console.log(\u2018hello\u2019);\nhello\u00A0world\n");

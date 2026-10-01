@@ -56,7 +56,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type { ChangedFile, GitService } from "./git-service.js";
+import type { ChangedFile, GitService } from "./git-service.ts";
 
 /**
  * Who created a checkpoint.
