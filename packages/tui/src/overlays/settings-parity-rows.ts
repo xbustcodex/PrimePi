@@ -6899,9 +6899,9 @@ export const OMP_PARITY_ROWS: readonly ParityRow[] = [
 		description: "Enable the ask tool for interactive user questions",
 		type: "boolean",
 		default: "true",
-		status: "wired",
+		status: "omp-present-unmigrated",
 		piKey: "ask.enabled",
-		note: "consumed by validateAskQuestion, which refuses an option label that collides with one the dialog owns",
+		note: "no consumer. The row named `validateAskQuestion` as the consumer, and that was false: validateAskQuestion checks an option label against the dialog's reserved labels and never reads this setting. `core/tools/ask.ts` holds a complete, tested validation layer, but no tool definition exists and nothing imports the module outside its own test, so there is no ask tool to enable. The setting stays registered so the panel renders in place; toggling it changes nothing",
 	},
 	{
 		id: "tools.intentTracing",

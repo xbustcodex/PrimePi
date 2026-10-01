@@ -2587,7 +2587,11 @@ export const askEnabled = registerSetting({
 	default: true,
 	ui: {
 		label: "Ask",
-		description: "Enable the ask tool for interactive user questions",
+		// Honest about what it does, because a user toggling this in `/settings`
+		// otherwise sees a tool that does not exist. The validation layer in
+		// `core/tools/ask.ts` is complete and tested, but no tool definition exists and
+		// nothing outside that module's own test imports it.
+		description: "Reserved: the ask tool is not implemented in PrimePi, so this setting currently has no effect",
 		tab: "tools",
 		group: "Available Tools",
 		control: "cycle",
