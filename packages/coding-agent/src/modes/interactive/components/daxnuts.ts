@@ -4,7 +4,14 @@
  * A heartfelt tribute to dax (@thdxr) for providing free Kimi K2.5 access via OpenCode.
  */
 
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import {
+	backgroundAnsi,
+	type Component,
+	foregroundAnsi,
+	rgbColor,
+	type TerminalColorMode,
+	type TUI,
+} from "@earendil-works/pi-tui";
 import { theme } from "../theme/theme.ts";
 
 // 32x32 RGB image of dax, hex encoded (3 bytes per pixel)
@@ -30,13 +37,15 @@ function parseImage(): number[][][] {
 	return pixels;
 }
 
-function rgb(r: number, g: number, b: number, bg = false): string {
-	return `\x1b[${bg ? 48 : 38};2;${r};${g};${b}m`;
+/** Escape for one image pixel, in the color depth the active theme was built for. */
+function rgb(r: number, g: number, b: number, mode: TerminalColorMode, bg = false): string {
+	const color = rgbColor(r, g, b);
+	return bg ? backgroundAnsi(color, mode) : foregroundAnsi(color, mode);
 }
 
 const RESET = "\x1b[0m";
 
-function buildImage(): string[] {
+function buildImage(mode: TerminalColorMode): string[] {
 	const pixels = parseImage();
 	const lines: string[] = [];
 
@@ -46,7 +55,7 @@ function buildImage(): string[] {
 		for (let x = 0; x < WIDTH; x++) {
 			const top = pixels[row][x];
 			const bottom = pixels[row + 1]?.[x] ?? top;
-			line += `${rgb(bottom[0], bottom[1], bottom[2])}${rgb(top[0], top[1], top[2], true)}▄`;
+			line += `${rgb(bottom[0], bottom[1], bottom[2], mode)}${rgb(top[0], top[1], top[2], mode, true)}▄`;
 		}
 		line += RESET;
 		lines.push(line);
@@ -63,10 +72,12 @@ export class DaxnutsComponent implements Component {
 	private cachedLines: string[] = [];
 	private cachedWidth = 0;
 	private cachedTick = -1;
+	private imageMode?: TerminalColorMode;
 
 	constructor(ui: TUI) {
 		this.ui = ui;
-		this.image = buildImage();
+		this.imageMode = theme.getColorMode();
+		this.image = buildImage(this.imageMode);
 		this.startAnimation();
 	}
 
@@ -98,6 +109,15 @@ export class DaxnutsComponent implements Component {
 		}
 
 		const t = theme;
+		// A capability change (for example a settings-driven color-depth override) moves
+		// the theme to another mode, so the pre-rendered pixel escapes are rebuilt.
+		const mode = theme.getColorMode();
+		if (mode !== this.imageMode) {
+			this.imageMode = mode;
+			this.image = buildImage(mode);
+			this.cachedWidth = 0;
+		}
+
 		const lines: string[] = [];
 
 		const center = (s: string) => {
@@ -121,7 +141,7 @@ export class DaxnutsComponent implements Component {
 				// Show scan line
 				if (i === revealedRows) {
 					const scanline = "▓".repeat(WIDTH);
-					lines.push(center(rgb(100, 200, 255) + scanline + RESET));
+					lines.push(center(rgb(100, 200, 255, mode) + scanline + RESET));
 				} else {
 					lines.push(center(" ".repeat(WIDTH)));
 				}

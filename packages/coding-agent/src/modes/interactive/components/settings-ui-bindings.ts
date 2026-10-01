@@ -315,11 +315,6 @@ export function visibleRowBindings(supportsImages: boolean): readonly SettingRow
 	return SETTINGS_ROW_BINDINGS.filter((binding) => !binding.requiresImages || supportsImages);
 }
 
-/** Row ids that the picker must render with a custom submenu component. */
-export function customRowIds(): readonly string[] {
-	return SETTINGS_ROW_BINDINGS.filter((binding) => binding.custom).map((binding) => binding.id);
-}
-
 /**
  * Fails loudly when a row binding names a setting that was never declared, so a
  * binding cannot drift away from the registry.

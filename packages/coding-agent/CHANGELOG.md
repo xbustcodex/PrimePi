@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Fixed the Daxnuts easter-egg image hardcoding 24-bit color escapes, so it rendered wrong on a 256-color terminal. Its pixel art is now built for the active theme's color depth and rebuilt if the depth changes.
+- Fixed a settings row whose binding names an unregistered setting silently disappearing from `/settings`. The picker now fails loudly on binding/registry drift instead of dropping the row.
 - Fixed the todo question detector reading an imperative as a question. The unmarked-opener branch tested the full interrogative list rather than the narrower one written for exactly that branch, so "do the work" and "will check the logs" classified as questions — and since a reminder is suppressed whenever the user is classified as mid-question, the ordinary imperative request silenced every reminder.
 - Fixed X11 clipboard text being misidentified as an image when the clipboard owner accepts unadvertised image targets ([#9786](https://github.com/earendil-works/pi/issues/9786)).
 - Prevented managed git packages from automatically installing Pi peer dependencies and added warnings for extension packages that list host-provided modules in `dependencies` ([#9863](https://github.com/earendil-works/pi/issues/9863)).

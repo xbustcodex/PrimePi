@@ -450,8 +450,4 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.dispose();
 		this.onSelectCallback(model);
 	}
-
-	getSearchInput(): Input {
-		return this.searchInput;
-	}
 }

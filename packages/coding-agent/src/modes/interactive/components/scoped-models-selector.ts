@@ -394,8 +394,4 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 		this.searchInput.handleInput(data);
 		this.refresh();
 	}
-
-	getSearchInput(): Input {
-		return this.searchInput;
-	}
 }

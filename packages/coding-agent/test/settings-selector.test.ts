@@ -6,6 +6,7 @@ import {
 	type SettingsConfig,
 	SettingsSelectorComponent,
 } from "../src/modes/interactive/components/settings-selector.ts";
+import { SETTINGS_ROW_BINDINGS } from "../src/modes/interactive/components/settings-ui-bindings.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 import { createHarness, type Harness } from "./suite/harness.ts";
@@ -134,5 +135,22 @@ describe("SettingsSelectorComponent", () => {
 		output = stripAnsi(list.render(120).join("\n"));
 		expect(output).toContain("  ✓ medium");
 		expect(output).toContain("→   high");
+	});
+
+	it("refuses to build rows when a binding names an unregistered setting", () => {
+		const drifted = {
+			id: "drifted-row",
+			key: "settings.that.dontExist",
+			currentValue: () => "",
+		};
+		const rows = SETTINGS_ROW_BINDINGS as unknown as (typeof drifted)[];
+		rows.push(drifted);
+		try {
+			const config = { defaultModel: "not set", availableDefaultModels: [] } as unknown as SettingsConfig;
+			const callbacks = { onCancel: () => {} } as unknown as SettingsCallbacks;
+			expect(() => new SettingsSelectorComponent(config, callbacks)).toThrow(/drifted-row/);
+		} finally {
+			rows.pop();
+		}
 	});
 });

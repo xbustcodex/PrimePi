@@ -24,7 +24,7 @@ import { getSettingsListTheme, parseAutoThemeSetting, type TerminalTheme, theme 
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
 import { SelectSubmenu, SteppedSubmenu } from "./settings-submenu.ts";
-import { rowBinding, visibleRowBindings } from "./settings-ui-bindings.ts";
+import { assertBindingsMatchRegistry, rowBinding, visibleRowBindings } from "./settings-ui-bindings.ts";
 
 const MODEL_PICKER_LAYOUT = { minPrimaryColumnWidth: 12, maxPrimaryColumnWidth: 46 };
 
@@ -587,6 +587,10 @@ export class SettingsSelectorComponent extends Container {
 
 		const supportsImages = getCapabilities().images;
 		const cycleThinkingKey = keyDisplayText("app.thinking.cycle");
+		// The binding table is hand-maintained beside the registry, so check the two agree
+		// before rendering: a drifted key would otherwise silently drop its row.
+		assertBindingsMatchRegistry();
+
 		const currentWarnings = { ...config.warnings };
 		const currentModelThinkingLevels = { ...config.modelThinkingLevels };
 		const defaultModelByValue = new Map(
