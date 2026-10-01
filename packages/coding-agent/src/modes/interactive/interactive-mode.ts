@@ -3456,6 +3456,7 @@ export class InteractiveMode {
 						this.hiddenThinkingLabel,
 						this.outputPad,
 						this.getMarkdownTransformers(),
+						(text: string) => this.session.redactForDisplay(text),
 					);
 					this.streamingMessage = event.message;
 					this.chatContainer.addChild(this.streamingComponent);
@@ -3915,6 +3916,7 @@ export class InteractiveMode {
 					this.hiddenThinkingLabel,
 					this.outputPad,
 					this.getMarkdownTransformers(),
+					(text: string) => this.session.redactForDisplay(text),
 				);
 				this.chatContainer.addChild(assistantComponent);
 				break;

@@ -1993,6 +1993,33 @@ ${context}`
 	}
 
 	/**
+	 * Masks credentials in text bound for a human-visible surface.
+	 *
+	 * `_redactProjection` masks the *outbound* projection, and by design does not
+	 * touch stored history — which is correct, because restoring a placeholder is
+	 * how a tool receives its real argument. But it means nothing masked what the
+	 * model echoed back: `message_update` carried the raw accumulated assistant
+	 * message straight to the streaming component, and a credential the model read
+	 * from a file was rendered on screen in full.
+	 *
+	 * This is the inbound counterpart, for display only. It is deliberately
+	 * irreversible at the boundary: the text goes to a human, and the placeholder is
+	 * what the user should see.
+	 *
+	 * Returns the text unchanged when redaction is off or no credential was found,
+	 * so the common case allocates nothing.
+	 */
+	redactForDisplay(text: string): string {
+		if (!text || !this._secretRedactor) return text;
+		return this._secretRedactor.redact(text);
+	}
+
+	/** Whether a credential is registered and display redaction is active. */
+	get hasDisplayRedaction(): boolean {
+		return this._secretRedactor !== undefined;
+	}
+
+	/**
 	 * Builds the credential redactor for this session.
 	 *
 	 * Two sources, in order: credentials the environment already holds, and

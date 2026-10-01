@@ -8,6 +8,42 @@ const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
+/** True when any block that is actually rendered carries text. */
+function containsRenderableSecret(message: AssistantMessage): boolean {
+	return message.content.some(
+		(block) =>
+			(block.type === "text" && typeof block.text === "string" && block.text.length > 0) ||
+			(block.type === "thinking" && typeof block.thinking === "string" && block.thinking.length > 0),
+	);
+}
+
+/**
+ * A copy of `message` with every rendered text block masked.
+ *
+ * Tool calls are left alone: their arguments were restored to real values on purpose,
+ * before execution, and masking them here would show the user a placeholder for
+ * something they just asked the tool to do.
+ */
+function redactRenderableContent(message: AssistantMessage, redact: (text: string) => string): AssistantMessage {
+	let changed = false;
+	const content = message.content.map((block) => {
+		if (block.type === "text" && typeof block.text === "string") {
+			const text = redact(block.text);
+			if (text === block.text) return block;
+			changed = true;
+			return { ...block, text };
+		}
+		if (block.type === "thinking" && typeof block.thinking === "string") {
+			const thinking = redact(block.thinking);
+			if (thinking === block.thinking) return block;
+			changed = true;
+			return { ...block, thinking };
+		}
+		return block;
+	});
+	return changed ? ({ ...message, content } as AssistantMessage) : message;
+}
+
 /**
  * Component that renders a complete assistant message
  */
@@ -22,6 +58,11 @@ export class AssistantMessageComponent extends Container {
 	private hasToolCalls = false;
 	private isStreaming = false;
 	private thinkingVisibilityOverrides = new Map<number, boolean>();
+	/**
+	 * Masks credentials in rendered text. Set from the session; absent means the
+	 * feature is off, and rendering then behaves exactly as it did before.
+	 */
+	redact?: (text: string) => string;
 
 	constructor(
 		message?: AssistantMessage,
@@ -30,6 +71,7 @@ export class AssistantMessageComponent extends Container {
 		hiddenThinkingLabel = "Thinking...",
 		outputPad = 1,
 		markdownTransformers: readonly MarkdownTransformer[] = [],
+		redact?: (text: string) => string,
 	) {
 		super();
 
@@ -38,6 +80,7 @@ export class AssistantMessageComponent extends Container {
 		this.hiddenThinkingLabel = hiddenThinkingLabel;
 		this.outputPad = outputPad;
 		this.markdownTransformers = markdownTransformers;
+		this.redact = redact;
 
 		// Container for text/thinking content
 		this.contentContainer = new Container();
@@ -89,6 +132,20 @@ export class AssistantMessageComponent extends Container {
 	}
 
 	updateContent(message: AssistantMessage, isStreaming = this.isStreaming): void {
+		// Credentials are masked here, at the last boundary before rendering.
+		//
+		// The session redacts the *outbound* projection and, by design, never touches
+		// stored history — restoring a placeholder is how a tool receives its real
+		// argument. Nothing masked what the model echoed back: a credential the model
+		// read from a file arrived in `message_update` and was rendered in full. This
+		// is the one component every assistant message passes through, streamed or
+		// complete, so a single guard covers both.
+		//
+		// Applied to a copy, so the session's own message — which the tool layer and the
+		// transcript still need intact — is untouched.
+		if (this.redact && containsRenderableSecret(message)) {
+			message = redactRenderableContent(message, this.redact);
+		}
 		this.lastMessage = message;
 		this.isStreaming = isStreaming;
 
