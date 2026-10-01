@@ -723,6 +723,17 @@ export class ModelRuntime implements Models {
 		model: TModel;
 		options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
 	}> {
+		// A disabled provider issues no credential, however one exists — including an
+		// ambient API key passed in `options`, which is the case selection cannot catch:
+		// `available` filters the model out of the list, but a caller that already holds
+		// the Model object reaches this function directly. Verified before this line: a
+		// credential on disk for a disabled provider was handed straight to the request.
+		//
+		// This is the single point every stream, completion and deferred fetch goes
+		// through, so one check here covers all of them.
+		if (!isProviderUsable(model.provider, this.disabledProviders())) {
+			throw new ModelsError("provider", `Provider "${model.provider}" is disabled.`);
+		}
 		const provider = this.models.getProvider(model.provider);
 		if (!provider) throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
 		const resolution = await this.getAuth(model, {

@@ -1,8 +1,13 @@
-import { rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Api, Model } from "@earendil-works/pi-ai";
+import { getModel } from "@earendil-works/pi-ai/compat";
 import { afterEach, describe, expect, it } from "vitest";
+import { AuthStorage } from "../src/core/auth-storage.ts";
 import { evaluateModelUsability, isProviderUsable } from "../src/core/model/provider-usability.ts";
 import { ModelRegistry } from "../src/core/model-registry.ts";
+import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { DEFAULT_DELEGATION_BUDGETS } from "../src/core/orchestration/delegation-budgets.ts";
 import { resolvePlanExitTransition } from "../src/core/orchestration/plan-model-transition.ts";
 
@@ -132,6 +137,70 @@ describe("provider usability authority", () => {
 				allowsPaid: false,
 			}),
 		).toBe("usable");
+	});
+});
+
+describe("the disabled rule is enforced where a credential is actually issued", () => {
+	// Every case above is a pure function over an explicit set. None of them proves
+	// the rule holds on the path a request takes, and that path is the one that can
+	// spend money.
+	//
+	// Before this test the leak was open: selection filtered a disabled provider's
+	// models out of `available`, but `ModelRuntime.prepareRequest` never consulted the
+	// disabled set at all. A caller holding a Model object — which a failover candidate
+	// list, a role resolution, or an extension does — reached the provider with a
+	// credential, and the request went out. Verified by driving the real runtime with a
+	// credential on disk and an ambient key in options.
+	it("refuses a disabled provider even when a credential is present and usable", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-disabled-"));
+		dirs.push(dir);
+		const auth = AuthStorage.create(join(dir, "auth.json"));
+		// A real, configured credential. Presence is not permission.
+		await auth.modify("anthropic", async () => ({ type: "api_key", key: "sk-ant-should-never-be-sent" }));
+		const runtime = await ModelRuntime.create({ credentials: auth, modelsPath: join(dir, "models.json") });
+		runtime.setDisabledProvidersReader(() => new Set(["anthropic"]));
+
+		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const message = await runtime
+			.streamSimple(
+				model,
+				{ messages: [{ role: "user", content: "hi", timestamp: 0 }] } as never,
+				// The ambient-key case the upstream reference reported: even an explicitly
+				// supplied credential must not override the user's decision to disable.
+				{ apiKey: "sk-ant-should-never-be-sent" } as never,
+			)
+			.result();
+
+		expect(message.stopReason).toBe("error");
+		expect(message.errorMessage).toContain('Provider "anthropic" is disabled');
+		// The credential itself must not appear in anything the user or model sees.
+		expect(JSON.stringify(message)).not.toContain("sk-ant-should-never-be-sent");
+	});
+
+	it("still serves the same provider once it is enabled again", async () => {
+		// The check reads the live set on every request, so re-enabling takes effect
+		// without a restart. Without a disabled check here this passes trivially, which
+		// is why the refusing case above carries the weight.
+		const dir = mkdtempSync(join(tmpdir(), "pi-enabled-"));
+		dirs.push(dir);
+		const auth = AuthStorage.create(join(dir, "auth.json"));
+		await auth.modify("anthropic", async () => ({ type: "api_key", key: "sk-ant-test" }));
+		const runtime = await ModelRuntime.create({ credentials: auth, modelsPath: join(dir, "models.json") });
+
+		let disabled = true;
+		runtime.setDisabledProvidersReader(() => (disabled ? new Set(["anthropic"]) : new Set<string>()));
+		const model = getModel("anthropic", "claude-sonnet-4-5")!;
+		const context = { messages: [{ role: "user", content: "hi", timestamp: 0 }] } as never;
+
+		const blocked = await runtime.streamSimple(model, context).result();
+		expect(blocked.stopReason).toBe("error");
+
+		disabled = false;
+		// No network call is made: with no credential-free model and a real provider
+		// behind it, the request either resolves or fails on the network. Either way the
+		// refusal must no longer be the disabled-provider one.
+		const allowed = await runtime.streamSimple(model, context).result();
+		expect(allowed.errorMessage ?? "").not.toContain("is disabled");
 	});
 });
 
