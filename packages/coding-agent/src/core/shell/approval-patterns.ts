@@ -65,9 +65,18 @@ export function commandMatches(command: string, pattern: string): boolean {
 	return patternToRegExp(pattern).test(normalized);
 }
 
-/** The first rule matching a command, in order. */
+/**
+ * The rule that decides a command.
+ *
+ * A deny always wins, wherever it sits in the list: `find` returned the first match,
+ * so a catch-all `*` allow above a `^rm\b` deny shadowed it and every `rm` was allowed.
+ * Order still decides *within* the allow rules, which is the documented intent.
+ */
 export function firstMatchingRule(command: string, rules: readonly ApprovalPattern[]): ApprovalPattern | undefined {
-	return rules.find((rule) => !rule.chainOnly && commandMatches(command, rule.match));
+	const applicable = allMatchingRules(command, rules);
+	const denied = applicable.find((rule) => rule.approval === "deny");
+	if (denied) return denied;
+	return applicable[0];
 }
 
 /** Every rule matching a command, in order. */

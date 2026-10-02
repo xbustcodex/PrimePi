@@ -96,8 +96,8 @@ describe("shell recognition", () => {
 
 describe("approval precedence", () => {
 	const rules: ApprovalRule[] = [
-		{ match: "^git status$", approval: "allow" },
-		{ match: "^rm\\b", approval: "deny" },
+		{ match: "git status", approval: "allow" },
+		{ match: "rm *", approval: "deny" },
 	];
 
 	it("judges each segment on its own", () => {
@@ -115,7 +115,13 @@ describe("approval precedence", () => {
 	it("allows a chain when every segment is allowed", () => {
 		const decision = decideChain({
 			command: "git status && ls",
-			rules: [{ match: "^(git|ls)\\b", approval: "allow" }],
+			// Two explicit globs rather than the regex alternation `^(git|ls)\b` this test
+			// originally used. Under glob rules `()` is literal, so the alternation could
+			// never have matched anything.
+			rules: [
+				{ match: "git status", approval: "allow" },
+				{ match: "ls", approval: "allow" },
+			],
 			compoundAllowed: true,
 			shell: "bash",
 		});
@@ -137,8 +143,8 @@ describe("approval precedence", () => {
 		const decision = decideChain({
 			command: "git status && ls",
 			rules: [
-				{ match: "^git status$", approval: "allow" },
-				{ match: "^ls$", approval: "deny" },
+				{ match: "git status", approval: "allow" },
+				{ match: "ls", approval: "deny" },
 			],
 			compoundAllowed: true,
 			shell: "bash",
@@ -149,7 +155,11 @@ describe("approval precedence", () => {
 	it("stops on a whole-chain deny before considering any segment", () => {
 		const decision = decideChain({
 			command: "git status && ls",
-			rules: [{ match: "&&", approval: "deny", chainOnly: true }],
+			// `*&&*`, not `&&`: patterns are globs anchored to the whole command, so a bare
+			// `&&` can only ever match a command that is exactly "&&" and would never fire.
+			// The property under test is that a chainOnly deny is evaluated against the
+			// whole chain before any segment is judged.
+			rules: [{ match: "*&&*", approval: "deny", chainOnly: true }],
 			compoundAllowed: true,
 			shell: "bash",
 		});
@@ -177,7 +187,7 @@ describe("approval precedence", () => {
 		// segmentation refusal this would be allowed outright.
 		const decision = decideChain({
 			command: "cd /tmp && ls",
-			rules: [{ match: ".*", approval: "allow" }],
+			rules: [{ match: "*", approval: "allow" }],
 			compoundAllowed: true,
 			shell: "bash",
 		});
@@ -189,7 +199,7 @@ describe("critical patterns", () => {
 	it("escalates a critical pattern in a segment", () => {
 		const decision = decideChain({
 			command: "ls && rm -rf /tmp/x",
-			rules: [{ match: ".*", approval: "allow" }],
+			rules: [{ match: "*", approval: "allow" }],
 			compoundAllowed: true,
 			shell: "bash",
 			criticalPatterns: CRITICAL,
@@ -200,7 +210,7 @@ describe("critical patterns", () => {
 	it("escalates a critical pattern on an unsegmented command", () => {
 		const decision = decideChain({
 			command: "rm -rf /tmp/x",
-			rules: [{ match: ".*", approval: "allow" }],
+			rules: [{ match: "*", approval: "allow" }],
 			compoundAllowed: false,
 			criticalPatterns: CRITICAL,
 		});
@@ -210,7 +220,7 @@ describe("critical patterns", () => {
 	it("does not escalate when the pattern appears only in a segment's arguments", () => {
 		const decision = decideChain({
 			command: "echo rm && ls",
-			rules: [{ match: ".*", approval: "allow" }],
+			rules: [{ match: "*", approval: "allow" }],
 			compoundAllowed: true,
 			shell: "bash",
 			criticalPatterns: CRITICAL,
@@ -220,18 +230,29 @@ describe("critical patterns", () => {
 });
 
 describe("a malformed rule must not silently allow", () => {
-	it("treats an unparseable pattern as matching", () => {
-		// Dropping a restriction the user wrote on purpose is the worse failure.
-		expect(matches({ match: "([unclosed", approval: "deny" }, "anything")).toBe(true);
+	it("matches a regex-looking pattern literally rather than as a regex", () => {
+		// There is no "malformed" pattern to survive: `patternToRegExp` escapes every
+		// metacharacter except `*`, so it cannot throw, and `([unclosed` is simply the
+		// literal text "([unclosed". Confirmed against the reference
+		// (oh-my-pi packages/coding-agent/src/tools/bash.ts:246-252), which applies the
+		// identical transform.
+		//
+		// This test previously asserted the opposite - that such a pattern matches
+		// everything - on the theory that a rule the user wrote must never be dropped.
+		// That behaviour does not exist and never did, so the assertion could not pass.
+		// The property that actually matters is the one below: a deny that does not
+		// match leaves the segment unmatched, which prompts rather than allows.
+		expect(matches({ match: "([unclosed", approval: "deny" }, "anything")).toBe(false);
+		expect(matches({ match: "([unclosed", approval: "deny" }, "([unclosed")).toBe(true);
 	});
 
-	it("never allows a chain under a malformed deny", () => {
+	it("never allows a chain under a deny that does not match it", () => {
 		const decision = decideChain({
 			command: "ls",
 			rules: [{ match: "([unclosed", approval: "deny" }],
 			compoundAllowed: true,
 			shell: "bash",
 		});
-		expect(decision.kind).toBe("deny");
+		expect(decision.kind).toBe("prompt");
 	});
 });

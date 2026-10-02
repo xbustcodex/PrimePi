@@ -246,9 +246,24 @@ export function matches(rule: ApprovalRule, text: string): boolean {
 	return commandMatches(text, rule.match);
 }
 
-/** The first rule matching a command, in order. */
+/**
+ * The rule that decides a command.
+ *
+ * **A deny always wins, wherever it sits in the list.** `find` returned the first
+ * matching rule, so a catch-all `*` allow listed above a `^rm\b` deny shadowed it:
+ * every `rm` command matched the allow, the deny was never consulted, and the
+ * decision came back `allow`. A user writing a deny rule and not getting it is a
+ * safety failure, not a precedence question.
+ *
+ * Order still decides *within* the allow rules - a specific allow beats a catch-all,
+ * which is the documented intent - and within the deny rules by first match, which
+ * only affects the reason string. The escalation is deny over allow.
+ */
 export function firstMatch(command: string, rules: readonly ApprovalRule[]): ApprovalRule | undefined {
-	return rules.find((rule) => !rule.chainOnly && matches(rule, command));
+	const applicable = rules.filter((rule) => !rule.chainOnly && matches(rule, command));
+	const denied = applicable.find((rule) => rule.approval === "deny");
+	if (denied) return denied;
+	return applicable[0];
 }
 
 /**
