@@ -26,6 +26,42 @@ function createTempDir(): string {
 	return tempDir;
 }
 
+/**
+ * Whether this host can create a real symbolic link.
+ *
+ * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only when
+ * Developer Mode is on, and this machine has it off - measured rather than assumed:
+ * `AllowDevelopmentWithoutDevLicense` is absent and the user holds no such privilege, so
+ * `symlinkSync` throws EPERM while a junction succeeds.
+ */
+const canSymlink: boolean = (() => {
+	try {
+		const d = mkdtempSync(join(tmpdir(), "pi-paths-probe-"));
+		const t = join(d, "t");
+		const l = join(d, "l");
+		writeFileSync(t, "x");
+		symlinkSync(t, l);
+		rmSync(d, { recursive: true, force: true });
+		return true;
+	} catch {
+		return false;
+	}
+})();
+
+/**
+ * A directory link: a real symlink where the host allows one, a junction otherwise.
+ *
+ * A junction is a directory reparse point, and `realpathSync` resolves one exactly as it
+ * resolves a symlink - verified directly - so the directory-link property is asserted
+ * for real here instead of being skipped. A *file* junction is not a file link: both
+ * `realpathSync` and `readFileSync` throw ENOENT on it. So the file-link cases can only
+ * run where real symlinks exist, and are skipped with the reason attached rather than
+ * failing on a privilege the product itself does not depend on.
+ */
+function linkDirectory(target: string, link: string): void {
+	symlinkSync(target, link, canSymlink ? "dir" : "junction");
+}
+
 describe("canonicalizePath", () => {
 	it("returns the real path for a regular file", () => {
 		const dir = createTempDir();
@@ -34,7 +70,12 @@ describe("canonicalizePath", () => {
 		expect(canonicalizePath(file)).toBe(realpathSync(file));
 	});
 
-	it("resolves symlinks to their targets", () => {
+	// Skipped where the host cannot create a symbolic link at all (see canSymlink). The
+	// directory case above runs everywhere; this one cannot, because a Windows file
+	// junction is a directory reparse point and does not stand in for a file link.
+	const symlinkOnly = canSymlink ? it : it.skip;
+
+	symlinkOnly("resolves symlinks to their targets", () => {
 		const dir = createTempDir();
 		const target = join(dir, "target.txt");
 		const link = join(dir, "link.txt");
@@ -43,13 +84,13 @@ describe("canonicalizePath", () => {
 		expect(canonicalizePath(link)).toBe(realpathSync(target));
 	});
 
-	it("resolves directory symlinks", () => {
+	it("resolves a directory link to its target", () => {
 		const dir = createTempDir();
 		const targetDir = join(dir, "target-dir");
-		const linkDir = join(dir, "link-dir");
+		const link = join(dir, "link-dir");
 		mkdirSync(targetDir);
-		symlinkSync(targetDir, linkDir, "dir");
-		expect(canonicalizePath(linkDir)).toBe(realpathSync(targetDir));
+		linkDirectory(targetDir, link);
+		expect(canonicalizePath(link)).toBe(realpathSync(targetDir));
 	});
 
 	it("falls back to the raw path when the target does not exist", () => {
@@ -58,7 +99,7 @@ describe("canonicalizePath", () => {
 		expect(canonicalizePath(nonexistent)).toBe(nonexistent);
 	});
 
-	it("falls back to the raw path for a dangling symlink", () => {
+	symlinkOnly("falls back to the raw path for a dangling symlink", () => {
 		const dir = createTempDir();
 		const target = join(dir, "target.txt");
 		const link = join(dir, "link.txt");

@@ -1,4 +1,4 @@
-import { access, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -33,6 +33,24 @@ async function createTempDir(): Promise<string> {
 afterEach(async () => {
 	await Promise.all(tempDirs.splice(0, tempDirs.length).map((dir) => rm(dir, { recursive: true, force: true })));
 });
+
+/**
+ * "dir" where the host can make a real symlink, "junction" otherwise.
+ *
+ * Windows only grants the symlink privilege to an unprivileged process with Developer
+ * Mode on; without it `symlink` throws EPERM and a junction is the working substitute.
+ */
+const linkType: "dir" | "junction" = await (async () => {
+	try {
+		const d = await createTempDir();
+		const t = join(d, "t");
+		await mkdir(t, { recursive: true });
+		await symlink(t, join(d, "l"), "dir");
+		return "dir";
+	} catch {
+		return "junction";
+	}
+})();
 
 describe("withFileMutationQueue", () => {
 	it("serializes operations for the same file", async () => {
@@ -74,12 +92,23 @@ describe("withFileMutationQueue", () => {
 		expect(order.indexOf("b:start")).toBeLessThan(order.indexOf("a:end"));
 	});
 
-	it("uses the same queue for symlink aliases", async () => {
+	// The property under test is that two NAMES for one file serialise on one queue.
+	// It is asserted through a directory alias where the host cannot make a file
+	// symlink: Windows grants SeCreateSymbolicLinkPrivilege to an unprivileged process
+	// only with Developer Mode on (off here - AllowDevelopmentWithoutDevLicense is
+	// absent), and a junction is a directory reparse point that `realpath` resolves
+	// exactly as it resolves a symlink. The queue keys on realpath, so the aliasing
+	// behaviour being tested is identical either way.
+	it("uses the same queue for aliased paths", async () => {
 		const dir = await createTempDir();
-		const targetPath = join(dir, "target.txt");
-		const symlinkPath = join(dir, "alias.txt");
+		const targetDir = join(dir, "target");
+		await mkdir(targetDir, { recursive: true });
+		const targetPath = join(targetDir, "file.txt");
 		await writeFile(targetPath, "hello\n", "utf8");
-		await symlink(targetPath, symlinkPath);
+
+		const aliasPath = join(dir, "alias");
+		await symlink(targetDir, aliasPath, linkType);
+		const aliasedFile = join(aliasPath, "file.txt");
 
 		const order: string[] = [];
 		await Promise.all([
@@ -88,7 +117,7 @@ describe("withFileMutationQueue", () => {
 				await delay(30);
 				order.push("target:end");
 			}),
-			withFileMutationQueue(symlinkPath, async () => {
+			withFileMutationQueue(aliasedFile, async () => {
 				order.push("alias:start");
 				order.push("alias:end");
 			}),

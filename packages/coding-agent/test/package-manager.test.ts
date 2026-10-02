@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { PassThrough } from "node:stream";
@@ -67,6 +67,28 @@ const isDisabled = (r: ResolvedResource, pathMatch: string, matchFn: "endsWith" 
 		? normalizedPath.endsWith(normalizedMatch) && !r.enabled
 		: normalizedPath.includes(normalizedMatch) && !r.enabled;
 };
+
+/**
+ * The directory-link type this host permits: "dir" for a real symlink, "junction"
+ * where Developer Mode is off and a file symlink throws EPERM.
+ *
+ * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
+ * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
+ * junction is a directory reparse point and `realpath` resolves one exactly as it
+ * resolves a symlink, so the aliasing property under test is identical.
+ */
+function directoryLinkTypeSync(): "dir" | "junction" {
+	try {
+		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
+		const t = join(d, "t");
+		mkdirSync(t, { recursive: true });
+		symlinkSync(t, join(d, "l"), "dir");
+		rmSync(d, { recursive: true, force: true });
+		return "dir";
+	} catch {
+		return "junction";
+	}
+}
 
 describe("DefaultPackageManager", () => {
 	let tempDir: string;
@@ -214,14 +236,14 @@ Content`,
 
 				mkdirSync(join(agentDir), { recursive: true });
 				mkdirSync(join(tempDir, ".pi"), { recursive: true });
-				symlinkSync(sharedExtensionsDir, join(agentDir, "extensions"), "dir");
-				symlinkSync(sharedSkillsDir, join(agentDir, "skills"), "dir");
-				symlinkSync(sharedPromptsDir, join(agentDir, "prompts"), "dir");
-				symlinkSync(sharedThemesDir, join(agentDir, "themes"), "dir");
-				symlinkSync(sharedExtensionsDir, join(tempDir, ".pi", "extensions"), "dir");
-				symlinkSync(sharedSkillsDir, join(tempDir, ".pi", "skills"), "dir");
-				symlinkSync(sharedPromptsDir, join(tempDir, ".pi", "prompts"), "dir");
-				symlinkSync(sharedThemesDir, join(tempDir, ".pi", "themes"), "dir");
+				symlinkSync(sharedExtensionsDir, join(agentDir, "extensions"), directoryLinkTypeSync());
+				symlinkSync(sharedSkillsDir, join(agentDir, "skills"), directoryLinkTypeSync());
+				symlinkSync(sharedPromptsDir, join(agentDir, "prompts"), directoryLinkTypeSync());
+				symlinkSync(sharedThemesDir, join(agentDir, "themes"), directoryLinkTypeSync());
+				symlinkSync(sharedExtensionsDir, join(tempDir, ".pi", "extensions"), directoryLinkTypeSync());
+				symlinkSync(sharedSkillsDir, join(tempDir, ".pi", "skills"), directoryLinkTypeSync());
+				symlinkSync(sharedPromptsDir, join(tempDir, ".pi", "prompts"), directoryLinkTypeSync());
+				symlinkSync(sharedThemesDir, join(tempDir, ".pi", "themes"), directoryLinkTypeSync());
 
 				const result = await packageManager.resolve();
 

@@ -67,8 +67,8 @@ function createSymlinkedSessionPaths(): {
 	mkdirSync(sharedDir, { recursive: true });
 	const aliasASessions = join(aliasADir, "sessions");
 	const aliasBSessions = join(aliasBDir, "sessions");
-	symlinkSync(sharedDir, aliasASessions);
-	symlinkSync(sharedDir, aliasBSessions);
+	symlinkSync(sharedDir, aliasASessions, directoryLinkTypeSync());
+	symlinkSync(sharedDir, aliasBSessions, directoryLinkTypeSync());
 
 	const parentRealPath = join(sharedDir, "parent.jsonl");
 	const childRealPath = join(sharedDir, "child.jsonl");
@@ -85,6 +85,28 @@ function createSymlinkedSessionPaths(): {
 
 const CTRL_D = "\x04";
 const CTRL_BACKSPACE = "\x1b[127;5u";
+
+/**
+ * The directory-link type this host permits: "dir" for a real symlink, "junction"
+ * where Developer Mode is off and a file symlink throws EPERM.
+ *
+ * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
+ * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
+ * junction is a directory reparse point and `realpath` resolves one exactly as it
+ * resolves a symlink, so the aliasing property under test is identical.
+ */
+function directoryLinkTypeSync(): "dir" | "junction" {
+	try {
+		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
+		const t = join(d, "t");
+		mkdirSync(t, { recursive: true });
+		symlinkSync(t, join(d, "l"), "dir");
+		rmSync(d, { recursive: true, force: true });
+		return "dir";
+	} catch {
+		return "junction";
+	}
+}
 
 describe("session selector path/delete interactions", () => {
 	const keybindings = new KeybindingsManager();

@@ -1,9 +1,9 @@
-import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path, { join } from "node:path";
 
 import { pathToFileURL } from "node:url";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ExtensionRunner } from "../src/core/extensions/runner.ts";
 import { DefaultResourceLoader, loadProjectContextFiles } from "../src/core/resource-loader.ts";
@@ -27,7 +27,51 @@ import { createModelRegistry } from "./model-runtime-test-utils.ts";
 // `<repo>/src` (absent) and two produced `<repo>/packages/src` (also absent).
 const SRC_ROOT = path.resolve(import.meta.dirname, "..");
 
+/**
+ * The directory-link type this host permits: "dir" for a real symlink, "junction"
+ * where Developer Mode is off and a file symlink throws EPERM.
+ *
+ * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
+ * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
+ * junction is a directory reparse point and `realpath` resolves one exactly as it
+ * resolves a symlink, so the aliasing property under test is identical.
+ */
+function directoryLinkTypeSync(): "dir" | "junction" {
+	try {
+		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
+		const t = join(d, "t");
+		mkdirSync(t, { recursive: true });
+		symlinkSync(t, join(d, "l"), "dir");
+		rmSync(d, { recursive: true, force: true });
+		return "dir";
+	} catch {
+		return "junction";
+	}
+}
+
 describe("DefaultResourceLoader", () => {
+	// Warm the loader once before any assertion runs.
+	//
+	// Measured on this machine: the FIRST `reload()` in a process costs ~15s (module
+	// loading, first-scan warm-up) and every subsequent one costs ~1.5-2s. With the
+	// default 5s budget, whichever test happened to run first timed out and the rest
+	// passed - a failure that depended on ordering rather than on behaviour.
+	//
+	// Paying the cost once here means each test measures steady-state reload, which is
+	// what the assertions are about.
+	beforeAll(async () => {
+		const warm = mkdtempSync(join(tmpdir(), "rl-warm-"));
+		mkdirSync(join(warm, ".pi", "extensions"), { recursive: true });
+		mkdirSync(join(warm, "agent"), { recursive: true });
+		writeFileSync(join(warm, "package.json"), "{}");
+		writeFileSync(join(warm, ".pi", "extensions", "e.ts"), "export default function() {}");
+		try {
+			await new DefaultResourceLoader({ cwd: warm, agentDir: join(warm, "agent") }).reload();
+		} finally {
+			rmSync(warm, { recursive: true, force: true });
+		}
+	}, 120_000);
+
 	let tempDir: string;
 	let agentDir: string;
 	let cwd: string;
@@ -269,8 +313,8 @@ Project skill`,
 
 			mkdirSync(agentDir, { recursive: true });
 			mkdirSync(join(cwd, ".pi"), { recursive: true });
-			symlinkSync(sharedExtDir, join(agentDir, "extensions"), "dir");
-			symlinkSync(sharedExtDir, join(cwd, ".pi", "extensions"), "dir");
+			symlinkSync(sharedExtDir, join(agentDir, "extensions"), directoryLinkTypeSync());
+			symlinkSync(sharedExtDir, join(cwd, ".pi", "extensions"), directoryLinkTypeSync());
 
 			const loader = new DefaultResourceLoader({ cwd, agentDir });
 			await loader.reload();
