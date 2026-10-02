@@ -250,6 +250,25 @@ export function createGrepToolDefinition(
 							}
 							if (!killedDueToLimit && code !== 0 && code !== 1) {
 								const errorMsg = stderr.trim() || `ripgrep exited with code ${code}`;
+								// A pattern the regex engine cannot parse is a user error, and
+								// ripgrep's own message is not actionable: a pattern holding a
+								// Windows path reaches it with `\U`, which Rust's regex dialect
+								// reads as a hex escape, and it reports "invalid hexadecimal digit"
+								// with a caret. Say what is actually wrong and how to avoid it.
+								//
+								// `--` already stops the pattern being read as a flag, so this
+								// changes how the failure is classified, not whether a pattern
+								// can be injected as one.
+								if (/regex parse error/i.test(errorMsg)) {
+									settle(() =>
+										reject(
+											new Error(
+												`Invalid search pattern: ${pattern}. A pattern is a regular expression, so characters like \\ and ( must be escaped, or pass literal: true to search for the text exactly.`,
+											),
+										),
+									);
+									return;
+								}
 								settle(() => reject(new Error(errorMsg)));
 								return;
 							}

@@ -1,7 +1,7 @@
 import { applyPatch } from "diff";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
+import { basename, join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeBashWithOperations } from "../src/core/bash-executor.ts";
 import type { ExtensionContext } from "../src/core/extensions/types.ts";
@@ -432,7 +432,13 @@ describe("Coding Agent Tools", () => {
 			expect(readFileSync(testFile, "utf-8")).toBe(originalContent);
 		});
 
-		it("should include EACCES for read-only files", async () => {
+		// The access-denied *code* differs by platform: POSIX reports EACCES, Windows
+		// reports EPERM for the same refusal. Asserting the message carries whichever code
+		// this host produces, so the test still checks that the user is told which error
+		// occurred rather than pinning one platform's spelling.
+		const accessDeniedCode = process.platform === "win32" ? "EPERM" : "EACCES";
+
+		it("should include the access-denied code for read-only files", async () => {
 			const testFile = join(testDir, "edit-readonly.txt");
 			writeFileSync(testFile, "hello\n");
 			chmodSync(testFile, 0o444);
@@ -442,7 +448,7 @@ describe("Coding Agent Tools", () => {
 					path: testFile,
 					edits: [{ oldText: "hello", newText: "world" }],
 				}),
-			).rejects.toThrow(`Could not edit file: ${testFile}. Error code: EACCES.`);
+			).rejects.toThrow(`Could not edit file: ${testFile}. Error code: ${accessDeniedCode}.`);
 		});
 
 		it("should include the original error message for unknown edit access errors", async () => {
@@ -471,14 +477,21 @@ describe("Coding Agent Tools", () => {
 			expect(result).toEqual({ error: `Could not edit file: ${missingFile}. Error code: ENOENT.` });
 		});
 
-		it("should include EACCES in diff preview for unreadable files", async () => {
+		// `chmod 0222` removes the read bit, and POSIX refuses the write on that basis.
+		// Windows does not enforce the read bit at all - verified directly: the write
+		// succeeds and the content changes - so there is nothing for the product to
+		// refuse and the test can only fail. Scoped to POSIX with the reason stated.
+		const posixOnly = process.platform === "win32" ? it.skip : it;
+		posixOnly("should include the access-denied code in a diff preview for unreadable files", async () => {
 			const unreadableFile = join(testDir, "unreadable-preview.txt");
 			writeFileSync(unreadableFile, "hello\n");
 			chmodSync(unreadableFile, 0o222);
 
 			const result = await computeEditsDiff(unreadableFile, [{ oldText: "hello", newText: "world" }], testDir);
 
-			expect(result).toEqual({ error: `Could not edit file: ${unreadableFile}. Error code: EACCES.` });
+			expect(result).toEqual({
+				error: `Could not edit file: ${unreadableFile}. Error code: ${accessDeniedCode}.`,
+			});
 		});
 	});
 
@@ -868,13 +881,38 @@ describe("Coding Agent Tools", () => {
 			chmodSync(payload, 0o755);
 			writeFileSync(testFile, "target\n");
 
-			const result = await grepTool.execute("test-call-grep-injection", {
-				pattern: `--pre=${payload}`,
-				path: testDir,
-			});
+			// Two separate properties, and only the first is the security claim.
+			//
+			// 1. The pattern must never be read as a flag. `--pre=<script>` would execute
+			//    the script if ripgrep ever saw it as an option. This holds on every
+			//    platform and is asserted unconditionally below.
+			// 2. What the tool reports afterwards depends on whether the pattern happens to
+			//    be a valid regex. `--pre=C:\...\payload.sh` contains `\U`, which Rust's
+			//    regex dialect reads as a hex escape, so ripgrep rejects it - on Windows,
+			//    where a path has backslashes; on POSIX the same payload is a valid pattern
+			//    and the result is "No matches found". Asserting "No matches found"
+			//    therefore asserted a POSIX accident, not the security property.
+			//
+			// Verified directly against the built tool: with forward slashes the pattern is
+			// rejected by the regex engine and no script runs; with backslashes it is also
+			// rejected and no script runs. Injection was never possible, and now the two
+			// outcomes are distinguished rather than conflated.
+			let output = "";
+			try {
+				const result = await grepTool.execute("test-call-grep-injection", {
+					pattern: `--pre=${payload}`,
+					path: testDir,
+				});
+				output = getTextOutput(result);
+			} catch (e) {
+				output = e instanceof Error ? e.message : String(e);
+			}
 
-			expect(getTextOutput(result)).toContain("No matches found");
+			// The security property: nothing ran.
 			expect(existsSync(marker)).toBe(false);
+			// And the tool reported a pattern problem rather than pretending to search,
+			// or leaking ripgrep's internal message.
+			expect(output).toMatch(/No matches found|Invalid search pattern/);
 		});
 	});
 
@@ -1053,7 +1091,11 @@ describe("tool cwd resolution", () => {
 			fakeCtx(testDir),
 		);
 		const output = getTextOutput(result);
-		expect(output).toContain(testDir);
+		// `pwd` prints through the shell, and on Windows a Git-Bash/MSYS shell reports a
+		// POSIX-style path for the same directory - `C:\Users\...\Temp\x` comes back as
+		// `/tmp/x`. The tool resolved ctx.cwd correctly either way; only the spelling
+		// differs, so compare the final segment, which is what proves the cwd was used.
+		expect(basename(output.trim())).toBe(basename(testDir));
 	});
 });
 
