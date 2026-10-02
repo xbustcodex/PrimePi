@@ -49,6 +49,17 @@ export interface ResolvedCompactionLimits {
 export const DEFAULT_RESERVE_TOKENS = 16_384;
 
 /**
+ * Where compaction fires on a window too small to hold `DEFAULT_RESERVE_TOKENS`.
+ *
+ * The default reserve is an absolute number of tokens, so it only expresses a sensible
+ * idea on a window with that much headroom to spare. Below that, the equivalent intent
+ * is a proportion of the window: compact once the context is **this** full. Chosen so a
+ * window that exactly cannot hold the reserve lands near the trigger a large window
+ * would reach for the same absolute headroom.
+ */
+const SMALL_WINDOW_TRIGGER_PERCENT = 85;
+
+/**
  * Resolves the two configured limits into the engine's reserved-token field.
  *
  * The engine compares `contextTokens > contextWindow - reserveTokens`, so a
@@ -78,6 +89,44 @@ export function resolveCompactionLimits(input: {
 		typeof tokens === "number" && Number.isFinite(tokens) && tokens > 0 ? Math.floor(tokens) : undefined;
 
 	if (percentTrigger === undefined && tokenTrigger === undefined) {
+		// **The fallback needs the same clamp as a configured trigger, and this is where
+		// it was missing.** `shouldCompact` fires on
+		// `contextTokens > contextWindow - reserveTokens`, so a reserve larger than the
+		// window makes the right-hand side negative and the comparison true for ANY
+		// context size. With DEFAULT_RESERVE_TOKENS at 16,384 that is every window below
+		// 16k: compaction then ran on every single turn, however small the context, and
+		// whatever reserve the caller passed in `settings` was never consulted here.
+		//
+		// Found through six failing tests that each looked like "an unexpected compaction
+		// happened" - a message that reads as the threshold genuinely being crossed. The
+		// fix is bounded to the unconfigured path and leaves every configured threshold
+		// exactly as it was, including the deliberate absence of a cap at `fallback`.
+		//
+		// With no configured threshold, the engine default is expressed as a *reserve*:
+		// compact when `contextTokens > contextWindow - reserveTokens`. The hazard is that
+		// this reserve is absolute while the window is a property of the chosen model, so
+		// on any window below DEFAULT_RESERVE_TOKENS the right-hand side goes negative and
+		// compaction fires on **every turn**.
+		//
+		// Clamping it to the window is not sufficient either: reserve == window means
+		// "fires above 0", which is the same defect in a smaller window. What has to be
+		// preserved is the *ratio*: the default expresses 16,384 tokens of headroom,
+		// which is meaningful on a 200k window and impossible on a 10k one.
+		//
+		// So on a window that cannot hold the default reserve, fall back to a percentage
+		// that expresses the same intent - compact when the context is most of the way
+		// full - rather than to a limit of zero. A window smaller than the default reserve
+		// is a small-window model, and for those "nearly full" is the correct reading of
+		// "16k of headroom", not "always full".
+		if (window > 0 && fallback < window) {
+			return { reserveTokens: fallback, decidedBy: "none" };
+		}
+		if (window > 0) {
+			// The window cannot hold the default reserve. Use the percentage that the
+			// default represents for a large window, so behaviour degrades smoothly.
+			const trigger = Math.floor((window * SMALL_WINDOW_TRIGGER_PERCENT) / 100);
+			return { reserveTokens: window - trigger, decidedBy: "percent" };
+		}
 		return { reserveTokens: fallback, decidedBy: "none" };
 	}
 
