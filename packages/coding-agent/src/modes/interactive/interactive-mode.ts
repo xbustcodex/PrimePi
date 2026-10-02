@@ -1958,7 +1958,10 @@ export class InteractiveMode {
 			// Deliberately a warning and not an error: the user's binding is honoured for
 			// whichever action comes first, and overriding them would be a larger decision
 			// than this fix should make on its own.
-			const keybindingConflicts = this.keybindings.getConflicts();
+			// `keybindings` is optional on a partially-constructed mode. Several callers
+			// (and several test harnesses) drive `showLoadedResources` before the manager
+			// exists, so this must not throw on its way to rendering a resource list.
+			const keybindingConflicts = this.keybindings?.getConflicts() ?? [];
 			if (keybindingConflicts.length > 0) {
 				const lines = keybindingConflicts.map(
 					(conflict) =>

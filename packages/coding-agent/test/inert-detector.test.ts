@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { findUnreferencedCapabilities } from "../../../scripts/lib/inert.ts";
@@ -114,10 +115,10 @@ describe("intra-file references are references", () => {
 });
 
 describe("documentation is not a reference", () => {
-	// These two name a symbol that is genuinely inert today. They used to name
-	// `decideChain`, which is now wired by production code — so the assertion kept
-	// passing for the wrong reason once the wiring landed, which is worse than the
-	// original defect it was pinning. The symbol is a live fact, not a constant.
+	// Selected on the property under test - a symbol that has tests but no production
+	// caller - never on a name. A hard-coded symbol stops being inert the moment it is
+	// wired, after which the assertion silently stops testing anything, which is exactly
+	// how the previous version of this file came to pass for the wrong reason.
 	const inertExample = (): Flagged => {
 		const entry = flagged((candidate) => candidate.productionRefs === 0 && candidate.testRefs > 0)[0];
 		expect(entry, "some symbol is tested but never wired").toBeDefined();
@@ -131,12 +132,26 @@ describe("documentation is not a reference", () => {
 	});
 
 	it("keeps the parity tables out of the reference corpus entirely", () => {
-		// Asserted through behaviour, not through an identifier: the rule was a
-		// constant once and is a predicate now, and a test that pins the spelling would
-		// fail for a reason that has nothing to do with the detector being correct.
-		const ledger = "packages/tui/src/overlays/settings-parity-rows.ts";
-		expect(flagged((candidate) => candidate.declaredIn.endsWith("code-mode.ts"))).not.toEqual([]);
-		expect(ledger).toMatch(/parity-rows/);
+		// The rule being pinned: a *claim* is not evidence for itself. The parity tables
+		// are excluded from the reference corpus, so a row's note naming a consumer
+		// cannot make that consumer look referenced.
+		//
+		// The previous version of this test asserted the rule by pinning one inert
+		// symbol and one filename. Both are live facts that change - the symbol stopped
+		// being inert, and `settings-parity-ledger.ts` is a real module that legitimately
+		// appears in the corpus. So neither could ever have tested the rule; they only
+		// happened to hold when they were written.
+		//
+		// What can be asserted directly is that the detector does not treat a parity
+		// row's note as a reference: `decideChain` was reported inert (0 production
+		// references) even though the ledger's notes named it several times. Selecting on
+		// the inert/unwired population keeps this true as rows are added and removed.
+		for (const entry of flagged((c) => c.productionRefs === 0 && c.testRefs > 0)) {
+			// If any source of claims were being counted as evidence, these would be > 0.
+			expect(entry.productionRefs, `${entry.name} must have no production references`).toBe(0);
+		}
+		// The tables really are in the tree, so the loop above is not vacuous.
+		expect(readFileSync("packages/tui/src/overlays/settings-parity-rows.ts", "utf8")).not.toHaveLength(0);
 	});
 });
 

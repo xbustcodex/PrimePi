@@ -23,11 +23,18 @@ function callHandleCtrlZ(context: HandleCtrlZThis): void {
 
 const interactiveModePrototype = InteractiveMode.prototype as unknown;
 
+// `handleCtrlZ` returns immediately on win32, so the two suspend tests below exercise a
+// branch that cannot run here: they take the Windows path, call the real `showStatus`
+// against a stub `this`, and fail on `this.chatContainer` rather than on anything they
+// assert. Scoped to POSIX so they run where they describe reality and are skipped - with
+// a stated reason, not a silent skip - where `handleCtrlZ` has no POSIX behaviour at all.
+// The first test is deliberately NOT skipped: it is the Windows branch, and it runs.
+const posixOnly = process.platform === "win32" ? test.skip : test;
+
 describe("InteractiveMode.handleCtrlZ", () => {
 	afterEach(() => {
 		vi.restoreAllMocks();
 	});
-
 	test("shows a status message and skips suspend on Windows", () => {
 		const ui: FakeUi = {
 			start: vi.fn(),
@@ -62,7 +69,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
 		expect(processKillSpy).not.toHaveBeenCalled();
 	});
 
-	test("keeps the process alive while suspended and restores the TUI on SIGCONT", () => {
+	posixOnly("keeps the process alive while suspended and restores the TUI on SIGCONT", () => {
 		const ui: FakeUi = {
 			start: vi.fn(),
 			stop: vi.fn(),
@@ -112,7 +119,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
 		expect(ui.requestRender).toHaveBeenCalledWith(true);
 	});
 
-	test("cleans up the temporary handlers if suspension fails", () => {
+	posixOnly("cleans up the temporary handlers if suspension fails", () => {
 		const ui: FakeUi = {
 			start: vi.fn(),
 			stop: vi.fn(),
