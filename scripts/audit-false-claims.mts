@@ -1,6 +1,12 @@
+import path from "node:path";
 import { analyzeReachability } from "./lib/reachability.ts";
 import { OMP_PARITY_ROWS } from "../packages/tui/src/overlays/settings-parity-rows.ts";
 import fs from "node:fs";
+
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * Finds rows whose *evidence class* contradicts their *promotion claim*.
@@ -33,7 +39,7 @@ import fs from "node:fs";
  *     npx tsx scripts/audit-false-claims.mts
  */
 
-const root = process.cwd();
+const root = ROOT;
 const reach = analyzeReachability(root);
 const reachabilityByKey = new Map<string, number>();
 
@@ -46,7 +52,9 @@ const entries = OMP_PARITY_ROWS.map((row) => {
 
 // LIVE_VERIFIED is the strongest claim in the ledger. A row in it with no proven
 // production read is asserting runtime verification of something nothing reads.
-const ledgerSource = fs.readFileSync("packages/tui/src/overlays/settings-parity-ledger.ts", "utf8");
+// Through ROOT, not a repo-relative literal: this read resolved only when the
+// command was run from the repo root, and threw ENOENT from anywhere else.
+const ledgerSource = fs.readFileSync(path.join(ROOT, "packages/tui/src/overlays/settings-parity-ledger.ts"), "utf8");
 const liveVerified = new Set(
 	[...liveVerifiedBlock(ledgerSource).matchAll(/"([^"]+)"/g)].map((match) => match[1]),
 );

@@ -1,4 +1,10 @@
+import path from "node:path";
 import { findUnreferencedCapabilities } from "./lib/inert.ts";
+
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * Reports exported capabilities that no production file references.
@@ -26,7 +32,7 @@ import { findUnreferencedCapabilities } from "./lib/inert.ts";
  * list that gets reviewed.
  */
 
-const root = process.cwd();
+const root = ROOT;
 const unreferenced = findUnreferencedCapabilities(root);
 
 const noRefs = unreferenced.filter((entry) => entry.testRefs === 0);

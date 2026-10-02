@@ -13,9 +13,15 @@
  * governs nothing.
  */
 
+import path from "node:path";
 import { findInertClassMembers } from "./lib/inert-class-members.ts";
 
-const found = findInertClassMembers(process.cwd());
+// The repo root, resolved from this file rather than from the process cwd. Run from
+// anywhere, the audit covers the same tree: with `process.cwd()` a run started inside
+// a package scanned that package, found nothing, and reported 0 - the same confident
+// empty answer the symbol scanner used to give.
+const ROOT = path.resolve(import.meta.dirname, "..");
+const found = findInertClassMembers(ROOT);
 
 const testedOnly = found.filter((member) => member.testRefs > 0);
 const unmentioned = found.filter((member) => member.testRefs === 0);

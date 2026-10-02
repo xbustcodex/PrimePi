@@ -3,6 +3,11 @@ import { reconcileLedger, setConsumptionIndex } from "../packages/tui/src/overla
 import { OMP_PARITY_ROWS } from "../packages/tui/src/overlays/settings-parity-rows.ts";
 import path from "node:path";
 
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
+
 /**
  * Reports, per reference row, how far the settings-to-runtime chain is proven.
  *
@@ -14,7 +19,7 @@ import path from "node:path";
  * a different thing from a row being unreachable.
  */
 
-const root = process.cwd();
+const root = ROOT;
 const reach = analyzeReachability(root);
 
 // Hand the measured index to the ledger so its evidence classes reflect what the

@@ -1,6 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
 
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
+
 /**
  * Reports whether an integrated capability is present in the **built artifact**.
  *
@@ -86,7 +91,7 @@ for (const needle of NEEDLES) {
 			} catch {
 				continue;
 			}
-			if (text.includes(needle)) hits.push(path.relative(process.cwd(), file).replace(/\\/g, "/"));
+			if (text.includes(needle)) hits.push(path.relative(ROOT, file).replace(/\\/g, "/"));
 		}
 	}
 	const verdict = hits.length > 0 ? "PRESENT in the shipped artifact" : "not found in built output";

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { analyzeReachability } from "./lib/reachability.ts";
 import {
 	buildLedger,
@@ -6,6 +7,11 @@ import {
 	setConsumptionIndex,
 } from "../packages/tui/src/overlays/settings-parity-ledger.ts";
 import { OMP_PARITY_ROWS } from "../packages/tui/src/overlays/settings-parity-rows.ts";
+
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
 
 /**
  * Reconciles every evidence set from one repository state and prints the
@@ -26,7 +32,7 @@ import { OMP_PARITY_ROWS } from "../packages/tui/src/overlays/settings-parity-ro
  * plausible in isolation.
  */
 
-const root = process.cwd();
+const root = ROOT;
 const reach = analyzeReachability(root);
 const index = new Map([...reach].map(([key, value]) => [key, value.edges.map((edge) => ({ site: edge.site, via: edge.via }))]));
 setConsumptionIndex(index);

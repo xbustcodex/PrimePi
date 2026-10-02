@@ -1,3 +1,4 @@
+import path from "node:path";
 /**
  * Reports the production capability graph.
  *
@@ -20,8 +21,13 @@
 
 import { buildCapabilityGraph } from "./lib/capability-graph.ts";
 
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
+
 const filter = process.argv[2];
-const graph = buildCapabilityGraph(process.cwd());
+const graph = buildCapabilityGraph(ROOT);
 
 const shown = filter === undefined ? graph.nodes : graph.nodes.filter((node) => `${node.declaredIn}#${node.label}`.includes(filter));
 

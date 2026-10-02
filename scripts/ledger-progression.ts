@@ -1,3 +1,4 @@
+import path from "node:path";
 /**
  * The promoted-row progression, derived from repository history.
  *
@@ -22,6 +23,11 @@
 
 import { execFileSync } from "node:child_process";
 
+// Resolved from this file, not from the process cwd: an audit run from
+// inside a package scanned that package, found nothing, and reported 0 - a
+// confident negative for a tree it never looked at.
+const ROOT = path.resolve(import.meta.dirname, "..");
+
 const LEDGER = "packages/tui/src/overlays/settings-parity-ledger.ts";
 
 const gitCache = new Map<string, string>();
@@ -32,7 +38,7 @@ function git(...args: string[]): string {
 	if (cached !== undefined) return cached;
 	try {
 		const out = execFileSync("git", args, {
-			cwd: process.cwd(),
+			cwd: ROOT,
 			encoding: "utf8",
 			maxBuffer: 64 * 1024 * 1024,
 			stdio: ["ignore", "pipe", "ignore"],
