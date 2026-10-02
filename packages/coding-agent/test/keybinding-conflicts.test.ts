@@ -1,5 +1,4 @@
-import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 
 /**
@@ -22,9 +21,9 @@ describe("keybinding conflicts", () => {
 		} as never);
 
 		const conflicts = manager.getConflicts();
-		assert.equal(conflicts.length, 1);
-		assert.equal(conflicts[0].key, "ctrl+g");
-		assert.deepEqual([...conflicts[0].keybindings].sort(), ["app.editor.external", "app.model.select"]);
+		expect(conflicts).toHaveLength(1);
+		expect(conflicts[0].key).toBe("ctrl+g");
+		expect([...conflicts[0].keybindings].sort()).toEqual(["app.editor.external", "app.model.select"]);
 	});
 
 	it("both actions match one keystroke, so one is unreachable", () => {
@@ -37,12 +36,12 @@ describe("keybinding conflicts", () => {
 
 		// ctrl+g reaches the terminal as the control byte 0x07.
 		const ctrlG = "";
-		assert.equal(manager.matches(ctrlG, "app.model.select"), true);
-		assert.equal(manager.matches(ctrlG, "app.editor.external"), true);
+		expect(manager.matches(ctrlG, "app.model.select")).toBe(true);
+		expect(manager.matches(ctrlG, "app.editor.external")).toBe(true);
 	});
 
 	it("reports nothing for a key bound to one action", () => {
 		const manager = new KeybindingsManager({ "app.model.select": "ctrl+g" } as never);
-		assert.deepEqual(manager.getConflicts(), []);
+		expect(manager.getConflicts()).toEqual([]);
 	});
 });
