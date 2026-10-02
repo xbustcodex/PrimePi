@@ -1,12 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path, { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { ProjectTrustStore } from "../src/core/trust-manager.ts";
 import { handlePackageCommand } from "../src/package-manager-cli.ts";
 import { ALLOW_SELF_UPDATE_ENV } from "../src/utils/self-update-barrier.ts";
+import { allowNetwork } from "./test-network-env.ts";
 
 /**
  * Migration invariants I5-I7: the OMP port must not displace Pi's context,
@@ -175,6 +176,11 @@ describe("I7: the self-update barrier cannot be influenced by settings", () => {
 	});
 
 	it("requires an explicit env opt-in, and only that", async () => {
+		// `vitest.config.ts` sets PI_OFFLINE for the whole suite and the version check
+		// returns early under it, so without this the fetch never happens and the
+		// assertion below fails on a policy the suite itself declares. `allowNetwork()` is
+		// the sanctioned opt-out; `fetch` is still a local stub, so nothing leaves.
+		allowNetwork();
 		vi.stubEnv(ALLOW_SELF_UPDATE_ENV, "1");
 		const fetchMock = vi.fn(async () => Response.json({ version: "0.0.1" }));
 		vi.stubGlobal("fetch", fetchMock);
@@ -198,11 +204,17 @@ describe("I7: the self-update barrier cannot be influenced by settings", () => {
 	});
 });
 
+/**
+ * The repository root, resolved from this file rather than from the process cwd, which
+ * is the repo root only when the file is invoked directly.
+ */
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+
 describe("I8: build-integrity gates remain part of the check contract", () => {
 	it("keeps every integrity gate wired into the root check script", () => {
 		// package.json is the build contract manifest, not implementation source, so
 		// asserting its shape is a build test rather than a source grep.
-		const rootPackage = JSON.parse(readFileSync(join(process.cwd(), "package.json"), "utf8")) as {
+		const rootPackage = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf8")) as {
 			scripts: Record<string, string>;
 		};
 		const check = rootPackage.scripts.check;
@@ -223,7 +235,7 @@ describe("I8: build-integrity gates remain part of the check contract", () => {
 
 	it("keeps the coding-agent shrinkwrap and install-lock present and non-empty", () => {
 		for (const artifact of ["packages/coding-agent/npm-shrinkwrap.json", "packages/coding-agent/install-lock"]) {
-			expect(existsSync(join(process.cwd(), artifact))).toBe(true);
+			expect(existsSync(join(REPO_ROOT, artifact))).toBe(true);
 		}
 	});
 });

@@ -9,6 +9,7 @@ import {
 	isSelfUpdateAllowed,
 	selfUpdateBlockedMessage,
 } from "../src/utils/self-update-barrier.ts";
+import { allowNetwork } from "./test-network-env.ts";
 
 describe("self-update barrier", () => {
 	describe("isSelfUpdateAllowed", () => {
@@ -109,6 +110,13 @@ describe("self-update barrier", () => {
 		});
 
 		it("reaches the upstream plan when the operator opts in explicitly", async () => {
+			// The version check returns early under PI_OFFLINE, which vitest.config.ts
+			// sets for the whole suite. Without this opt-out the fetch never happens and the
+			// assertion below fails on a policy the suite itself declares - it only passed
+			// when the file was invoked from the repo root, where the package config is
+			// not applied and PI_OFFLINE is left unset. `fetch` stays a local stub, so
+			// nothing leaves the machine.
+			allowNetwork();
 			vi.stubEnv(ALLOW_SELF_UPDATE_ENV, "1");
 			const fetchMock = vi.fn(async () => Response.json({ version: "0.0.0" }));
 			vi.stubGlobal("fetch", fetchMock);

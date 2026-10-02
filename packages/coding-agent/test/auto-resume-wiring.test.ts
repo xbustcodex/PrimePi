@@ -19,7 +19,16 @@ import { describe, expect, it } from "vitest";
  * it claims.
  */
 
-const mainSource = (): string => readFileSync(path.join(process.cwd(), "packages/coding-agent/src/main.ts"), "utf8");
+/**
+ * The repository root, resolved from this file.
+ *
+ * `process.cwd()` is the repo root when this file is invoked directly and the package
+ * directory under the suite runner, so a path built from it resolves to
+ * `<package>/packages/coding-agent/src/main.ts` - which does not exist - and the test
+ * fails in one invocation and passes in the other.
+ */
+const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
+const mainSource = (): string => readFileSync(path.join(REPO_ROOT, "packages/coding-agent/src/main.ts"), "utf8");
 
 describe("auto-resume is wired into startup", () => {
 	it("reads the setting in the session-creation path", () => {
