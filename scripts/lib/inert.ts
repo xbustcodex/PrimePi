@@ -104,14 +104,32 @@ export interface UnreferencedSymbol {
 	readonly kind: "function" | "class" | "const";
 }
 
-/** Every `.ts` file under a root, as repo-relative posix paths. */
-function collectFiles(root: string, relativeRoots: string[]): string[] {
+/**
+ * Every `.ts` file under the given repo-relative roots.
+ *
+ * A directory that cannot be read is **reported**, not skipped. The previous version
+ * swallowed the error and returned whatever it managed to collect, which is the one
+ * failure this tool must never produce: it reports "no capability is unreferenced",
+ * and every assertion built on it agrees. Observed under full-suite parallel load,
+ * where the walk returned 0 files in 11.6s while the same call alone returned 492 in
+ * 37s, and eleven `KNOWN_INERT` fixtures failed with "expected 0 to have a length
+ * of 1".
+ *
+ * `ENOENT` is still tolerated: a root that does not exist is a configuration
+ * question, but a root that exists and cannot be read is a fault, and returning a
+ * partial corpus for it inverts the answer.
+ */
+function collectFiles(root: string, relativeRoots: readonly string[]): string[] {
 	const files: string[] = [];
+	const unreadable: string[] = [];
 	const walk = (dir: string) => {
 		let entries: fs.Dirent[];
 		try {
 			entries = fs.readdirSync(dir, { withFileTypes: true });
-		} catch {
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (code === "ENOENT") return;
+			unreadable.push(`${dir} (${code ?? "unknown"})`);
 			return;
 		}
 		for (const entry of entries) {
@@ -121,6 +139,11 @@ function collectFiles(root: string, relativeRoots: string[]): string[] {
 		}
 	};
 	for (const relative of relativeRoots) walk(path.join(root, relative));
+	if (unreadable.length > 0) {
+		throw new Error(
+			`inert: ${unreadable.length} director${unreadable.length === 1 ? "y" : "ies"} could not be read, so this scan would under-report. Refusing to return a partial corpus:\n  ${unreadable.slice(0, 10).join("\n  ")}`,
+		);
+	}
 	return files;
 }
 
@@ -238,7 +261,13 @@ export function findUnreferencedCapabilities(root: string): UnreferencedSymbol[]
 	const results: UnreferencedSymbol[] = [];
 	for (const file of allFiles) {
 		if (isTestPath(file) || NOT_CAPABILITIES.has(path.basename(file)) || isBarrel(file)) continue;
-		for (const exported of exportsOf(file)) {
+		// `path.join(root, file)`, not `file`. `exportsOf` reads from disk and swallows a
+		// read failure, so passing the repo-relative path made every export parse return
+		// [] - the scan reported "no capability is unreferenced" while believing it had
+		// walked the tree. It resolves only when the process cwd happens to be the repo
+		// root, which is why it passed in isolation and returned 0 symbols under the
+		// package-scoped suite runner. The line above, for `spansOf`, already did this.
+		for (const exported of exportsOf(path.join(root, file))) {
 			let productionRefs = 0;
 			let testRefs = 0;
 			const pattern = new RegExp(`\\b${exported.name}\\b`);
