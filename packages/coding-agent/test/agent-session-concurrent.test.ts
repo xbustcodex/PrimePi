@@ -131,6 +131,17 @@ describe("AgentSession concurrent prompt guard", () => {
 		return session;
 	}
 
+	/** Resolves once the session reports streaming, or fails after a bounded wait. */
+	async function waitForStreaming(session: AgentSession): Promise<void> {
+		const deadline = Date.now() + 5_000;
+		while (!session.isStreaming) {
+			if (Date.now() > deadline) {
+				throw new Error("session never began streaming");
+			}
+			await new Promise((resolve) => setTimeout(resolve, 5));
+		}
+	}
+
 	it("should throw when prompt() called while streaming", async () => {
 		await createSession();
 
@@ -138,7 +149,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		const firstPrompt = session.prompt("First message");
 
 		// Wait a tick for isStreaming to be set
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming(session);
 
 		// Verify we're streaming
 		expect(session.isStreaming).toBe(true);
@@ -158,7 +169,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		// Start first prompt
 		const firstPrompt = session.prompt("First message");
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming(session);
 
 		// steer should work while streaming
 		await expect(session.steer("Steering message")).resolves.toBeUndefined();
@@ -174,7 +185,7 @@ describe("AgentSession concurrent prompt guard", () => {
 
 		// Start first prompt
 		const firstPrompt = session.prompt("First message");
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming(session);
 
 		// followUp should work while streaming
 		await expect(session.followUp("Follow-up message")).resolves.toBeUndefined();
@@ -269,7 +280,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		});
 
 		const firstPrompt = session.prompt("First message");
-		await new Promise((resolve) => setTimeout(resolve, 10));
+		await waitForStreaming(session);
 		expect(session.isStreaming).toBe(true);
 
 		const pi = (
