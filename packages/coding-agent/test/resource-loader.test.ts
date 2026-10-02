@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import path, { join } from "node:path";
+
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -12,6 +13,19 @@ import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+
+/**
+ * Resolved from this file rather than from the process cwd.
+ *
+ * `process.cwd()` is the package directory when vitest runs the suite but the repo
+ * root when the same file is invoked from the root, so a path built from it resolves
+ * in one invocation and to nothing in the other. These three reads passed in isolation
+ * and failed in the sequential run, where the working directory differed.
+ */
+// One level up from `test/`, which is the package directory - and `src/` is relative
+// to the package. Measured by the ENOENT it removed: three levels produced
+// `<repo>/src` (absent) and two produced `<repo>/packages/src` (also absent).
+const SRC_ROOT = path.resolve(import.meta.dirname, "..");
 
 describe("DefaultResourceLoader", () => {
 	let tempDir: string;
@@ -214,7 +228,7 @@ Project skill`,
 			);
 
 			const baseTheme = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
+				readFileSync(join(SRC_ROOT, "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
 			) as { name: string; vars?: Record<string, string> };
 			baseTheme.name = "collision-theme";
 			const userThemePath = join(agentDir, "themes", "collision.json");
@@ -522,7 +536,7 @@ Project skill content`,
 			);
 			writeFileSync(join(promptsDir, "project.md"), "Project prompt");
 			const themeData = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
+				readFileSync(join(SRC_ROOT, "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
 			) as { name: string };
 			themeData.name = "project-theme";
 			writeFileSync(join(themesDir, "project.json"), JSON.stringify(themeData, null, 2));
@@ -767,7 +781,7 @@ description: Package prompt
 Package prompt content`,
 			);
 			const baseTheme = JSON.parse(
-				readFileSync(join(process.cwd(), "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
+				readFileSync(join(SRC_ROOT, "src", "modes", "interactive", "theme", "dark.json"), "utf-8"),
 			) as { name: string };
 			writeFileSync(
 				join(packageThemesDir, "package-theme.json"),

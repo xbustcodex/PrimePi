@@ -27,8 +27,14 @@ import { findUnreferencedCapabilities } from "../../../scripts/lib/inert.ts";
  * with a fixture rather than an exemption list.
  */
 
-/** The scan parses ~1400 files; on a cold cache it takes ~45s. */
-const SCAN_TIMEOUT_MS = 180_000;
+/**
+ * The scan parses ~1400 files and matches every symbol against the whole corpus:
+ * ~35s alone, and well past 200s when the rest of the suite is running in parallel
+ * alongside it. 180s was below what the suite actually costs, so the hook was cut
+ * short under load and the memo stayed undefined - which surfaced as "the scan
+ * returned no symbols", i.e. eleven tests reporting that nothing is inert.
+ */
+const SCAN_TIMEOUT_MS = 600_000;
 const ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 /**
  * The scan walks ~1400 files and parses each, so it costs ~45s. Every fixture in
@@ -151,7 +157,12 @@ describe("documentation is not a reference", () => {
 			expect(entry.productionRefs, `${entry.name} must have no production references`).toBe(0);
 		}
 		// The tables really are in the tree, so the loop above is not vacuous.
-		expect(readFileSync("packages/tui/src/overlays/settings-parity-rows.ts", "utf8")).not.toHaveLength(0);
+		// Resolved through ROOT, not a repo-relative literal: vitest runs with cwd set to
+		// the package directory, so a bare path only resolves when the test happens to be
+		// invoked from the repo root. That is why this passed alone and failed in the suite.
+		expect(
+			readFileSync(path.join(ROOT, "packages/tui/src/overlays/settings-parity-rows.ts"), "utf8"),
+		).not.toHaveLength(0);
 	});
 });
 
