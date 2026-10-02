@@ -130,6 +130,12 @@ describe("automatic compaction cancellation regressions", () => {
 		const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
 		harnesses.push(harness);
 		seedCompactableSession(harness);
+		// The summarizer is a separate model call, so the faux provider needs a response
+		// queued for it. Without one it exhausts first and the failure surfaces as
+		// "No more faux responses queued" before the mocked auth error is ever reached -
+		// which is what happened once the compaction threshold stopped firing
+		// unconditionally and this code path actually became reachable.
+		harness.setResponses([fauxAssistantMessage("summary")]);
 		vi.spyOn(harness.session.modelRuntime, "getAuth").mockRejectedValue(createError());
 
 		await runAutoCompaction(harness);

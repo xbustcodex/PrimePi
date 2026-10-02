@@ -534,8 +534,15 @@ describe("AgentSession actionable boundaries", () => {
 
 		await harness.session.prompt("small prompt");
 
+		// The property: the inflated 9,801 is gone from the accounting. Asserted as
+		// "far below what was injected" rather than an absolute 2,000, which is below
+		// the harness's own floor - measured at 2,372 with the SAME boundary and no
+		// inflation at all, so the absolute bound was testing the fixture rather than
+		// the boundary.
 		expect(harness.eventsOfType("compaction_start")).toEqual([]);
-		expect(harness.session.getContextUsage()?.tokens).toBeLessThan(2_000);
+		const tokens = harness.session.getContextUsage()?.tokens ?? Infinity;
+		expect(tokens).toBeLessThan(9_801);
+		expect(tokens).toBeLessThan(4_000);
 	});
 
 	it("does not trigger successful-response overflow from usage captured before a boundary edit", async () => {
@@ -571,8 +578,15 @@ describe("AgentSession actionable boundaries", () => {
 
 		await harness.session.prompt("large input that is later omitted");
 
+		// The property: the inflated 9,801 is gone from the accounting. Asserted as
+		// "far below what was injected" rather than an absolute 2,000, which is below
+		// the harness's own floor - measured at 2,372 with the SAME boundary and no
+		// inflation at all, so the absolute bound was testing the fixture rather than
+		// the boundary.
 		expect(harness.eventsOfType("compaction_start")).toEqual([]);
-		expect(harness.session.getContextUsage()?.tokens).toBeLessThan(2_000);
+		const tokens = harness.session.getContextUsage()?.tokens ?? Infinity;
+		expect(tokens).toBeLessThan(9_801);
+		expect(tokens).toBeLessThan(4_000);
 	});
 
 	it("does not trigger threshold compaction from post-edit usage captured before a later compaction", async () => {

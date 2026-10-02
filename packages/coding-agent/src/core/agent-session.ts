@@ -1033,8 +1033,17 @@ export class AgentSession {
 				env: result.env,
 			};
 		} catch (error) {
-			if (signal?.aborted) throw error;
-			return { model };
+			// **A failure to resolve auth must not become an unauthenticated request.**
+			// The original code caught every error here and returned `{ model }` — no key, no
+			// headers — so an expired credential during summarization was sent to the
+			// provider with nothing attached. The provider then rejected it with a message
+			// about the *request* rather than about the credential, and the local cause was
+			// gone. `_getRequiredRequestAuth`, which serves the ordinary request path, has
+			// always thrown here; summarization was the odd one out.
+			//
+			// Aborts need no special case: an aborted signal surfaces as an AbortError, and
+			// rethrowing preserves that exactly.
+			throw error;
 		}
 	}
 
