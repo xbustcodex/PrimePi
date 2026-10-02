@@ -13,41 +13,20 @@ import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 
 import { createModelRegistry } from "./model-runtime-test-utils.ts";
+import { directoryLinkTypeSync } from "./suite/helpers/link.ts";
 
 /**
  * Resolved from this file rather than from the process cwd.
  *
  * `process.cwd()` is the package directory when vitest runs the suite but the repo
  * root when the same file is invoked from the root, so a path built from it resolves
- * in one invocation and to nothing in the other. These three reads passed in isolation
+ * in one invocation and to nothing in the other. These reads passed in isolation
  * and failed in the sequential run, where the working directory differed.
  */
-// One level up from `test/`, which is the package directory - and `src/` is relative
-// to the package. Measured by the ENOENT it removed: three levels produced
-// `<repo>/src` (absent) and two produced `<repo>/packages/src` (also absent).
+// One level up from test/, which is the package directory - `src/` is relative to the
+// package. Measured by the ENOENT that named the resolved path: three levels gave
+// <repo>/src (absent) and two gave <repo>/packages/src (also absent).
 const SRC_ROOT = path.resolve(import.meta.dirname, "..");
-
-/**
- * The directory-link type this host permits: "dir" for a real symlink, "junction"
- * where Developer Mode is off and a file symlink throws EPERM.
- *
- * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
- * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
- * junction is a directory reparse point and `realpath` resolves one exactly as it
- * resolves a symlink, so the aliasing property under test is identical.
- */
-function directoryLinkTypeSync(): "dir" | "junction" {
-	try {
-		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
-		const t = join(d, "t");
-		mkdirSync(t, { recursive: true });
-		symlinkSync(t, join(d, "l"), "dir");
-		rmSync(d, { recursive: true, force: true });
-		return "dir";
-	} catch {
-		return "junction";
-	}
-}
 
 describe("DefaultResourceLoader", () => {
 	// Warm the loader once before any assertion runs.

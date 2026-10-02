@@ -7,6 +7,7 @@ import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { directoryLinkTypeSync } from "./suite/helpers/link.ts";
 
 type Deferred<T> = {
 	promise: Promise<T>;
@@ -85,28 +86,6 @@ function createSymlinkedSessionPaths(): {
 
 const CTRL_D = "\x04";
 const CTRL_BACKSPACE = "\x1b[127;5u";
-
-/**
- * The directory-link type this host permits: "dir" for a real symlink, "junction"
- * where Developer Mode is off and a file symlink throws EPERM.
- *
- * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
- * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
- * junction is a directory reparse point and `realpath` resolves one exactly as it
- * resolves a symlink, so the aliasing property under test is identical.
- */
-function directoryLinkTypeSync(): "dir" | "junction" {
-	try {
-		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
-		const t = join(d, "t");
-		mkdirSync(t, { recursive: true });
-		symlinkSync(t, join(d, "l"), "dir");
-		rmSync(d, { recursive: true, force: true });
-		return "dir";
-	} catch {
-		return "junction";
-	}
-}
 
 describe("session selector path/delete interactions", () => {
 	const keybindings = new KeybindingsManager();

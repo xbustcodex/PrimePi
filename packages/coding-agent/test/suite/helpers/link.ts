@@ -1,3 +1,4 @@
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
 import { mkdir, mkdtemp, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -48,6 +49,25 @@ export async function canCreateSymlinks(): Promise<boolean> {
 		return true;
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * The directory-link type this host permits: "dir" for a real symlink, "junction"
+ * where Developer Mode is off and a file symlink throws EPERM.
+ *
+ * Synchronous, for suites that already use the `node:fs` sync API.
+ */
+export function directoryLinkTypeSync(): "dir" | "junction" {
+	try {
+		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
+		const t = join(d, "t");
+		mkdirSync(t, { recursive: true });
+		symlinkSync(t, join(d, "l"), "dir");
+		rmSync(d, { recursive: true, force: true });
+		return "dir";
+	} catch {
+		return "junction";
 	}
 }
 

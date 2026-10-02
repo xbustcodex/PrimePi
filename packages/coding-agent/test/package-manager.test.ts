@@ -1,11 +1,12 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DefaultPackageManager, type ProgressEvent, type ResolvedResource } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
+import { directoryLinkTypeSync } from "./suite/helpers/link.ts";
 
 function normalizeForMatch(value: string): string {
 	return value.replace(/\\/g, "/");
@@ -67,28 +68,6 @@ const isDisabled = (r: ResolvedResource, pathMatch: string, matchFn: "endsWith" 
 		? normalizedPath.endsWith(normalizedMatch) && !r.enabled
 		: normalizedPath.includes(normalizedMatch) && !r.enabled;
 };
-
-/**
- * The directory-link type this host permits: "dir" for a real symlink, "junction"
- * where Developer Mode is off and a file symlink throws EPERM.
- *
- * Windows grants `SeCreateSymbolicLinkPrivilege` to an unprivileged process only with
- * Developer Mode on; measured here, `AllowDevelopmentWithoutDevLicense` is absent. A
- * junction is a directory reparse point and `realpath` resolves one exactly as it
- * resolves a symlink, so the aliasing property under test is identical.
- */
-function directoryLinkTypeSync(): "dir" | "junction" {
-	try {
-		const d = mkdtempSync(join(tmpdir(), "pi-linkprobe-"));
-		const t = join(d, "t");
-		mkdirSync(t, { recursive: true });
-		symlinkSync(t, join(d, "l"), "dir");
-		rmSync(d, { recursive: true, force: true });
-		return "dir";
-	} catch {
-		return "junction";
-	}
-}
 
 describe("DefaultPackageManager", () => {
 	let tempDir: string;
