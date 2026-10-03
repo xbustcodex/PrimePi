@@ -1,3 +1,4 @@
+import { join, sep } from "node:path";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { beforeAll, describe, expect, it } from "vitest";
 import type { AgentSession } from "../src/core/agent-session.ts";
@@ -107,8 +108,19 @@ describe("formatCwdForFooter", () => {
 	});
 
 	it("abbreviates the home directory and descendants", () => {
-		expect(formatCwdForFooter("/home/user", "/home/user")).toBe("~");
-		expect(formatCwdForFooter("/home/user/project", "/home/user")).toBe("~/project");
+		// Built with `join`, and the expectation with `sep`, because
+		// `formatCwdForFooter` joins with the *platform* separator deliberately - a footer
+		// printing a POSIX separator on Windows would be wrong, since that is not the path
+		// the user's other tools show. The old literals ("~", "~/project") only held on
+		// POSIX, so this asserted a bug on every other platform.
+		const home = join(process.cwd(), "home", "user");
+		expect(formatCwdForFooter(home, home)).toBe("~");
+		expect(formatCwdForFooter(join(home, "project"), home)).toBe(`~${sep}project`);
+		expect(formatCwdForFooter(join(home, "a", "b"), home)).toBe(`~${sep}a${sep}b`);
+		// A path on a different drive is not under home and must not be abbreviated.
+		// `relative()` reports it as absolute there, which the implementation guards
+		// against with `isAbsolute` - asserted so the guard stays covered.
+		expect(formatCwdForFooter("D:\\elsewhere\\x", home)).toBe("D:\\elsewhere\\x");
 	});
 });
 

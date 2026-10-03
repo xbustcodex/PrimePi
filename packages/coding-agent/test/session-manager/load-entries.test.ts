@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FileEntry, SessionEntry, SessionMessageEntry } from "../../src/core/session-manager.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
@@ -100,7 +101,12 @@ describe("SessionManager.inMemory with preloaded entries", () => {
 
 		expect(session.getSessionId()).toBe("restored-session");
 		expect(session.getHeader()!.id).toBe("restored-session");
-		expect(session.getHeader()!.cwd).toBe("/project");
+		// `resolve("/project")`, not the literal: the session store persists the
+		// **canonical** cwd, which is the contract PD-11 established so two spellings of one
+		// directory resolve to one stored header. On Windows the literal "/project"
+		// canonicalises to "C:\project", so asserting the input verbatim asserted a
+		// non-canonical store on every platform but POSIX.
+		expect(session.getHeader()!.cwd).toBe(resolve("/project"));
 	});
 
 	it("generates a session id when the options carry none", () => {

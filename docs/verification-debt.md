@@ -419,6 +419,27 @@ of which are now resolved or separately classified.
 environment reports `/tmp/...`. The test compares two values that are only
 equal under a POSIX-conventional shell.
 
+**Class A, sharper form — a Windows cwd is reported back as a path that does not
+exist.** Found while working `sdk-session-manager.test.ts`, and worth separating
+from the separator mistakes because it is not a fixture problem:
+
+    sessionCwd           C:\Users\xkali\AppData\Local\Temp\pi-probe-...\session-project
+    realpath(sessionCwd) C:\Users\xkali\AppData\Local\Temp\pi-probe-...\session-project
+    bash `pwd` output    "/tmp/pi-probe-.../session-project"
+
+The session-level `cwd` contract is sound: `sdk.ts:182` resolves it from
+`sessionManager.getCwd()`, the system prompt carries it, and
+`createAllToolDefinitions(this._cwd, …)` receives it. The translation happens in
+the spawned shell's own output. Because `/tmp/...` does not exist on this machine,
+**any caller that resolves the printed path fails** with `ENOENT` — this is not a
+cosmetic separator mismatch.
+
+Reproduces outside vitest under a plain `tsx` script, so it is not a harness
+artifact. The owning layer has not been established, so it is recorded rather than
+guessed at: the fix belongs wherever path translation between host and shell lives,
+and changing it on the authority of one probe would alter how every command reports
+its paths.
+
 **Class B - symlink creation is `EPERM` (2 failures).** `nodejs-env.test.ts`
 creates symlinks with `fs.symlink`. On Windows that requires either Developer
 Mode or SeCreateSymbolicLinkPrivilege; this machine has neither, so the call
