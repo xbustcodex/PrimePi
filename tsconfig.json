@@ -47,6 +47,9 @@
 			"@earendil-works/pi-client/*": ["./packages/client/src/*"],
 			"@earendil-works/pi-server": ["./packages/server/src/index.ts"],
 			"@earendil-works/pi-server/unix": ["./packages/server/src/transports/unix/index.ts"],
+			"@earendil-works/pi-server/windows-named-pipe": [
+				"./packages/server/src/transports/windows-named-pipe/index.ts"
+			],
 			"@earendil-works/pi-server/*": ["./packages/server/src/*"],
 			"typebox": ["./node_modules/typebox"],
 			"@earendil-works/pi-tui": ["./packages/tui/src/index.ts"],

@@ -1,14 +1,23 @@
 import { lstat, mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Context, createFacetHost, defineFacet, defineService } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Client, ServerError as ClientServerError } from "@earendil-works/pi-client";
+import {
+	Client,
+	ServerError as ClientServerError,
+	createWindowsNamedPipeTransportFactory,
+} from "@earendil-works/pi-client";
 import { createUnixTransportFactory } from "@earendil-works/pi-client/unix";
+
+const TEST_AUTH_TOKEN = "test-auth-token-not-a-real-secret";
+
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ExampleFacetService } from "../examples/plugins/pi-example-plugin/src/contract.ts";
 import { runClient } from "../src/experimental/client.ts";
 import { activateBuiltinClientServices, openClientRuntime } from "../src/experimental/client-runtime.ts";
+import { localAuthTokenFromEnvironment, localEndpointIsNamedPipe } from "../src/experimental/local-client-endpoint.ts";
 import { createPresentationFacetLoaders } from "../src/experimental/plugins/bundled.ts";
 import * as processRuntime from "../src/experimental/process.ts";
 import { type RunningServer, startServer } from "../src/experimental/server.ts";
@@ -44,7 +53,7 @@ beforeEach(async () => {
 });
 
 async function makeServer(): Promise<{ directory: string; runtime: RunningServer }> {
-	const directory = await mkdtemp(join("/tmp", "pes-"));
+	const directory = await mkdtemp(join(tmpdir(), "pes-"));
 	directories.add(directory);
 	const runtime = await startServer({ ...sessionWorkerModel, directory });
 	servers.add(runtime);
@@ -61,11 +70,26 @@ async function attachSession(client: Client, sessionId: string): Promise<void> {
 	}
 }
 
-async function attachClient(runtime: RunningServer, sessionId: string): Promise<Client> {
-	const client = await Client.connect({
+/**
+ * Connect to a running server the way the production client does.
+ *
+ * The transport is chosen per platform — a `0600` socket in a `0700` directory on POSIX,
+ * a named pipe plus a credential on Windows — so these tests exercise the same path a user
+ * takes rather than a Unix-only shortcut that cannot work here.
+ */
+function connectToServer(runtime: RunningServer): Promise<Client> {
+	const authToken = localAuthTokenFromEnvironment();
+	return Client.connect({
 		serverId: runtime.serverId,
-		transportFactory: createUnixTransportFactory({ path: runtime.socketPath }),
+		authToken,
+		transportFactory: localEndpointIsNamedPipe()
+			? createWindowsNamedPipeTransportFactory({ path: runtime.socketPath })
+			: createUnixTransportFactory({ path: runtime.socketPath }),
 	});
+}
+
+async function attachClient(runtime: RunningServer, sessionId: string): Promise<Client> {
+	const client = await connectToServer(runtime);
 	clients.add(client);
 	await attachSession(client, sessionId);
 	return client;
@@ -82,7 +106,46 @@ afterEach(async () => {
 });
 
 describe("experimental durable server composition", () => {
-	test("uses PI_SERVER_DIR and PI_SERVER_ID", async () => {
+	beforeEach(() => {
+		// A Windows named pipe cannot be restricted to the owner by `node:net`, so the server
+		// and client share a credential instead. Set for every case in this suite on Windows;
+		// on POSIX it is ignored, because the `0600` socket in a `0700` directory already does
+		// that work and the server is configured with no credential at all.
+		if (process.platform === "win32") vi.stubEnv("PI_SERVER_AUTH_TOKEN", TEST_AUTH_TOKEN);
+	});
+
+	// The Windows counterpart of the test below. A named pipe has no directory entry, so the
+	// properties that hold on both platforms are asserted instead: the identity comes from
+	// PI_SERVER_ID, the endpoint is a pipe named for it, the directory still holds only the
+	// metadata that lives on disk, and a client reaches the server through it.
+	test.runIf(process.platform === "win32")("uses PI_SERVER_DIR and PI_SERVER_ID via a named pipe", async () => {
+		const serverId = "00000000-0000-4000-8000-000000000001";
+		vi.stubEnv("PI_SERVER_ID", serverId);
+		const { directory, runtime } = await makeServer();
+		vi.stubEnv("PI_SERVER_DIR", directory);
+		servers.add(runtime);
+
+		expect(runtime.serverId).toBe(serverId);
+		// The pipe is named for the identity plus a per-generation nonce, and nothing else.
+		// Compared with an explicit prefix check rather than a hand-escaped regex: the
+		// backslash runs make a literal regex unreadable and easy to get wrong.
+		expect(runtime.socketPath.startsWith(`\\\\.\\pipe\\pi-${serverId}-`)).toBe(true);
+		expect(runtime.socketPath.slice(`\\\\.\\pipe\\pi-${serverId}-`.length)).toMatch(/^[0-9a-f]{12}$/);
+		// The endpoint is a kernel object with no filesystem entry, which is the Windows
+		// counterpart of the POSIX `isSocket()` and `0o600` assertions. `lstat` is not a probe
+		// for that: given a non-filesystem path it falls back to the current directory, so it
+		// resolves rather than rejecting. The absence of a directory entry is what matters.
+		expect(runtime.socketPath.startsWith("\\\\.\\pipe\\")).toBe(true);
+		expect(await readdir(directory)).not.toContain(runtime.socketPath);
+		// Only the metadata that genuinely lives on disk is in the directory.
+		const entries = await readdir(directory);
+		expect(entries.every((entry) => !entry.startsWith("."))).toBe(true);
+		await expect(runClient({ command: "client" }, { directory })).resolves.toMatchObject({
+			kind: "list",
+		});
+	});
+
+	test.runIf(process.platform !== "win32")("uses PI_SERVER_DIR and PI_SERVER_ID", async () => {
 		const directory = await mkdtemp(join("/tmp", "pi-server-dir-"));
 		directories.add(directory);
 		const serverId = "00000000-0000-4000-8000-000000000001";
@@ -284,14 +347,8 @@ describe("experimental durable server composition", () => {
 
 	test("hydrates and mutates server Session services across framed clients", async () => {
 		const { runtime } = await makeServer();
-		const firstClient = await Client.connect({
-			serverId: runtime.serverId,
-			transportFactory: createUnixTransportFactory({ path: runtime.socketPath }),
-		});
-		const secondClient = await Client.connect({
-			serverId: runtime.serverId,
-			transportFactory: createUnixTransportFactory({ path: runtime.socketPath }),
-		});
+		const firstClient = await connectToServer(runtime);
+		const secondClient = await connectToServer(runtime);
 		clients.add(firstClient);
 		clients.add(secondClient);
 		const errors: Error[] = [];
@@ -479,10 +536,7 @@ describe("experimental durable server composition", () => {
 
 	test("fences superseded attachment hydration by attachment generation", async ({ onTestFinished }) => {
 		const { runtime } = await makeServer();
-		const client = await Client.connect({
-			serverId: runtime.serverId,
-			transportFactory: createUnixTransportFactory({ path: runtime.socketPath }),
-		});
+		const client = await connectToServer(runtime);
 		clients.add(client);
 		const errors: Error[] = [];
 		const services = createSessionServiceBinding(client, {

@@ -15,15 +15,18 @@ const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
  * rather than trusted.
  *
  * @param serverId canonical lowercase UUIDv4, as on the Unix path
- * @param nonce opaque per-generation discriminator, 32 lowercase hex characters
+ * @param nonce opaque per-generation discriminator in lowercase hex. The existing Unix
+ *   route uses a 12-character slice of a UUID, so 12..32 is accepted rather than
+ *   demanding a width this codebase does not use. What matters is that it is
+ *   unpredictable and validated, not how wide it is.
  * @param prefix pipe namespace; defaults to `pi`
  */
 export function getWindowsNamedPipePath(serverId: string, nonce: string, prefix = "pi"): string {
 	if (!UUID_V4.test(serverId)) {
 		throw new TypeError("Windows named-pipe serverId must be a canonical lowercase UUIDv4");
 	}
-	if (!/^[0-9a-f]{32}$/.test(nonce)) {
-		throw new TypeError("Windows named-pipe nonce must be 32 lowercase hexadecimal characters");
+	if (!/^[0-9a-f]{12,32}$/.test(nonce)) {
+		throw new TypeError("Windows named-pipe nonce must be 12 to 32 lowercase hexadecimal characters");
 	}
 	if (!/^[A-Za-z0-9._-]+$/.test(prefix)) {
 		throw new TypeError("Windows named-pipe prefix must contain only alphanumerics, dot, underscore or hyphen");

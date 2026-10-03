@@ -47,8 +47,12 @@ export function spawnInternalProcess(
 		throw new Error("A compiled Bun executable cannot launch an external internal-process entrypoint");
 	}
 	const entryUrl = defaultEntryUrl(role, options.entryUrl);
+	// `--import` takes a URL specifier, not a path. `fileURLToPath` produced "C:\...",
+	// which Node's ESM loader rejects on Windows with ERR_UNSUPPORTED_ESM_URL_SCHEME
+	// ("Received protocol 'c:'") before the child ran anything — so every internal process
+	// failed to start. The same fix as the test harnesses in 70b42aba6, here in production.
 	const sourceRuntimeArgs = import.meta.url.endsWith(".ts")
-		? ["--import", fileURLToPath(new URL("source-resolver.ts", import.meta.url))]
+		? ["--import", new URL("source-resolver.ts", import.meta.url).href]
 		: [];
 	const child = spawn(
 		process.execPath,

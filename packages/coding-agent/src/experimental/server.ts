@@ -12,7 +12,7 @@ import {
 } from "@earendil-works/pi-agent-core";
 import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
 import { Client, ServerError as ClientServerError, DisconnectedError } from "@earendil-works/pi-client";
-import { createUnixTransportFactory, type UnixServerRoute } from "@earendil-works/pi-client/unix";
+import type { UnixServerRoute } from "@earendil-works/pi-client/unix";
 import { isServerId, type ServerId } from "@earendil-works/pi-protocol";
 import {
 	ServerError as RoutedServerError,
@@ -21,12 +21,18 @@ import {
 	SessionAmbiguousError,
 	SessionNotFoundError,
 } from "@earendil-works/pi-server";
-import { createUnixServer, getUnixSocketPath } from "@earendil-works/pi-server/unix";
 import lockfile from "proper-lockfile";
 import type { AuthInput } from "../cli/experimental/command-options.ts";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { CoordinatorConnection, type CoordinatorStartupLease, ensureCoordinator } from "./coordinator.ts";
+import {
+	createLocalTransportFactory,
+	type LocalClientRoute,
+	localAuthTokenFromEnvironment,
+	localRouteForPath,
+} from "./local-client-endpoint.ts";
+import { controlEndpointPath, createLocalServer, resolveServerEndpoint, serverEndpointPath } from "./local-endpoint.ts";
 import { createPresentationFacetData } from "./plugins/bundled.ts";
 import {
 	createServerPluginPackage,
@@ -55,9 +61,28 @@ export function resolveServerDirectory(directory?: string): string {
 	return resolvePath(directory ?? process.env[ENV_SERVER_DIR] ?? join(homedir(), ".pi", "server"));
 }
 
+/**
+ * Prepare the directory that holds server endpoints, and prove it is private.
+ *
+ * On POSIX this is the whole access-control story for the endpoint: a `0700` directory
+ * owned by the current uid means only that user can reach the socket inside it. The
+ * `lstat` uid comparison is what makes it a *check* rather than a request — a directory
+ * that already existed with looser permissions or a different owner is refused.
+ *
+ * **On Windows there is no endpoint directory to secure.** A named pipe is a kernel
+ * object with no filesystem entry, and `node:net` cannot set its security descriptor, so
+ * there is nothing for `chmod` or an ownership check to protect. The equivalent property
+ * is provided by the credential the server requires in its `hello` frame — see
+ * `local-endpoint.ts` and `ServerOptions.authToken`. This function therefore only has to
+ * create the directory for the *metadata* that still lives on disk (server ids, plugin
+ * caches), and returns without a permission check rather than pretending to make one.
+ */
 export async function ensurePrivateServerDirectory(directory: string): Promise<void> {
-	if (typeof process.getuid !== "function") throw new Error("Unix socket directory requires a POSIX user ID");
 	await mkdir(directory, { recursive: true, mode: 0o700 });
+	if (process.platform === "win32") return;
+	if (typeof process.getuid !== "function") {
+		throw new Error("Unix socket directory requires a POSIX user ID");
+	}
 	const stats = await lstat(directory);
 	if (!stats.isDirectory()) throw new Error(`Unix socket directory is not a directory: ${directory}`);
 	if (stats.uid !== process.getuid()) {
@@ -150,7 +175,10 @@ export async function activateServer(options: ActivateServerOptions): Promise<Ac
 	const profile = await acquireServerProfile(options.directory, options.requestedServerId);
 	const serverId = profile.serverId;
 	await profile.release();
-	const route = { serverId, path: getUnixSocketPath(serverId, options.directory) };
+	const route = {
+		serverId,
+		path: resolveServerEndpoint(serverId, options.directory, randomUUID().replaceAll("-", "")).path,
+	};
 	const release = await acquireServerActivation(options.directory, serverId);
 	try {
 		const existing = await connect(route);
@@ -213,9 +241,11 @@ export function acquireServerActivation(directory: string, serverId: ServerId): 
 }
 
 async function connect(route: UnixServerRoute): Promise<Client | undefined> {
+	const local = localRouteForPath(route.serverId, route.path);
 	const client = new Client({
 		serverId: route.serverId,
-		transportFactory: createUnixTransportFactory({ path: route.path }),
+		transportFactory: createLocalTransportFactory(local, localAuthTokenFromEnvironment()),
+		authToken: localAuthTokenFromEnvironment(),
 	});
 	try {
 		await client.connect();
@@ -347,6 +377,13 @@ export interface StartServerOptions {
 	readonly relayAuth?: AuthInput;
 	/** Explicit plugin packages. Undefined restores the logical server profile; an empty list clears it. */
 	readonly pluginPackages?: readonly string[];
+	/**
+	 * Credential required from every client. **Required on Windows**, where the endpoint is a
+	 * named pipe whose ACL `node:net` cannot set; ignored on POSIX, where a `0600` socket in a
+	 * `0700` directory already restricts access. Must be shared with clients out of band -
+	 * never derived from the endpoint name, which any local process can enumerate.
+	 */
+	readonly authToken?: string;
 	readonly onRelayStatus?: (status: RadiusRelayHostStatus) => void;
 }
 
@@ -358,6 +395,8 @@ interface ResolvedSessionPlugins {
 
 interface StartServerBackendOptions {
 	readonly path: string;
+	/** Credential required from every client on Windows; see StartServerOptions.authToken. */
+	readonly authToken?: string;
 	readonly serverId: ServerId;
 	readonly sessionDir?: string;
 	resolveSessionPlugins(
@@ -470,10 +509,16 @@ async function startServerBackend(
 		if (errors.length === 1) throw errors[0];
 		if (errors.length > 1) throw new AggregateError(errors, "Experimental session catalog cleanup failed");
 	};
-	const server = createUnixServer(host, {
+	// Platform-selected: a `0600` socket in a `0700` directory on POSIX, a named pipe
+	// plus a required credential on Windows. `createLocalServer` refuses a Windows server
+	// with no `authToken`, because a named pipe's ACL cannot be set through `node:net` and
+	// the credential is the only thing restricting it to the intended peer.
+	const server = createLocalServer(host, {
 		serverId,
-		path: socketPath,
-		mode: 0o600,
+		endpoint: { platform: process.platform === "win32" ? "win32" : "posix", path: socketPath },
+		// Falls back to the environment so a launcher and the spawned server agree without
+		// the secret being passed on a command line, where any local process could read it.
+		authToken: options.authToken ?? localAuthTokenFromEnvironment(),
 		onConnectionCountChanged,
 	});
 	try {
@@ -607,10 +652,13 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 			}
 			return reloaded.presentationArtifacts;
 		};
-		const socketPath = getUnixSocketPath(serverId, directory);
-		const controlPath = join(directory, `control-${serverId}.sock`);
 		const serverNonce = randomUUID().replaceAll("-", "").slice(0, 12);
-		const serverPath = join(directory, `server-${serverId}-${serverNonce}.sock`);
+		// All three endpoints are platform-derived. The Unix route is a `server-<id>-<nonce>.sock`
+		// and a `control-<id>.sock` in the server directory; the Windows route is a named pipe
+		// per endpoint, and there is no directory entry to clean up or collide.
+		const socketPath = resolveServerEndpoint(serverId, directory, serverNonce).path;
+		const controlPath = controlEndpointPath(serverId, directory, serverNonce);
+		const serverPath = serverEndpointPath(serverId, directory, serverNonce);
 		startupLease = await ensureCoordinator(socketPath, controlPath);
 		coordinator = new CoordinatorConnection({ controlPath, endpoint: serverPath });
 		const sessionDir = resolveSessionDirectory(options.sessionDir);
@@ -620,6 +668,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 		backend = await startServerBackend(
 			{
 				path: serverPath,
+				authToken: options.authToken,
 				serverId,
 				sessionDir: options.sessionDir,
 				resolveSessionPlugins,

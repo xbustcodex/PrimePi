@@ -1,9 +1,16 @@
 import { basename } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { Client, ServerError } from "@earendil-works/pi-client";
-import { createUnixTransportFactory, discoverUnixServers, type UnixServerRoute } from "@earendil-works/pi-client/unix";
+import { discoverUnixServers, type UnixServerRoute } from "@earendil-works/pi-client/unix";
 import { isServerId, type ServerId } from "@earendil-works/pi-protocol";
 import type { ClientCommand } from "../cli/experimental/commands/client.ts";
+import {
+	createLocalTransportFactory,
+	type LocalClientRoute,
+	localAuthTokenFromEnvironment,
+	localEndpointIsNamedPipe,
+	localRouteForPath,
+} from "./local-client-endpoint.ts";
 import { RadiusRelayAuthResolver } from "./radius-auth.ts";
 import { createRadiusClientTransportFactory, RadiusClientReconnect } from "./radius-relay.ts";
 import { activateServer, ENV_SERVER_ID, resolveServerDirectory, resolveSessionDirectory } from "./server.ts";
@@ -21,6 +28,7 @@ import { Transcript } from "./services/transcript.ts";
 
 export type ClientRuntimeRoute =
 	| ({ readonly transport: "unix" } & UnixServerRoute)
+	| ({ readonly transport: "named-pipe" } & UnixServerRoute)
 	| { readonly transport: "radius"; readonly serverId: ServerId };
 
 export interface ClientRuntimeServer {
@@ -73,8 +81,14 @@ export async function openClientRuntime(
 		routes = [
 			command.connect.transport === "radius"
 				? { transport: "radius", serverId: command.connect.serverId }
-				: { transport: "unix", ...routeFromExplicitPath(command.connect.path) },
+				: localRouteForPath(routeFromExplicitPath(command.connect.path).serverId, command.connect.path),
 		];
+	} else if (localEndpointIsNamedPipe()) {
+		// A named pipe has no directory entry, so there is nothing to scan and `discoverUnixServers`
+		// cannot apply. Discovery on Windows means activating, which connects first and starts a
+		// server only if nothing answers. That is the same shape as a POSIX scan that finds
+		// nothing, and it needs no privileged enumeration of another process's endpoints.
+		routes = [];
 	} else {
 		routes = (await discoverUnixServers({ directory })).map((route) => ({ transport: "unix", ...route }));
 		if (routes.length > 0 && command.model !== undefined) {
@@ -88,7 +102,7 @@ export async function openClientRuntime(
 				provider: command.provider,
 				model: command.model,
 			});
-			routes = [{ transport: "unix", ...activated.route }];
+			routes = [localRouteForPath(activated.route.serverId, activated.route.path)];
 			activatedClient = activated.client;
 		}
 	}
@@ -123,13 +137,21 @@ export async function openClientRuntime(
 				try {
 					client = await Client.connect({
 						serverId: route.serverId,
+						// Required for a named pipe and ignored for a Unix socket, whose `0600`
+						// mode inside a `0700` directory already restricts the endpoint to the
+						// owner. See local-client-endpoint.ts for why the credential rather than
+						// an ACL is what restricts a Windows pipe.
+						authToken: route.transport === "radius" ? undefined : localAuthTokenFromEnvironment(),
 						transportFactory:
-							route.transport === "unix"
-								? createUnixTransportFactory({ path: route.path })
-								: createRadiusClientTransportFactory({
+							route.transport === "radius"
+								? createRadiusClientTransportFactory({
 										serverId: route.serverId,
 										auth: new RadiusRelayAuthResolver(command.auth),
-									}),
+									})
+								: createLocalTransportFactory(
+										{ transport: route.transport, path: route.path },
+										localAuthTokenFromEnvironment(),
+									),
 					});
 				} catch (error) {
 					if (
