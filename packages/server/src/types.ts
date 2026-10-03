@@ -10,6 +10,19 @@ export interface ServerOptions {
 	handshakeTimeoutMs?: number;
 	onConnectionCountChanged?: (count: number) => void;
 	onError?: (error: Error) => void;
+	/**
+	 * Credential every client must present in its `hello` frame. Compared in constant
+	 * time; a mismatch closes the connection before any service is attached.
+	 *
+	 * Leave undefined where the operating system already restricts the endpoint to the
+	 * owner - a POSIX socket inside a `0700` directory with `0600` mode. **Required** for a
+	 * Windows named pipe: `node:net` cannot set a pipe's security descriptor, so the pipe
+	 * inherits a default DACL that is not owner-only.
+	 *
+	 * Current OMP reaches the same conclusion from the same primitive - `node:net` on
+	 * `\\.\pipe\` plus a `timingSafeEqual` bearer (`collab/registry.ts:449-453, 207-211`).
+	 */
+	authToken?: string;
 }
 
 export type MaybePromise<T> = T | Promise<T>;

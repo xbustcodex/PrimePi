@@ -1,6 +1,10 @@
 export { Client, createClientServiceTransport } from "./client.ts";
 export { ClientDisposedError, DisconnectedError, ServerError } from "./errors.ts";
 export type { ByteTransport, ByteTransportFactory, ByteTransportHandlers } from "./transport.ts";
+export {
+	createWindowsNamedPipeTransportFactory,
+	type WindowsNamedPipeTransportOptions,
+} from "./windows-named-pipe.ts";
 export type {
 	AttachmentChangeListener,
 	ClientOptions,

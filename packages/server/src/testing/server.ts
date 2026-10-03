@@ -22,6 +22,9 @@ export function createTestServer(options: TestServerOptions): TestServer {
 			handshakeTimeoutMs: options.handshakeTimeoutMs,
 			serverId: options.serverId ?? "00000000-0000-4000-8000-000000000001",
 			onError: options.onError,
+			// Forwarded so a conformance test can exercise the credential gate through the
+			// real `Server` rather than a hand-rolled handshake.
+			authToken: options.authToken,
 		}),
 		host,
 	};

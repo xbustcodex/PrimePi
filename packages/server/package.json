@@ -17,6 +17,10 @@
 		"./unix": {
 			"types": "./dist/transports/unix/index.d.ts",
 			"import": "./dist/transports/unix/index.js"
+		},
+		"./windows-named-pipe": {
+			"types": "./dist/transports/windows-named-pipe/index.d.ts",
+			"import": "./dist/transports/windows-named-pipe/index.js"
 		}
 	},
 	"files": [

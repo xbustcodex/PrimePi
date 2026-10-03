@@ -33,6 +33,14 @@ interface ConnectionOptions {
 	transportFactory: ByteTransportFactory;
 	serverId: string;
 	maxFrameLength?: number;
+	/**
+	 * Credential presented in the `hello` frame. Required when the server demands one,
+	 * which is the case for a Windows named-pipe endpoint: the pipe cannot be restricted by
+	 * an ACL through `node:net`, so the credential is what proves the connecting process is
+	 * the intended peer. Omitted on POSIX, where the socket's `0600` mode inside a `0700`
+	 * directory already does that.
+	 */
+	authToken?: string;
 	onHandshake(hello: ServerHello): void;
 	onMessage(message: Exclude<ServerMessage, { type: "hello" | "hello_error" }>): void;
 	onStateChange(change: ConnectionStateChange): void;
@@ -133,7 +141,16 @@ export class Connection {
 		this.#lifecycle = { ...lifecycle, transport };
 		try {
 			await transport.send(
-				encodeClientMessage({ type: "hello", version: PROTOCOL_VERSION }, { maxFrameLength: this.#maxFrameLength }),
+				encodeClientMessage(
+					{
+						type: "hello",
+						version: PROTOCOL_VERSION,
+						// Omitted entirely when absent, so a server with no credential sees
+						// exactly the frame it saw before this field existed.
+						...(this.#options.authToken === undefined ? {} : { authToken: this.#options.authToken }),
+					},
+					{ maxFrameLength: this.#maxFrameLength },
+				),
 			);
 		} catch (error) {
 			if (this.#isCurrent(id)) this.#failAndClose(toDisconnectedError(error));

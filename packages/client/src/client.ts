@@ -82,6 +82,7 @@ export class Client {
 			transportFactory: options.transportFactory,
 			serverId: options.serverId,
 			maxFrameLength: options.maxFrameLength,
+			authToken: options.authToken,
 			onHandshake: (hello) => {
 				this.#hello = hello;
 			},

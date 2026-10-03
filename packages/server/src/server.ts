@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import {
 	createServiceStateEncoder,
 	decodeServiceControlCall,
@@ -39,6 +40,28 @@ import type { ServerListener } from "./listener.ts";
 import { SessionRouter } from "./session-router.ts";
 import type { ServerHost, ServerOptions } from "./types.ts";
 
+/**
+ * Constant-time comparison of a presented credential against the expected one.
+ *
+ * OMP uses `timingSafeEqual` in its collab registry (`collab/registry.ts:207-211`) and a
+ * plain `!==` in its daemon broker (`launch/broker.ts:546`). The stronger of the two
+ * upstream patterns is adopted: length-check first, because `timingSafeEqual` throws on
+ * mismatched buffer lengths, then the constant-time compare.
+ *
+ * A server configured with **no** credential accepts any connection, which is what POSIX
+ * keeps today via its `0700` directory and `0600` socket. A server configured with one
+ * requires it, which is how a Windows named pipe — where `node:net` cannot set a security
+ * descriptor — gains the same "only the intended peer" property.
+ */
+export function credentialsMatch(expected: string | undefined, presented: unknown): boolean {
+	if (expected === undefined) return true;
+	if (typeof presented !== "string") return false;
+	const a = Buffer.from(expected, "utf8");
+	const b = Buffer.from(presented, "utf8");
+	if (a.length !== b.length) return false;
+	return timingSafeEqual(a, b);
+}
+
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 const MAX_UINT32 = 0xffff_ffff;
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
@@ -54,6 +77,8 @@ export class Server<TMetadata extends SessionMetadata = SessionMetadata> {
 	private readonly handshakeTimeoutMs: number;
 	private readonly onConnectionCountChanged: ((count: number) => void) | undefined;
 	private readonly onError: ((error: Error) => void) | undefined;
+	/** Required credential for every connection; undefined means any peer may connect. */
+	private readonly authToken: string | undefined;
 	private readonly connections = new Set<ConnectionState>();
 	private readonly sessions: SessionRouter<TMetadata>;
 	private closing = false;
@@ -73,6 +98,7 @@ export class Server<TMetadata extends SessionMetadata = SessionMetadata> {
 		this.handshakeTimeoutMs = resolved.handshakeTimeoutMs;
 		this.onConnectionCountChanged = options.onConnectionCountChanged;
 		this.onError = options.onError;
+		this.authToken = options.authToken;
 		this.sessions = new SessionRouter({
 			host,
 			serverId: this.serverId,
@@ -268,6 +294,17 @@ export class Server<TMetadata extends SessionMetadata = SessionMetadata> {
 			return;
 		}
 
+		// Closed and explicit: a connection that cannot prove it is the intended peer never
+		// reaches `attachClient`, so no service is hydrated for it. Placed after the
+		// version gate, matching OMP's ordering (`collab/registry.ts:311-318`: version,
+		// then token).
+		if (!credentialsMatch(this.authToken, hello.authToken)) {
+			await this.failProtocol(state, {
+				code: "unauthorized",
+				message: "Client authentication failed",
+			});
+			return;
+		}
 		if (this.closing || state.disconnected || state.stage !== "handshaking" || state.connection.closed) return;
 		const services = await this.host.serverServices.attachClient(
 			{

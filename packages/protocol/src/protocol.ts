@@ -25,10 +25,30 @@ const ProtocolErrorSchema = StrictObject({
 export type ProtocolErrorCode = string;
 export type ProtocolError = Static<typeof ProtocolErrorSchema>;
 
-/** Must be the first frame sent by a client. */
+/**
+ * Must be the first frame sent by a client.
+ *
+ * `authToken` is the shared secret that proves a connecting process is the intended
+ * peer. It is **optional on the wire** and **required whenever the listener demands
+ * one**, so the same schema serves both platforms:
+ *
+ * - On POSIX a `0700` directory plus a `0600` socket already restrict the endpoint to
+ *   the owner, and OMP's daemon broker sends no token there.
+ * - On Windows the endpoint is a **named pipe**, and `node:net` cannot set a pipe's
+ *   security descriptor, so the transport cannot restrict access to the owner. The
+ *   token is what supplies that property instead.
+ *
+ * Current OMP reached the same conclusion from the same primitive: `node:net` bound to
+ * `\\.\pipe\omp-collab-<id>` with a per-request `timingSafeEqual` bearer
+ * (`collab/registry.ts:449-453, 207-211`).
+ *
+ * Adding this here rather than inventing a Windows-only handshake keeps authentication
+ * in the one place that already fences a connection before it can reach any service.
+ */
 const ClientHelloSchema = StrictObject({
 	type: Type.Literal("hello"),
 	version: Type.Integer({ minimum: 0 }),
+	authToken: Type.Optional(Type.String()),
 });
 export type ClientHello = Static<typeof ClientHelloSchema>;
 
