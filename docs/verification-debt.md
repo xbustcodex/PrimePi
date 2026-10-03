@@ -436,3 +436,58 @@ something to change unilaterally.
 **Why it does not block migration.** Neither concerns session persistence,
 recovery, context durability or any migrated capability. PD-11, which did, is
 resolved.
+
+---
+
+## PD-13: the cross-package build invariant - a green source check is not a shipped contract
+
+**Status:** standing verification rule. Discovered while removing `getUpdateInstruction`
+(`0bf77154a`), where a compaction change in `packages/ai` was proven green and then failed
+the build of its own consumer.
+
+### What happened
+
+    npm run check     exit 0, 0 errors
+    npm run build     FAIL
+      src/core/settings-manager.ts(1430,5): error TS2353: 'reserveTokens' does not exist
+      in type 'CompactionThresholds'
+
+Both results were correct. `npm run check` typechecks against the **source** of every
+workspace package, so it saw the new `CompactionThresholds.reserveTokens` immediately.
+`npm run build` typechecks against each dependency's generated `dist`, and
+`packages/ai/dist` still held declarations from **before** the compaction commit. The
+consumer was therefore being typechecked against a contract that no longer existed.
+
+### The rule
+
+When package A changes an exported type or runtime contract that package B consumes,
+source-level check success is **insufficient evidence**. In order:
+
+1. `npm run check` - cheap, catches source errors.
+2. **Rebuild A** - regenerate its `dist` and declarations.
+3. **Build B against A's newly generated artifacts** - this is the step that carries the
+   evidence.
+4. Inspect the **shipped** declarations, not the source, when the change is export-
+   surface-visible.
+
+Apply it **transitively**. If B is itself a dependency of C, rebuilding A means rebuilding
+B before building C, or C inherits the same staleness one level down.
+
+### Why it is stated as an invariant
+
+It fails in both directions, and each direction is dangerous:
+
+- **False green.** A green check over stale `dist` proves nothing about the consumer. The
+  type exists in source and will ship correctly, so the failure lands later - at install
+  or at publish, not at review.
+- **False red.** A stale `dist` reports an error for code that is correct, which invites
+  the exact wrong repair: weakening the consumer to match an artifact nobody will ship.
+
+Both were live here. The honest read is that `npm run check` is a *necessary* gate and
+never a *sufficient* one for a cross-package change.
+
+### How to avoid it cheaply
+
+For a change that touches an exported contract, run the full `npm run build` rather than
+stopping at `check`. The build is slower and it is the only command that proves the
+dependency actually agrees with the shipped declarations.
