@@ -94,3 +94,68 @@ back through the event stream.
 Note that the environmental count is measured, not assumed: several tests that appeared
 environmental turned out to be cwd and budget defects, which is why each was chased to a
 cause rather than filed.
+
+---
+
+## Follow-up campaign: 106 -> 45 failures, every cause measured
+
+Continued from `748786749`. The "62 to work through" above were worked individually — no
+bulk classification — and the count is now **45**, every one with an established cause.
+Full detail in `docs/failure-classification.md`.
+
+### What the campaign fixed, and the single defect class behind all of it
+
+The dominant class was **fixtures that never reached the code they were written to
+test**, so the suite reported a loader error, a missing string, or an absent event where
+it should have reported the behaviour:
+
+| Cause | Files | Symptom it produced |
+|---|---|---|
+| `--import` given a path, not a `file://` URL | 7 | `ERR_UNSUPPORTED_ESM_URL_SCHEME ... Received protocol 'c:'` |
+| hardcoded POSIX path literal (`/tmp`, `/`, `~`) | 9 | `expected '/home/user/project' to be '~\\project'` |
+| stale upstream model id | 5 | `TypeError: Cannot convert undefined or null to object` |
+| hardcoded tool list | 2 | `expected 9 tools, received 16` |
+| dead Windows `.cmd` guard | 2 | `expected 'exited with code 23', got "not managed by a global pnpm install"` |
+| non-hermetic test (ambient `OPENAI_API_KEY`) | 1 | `expected {status:'ready'} to equal {status:'not_ready'}` |
+
+That is the "silent instrument" shape from above, one level down: each returned a
+confident answer about something other than the property under test.
+
+### Two real product defects found behind them
+
+Not fixture problems, found only because the fixtures were fixed and the tests then ran:
+
+1. **`generate-models.ts` named a retired model id**, so `DeepSeek-V4-Pro-0813` was
+   published with **no `thinkingFormat`, no `supportsReasoningEffort`, and the wrong
+   thinking-level map**. Nothing failed; the model silently lost its reasoning controls.
+2. **`shortenImagePath` emitted `~\.pi\agent\shot.png`** in the TUI image fallback — a
+   POSIX `~` with a Windows separator, not a path any shell accepts. The prefix test
+   accepted both separators; the replacement did not normalise.
+
+Plus a stale provider default (`nvidia/nemotron-3-super-120b-a12b`, **retired** by NVIDIA
+rather than renamed) that left a provider with no default model at all.
+
+### The 45 that remain are not locally fixable
+
+    26  Windows transport gap           one cause, no alternative transport, security design
+     5  npm custom-prefix refusal      deliberate refusal, correctly implemented
+     3  jiti tsconfigPaths cost        upstream defect, no local fix available
+     1  session_start sendUserMessage  a real gap; every fix is a design decision
+     1  ledger monotonicity            a deliberately falsified test premise
+     1  bash pwd translation           owning layer not established
+     1  compaction auth ordering       pre-existing
+     7  load-sensitive                 pass promptly in isolation, verified one by one
+
+### The credit blocker is unchanged and now precisely bounded
+
+Re-verified against the product's own completion path, not inferred from a status code:
+
+    GET  openrouter.ai/api/v1/models   -> key works, 466 models   (free endpoint)
+    POST a real completion             -> 402 billing_error
+                                        "This account never purchased credits"
+    POST api.openai.com with OPENAI_API_KEY -> 401; that variable holds an sk-or-v1- token
+
+So the 79 `packages/ai` failures are confirmed by observation, and none is a code
+defect. Steps 1-5 and 9-11 of the paid-evidence loop cannot run until credits exist.
+Steps 6, 7 and 12 did run: `npm run check` exit 0, `npm run build` exit 0, and every
+failure classified above.
