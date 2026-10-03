@@ -43,8 +43,15 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	moonshotai: "kimi-k2.6",
 	"moonshotai-cn": "kimi-k2.6",
 	huggingface: "moonshotai/Kimi-K2.6",
-	fireworks: "accounts/fireworks/models/kimi-k2p6",
-	together: "moonshotai/Kimi-K2.6",
+	// Both ids below were renamed upstream, and a default that names a model the
+	// catalog no longer contains resolves to nothing - so the provider silently offered
+	// no default instead of failing loudly. Verified against models.dev, where
+	// `fireworks-ai`'s kimi ids are `models/kimi-k3`, `routers/kimi-k3-fast`,
+	// `routers/kimi-fast-latest` and `routers/kimi-latest`, and `togetherai`'s only kimi
+	// id is `moonshotai/Kimi-K3`. `test/model-resolver.test.ts` enforces this for every
+	// provider, which is how the drift surfaced.
+	fireworks: "accounts/fireworks/models/kimi-k3",
+	together: "moonshotai/Kimi-K3",
 	baseten: "zai-org/GLM-5.2",
 	opencode: "kimi-k2.6",
 	"opencode-go": "kimi-k2.6",
