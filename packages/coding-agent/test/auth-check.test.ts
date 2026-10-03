@@ -9,6 +9,21 @@ import { parseAuthCommand } from "../src/cli/auth-command.ts";
 import { AuthStorage, ReadOnlyAuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 
+/**
+ * These tests assert what happens when a provider has **no** configured credential.
+ * That is only a meaningful assertion if the machine running them has none either:
+ * `ModelRuntime.create` legitimately falls back to ambient environment credentials,
+ * so with `OPENAI_API_KEY` exported the "no credentials" cases report `ready` and the
+ * two negative tests fail for a reason that has nothing to do with the code.
+ *
+ * Verified on this machine, where the variable was set to an OpenRouter key:
+ * `ambient OPENAI_API_KEY: "sk-or-v1-3c…"` — and `not_ready` was expected.
+ *
+ * Cleared for the whole file rather than per-test, because every negative case in the
+ * suite depends on it. `stubEnv` is restored by vitest's `unstubEnvs` in `afterEach`.
+ */
+const AMBIENT_CREDENTIAL_VARS = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "GEMINI_API_KEY"];
+
 const tempDir = join(tmpdir(), `pi-test-auth-check-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 
 async function createRuntime(credentials: AuthStorage | ReadOnlyAuthStorage): Promise<ModelRuntime> {
@@ -25,10 +40,14 @@ describe("auth check command", () => {
 	beforeEach(() => {
 		if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
 		mkdirSync(tempDir, { recursive: true });
+		// See AMBIENT_CREDENTIAL_VARS: an exported provider key would make every
+		// "no credentials configured" case report `ready` instead.
+		for (const name of AMBIENT_CREDENTIAL_VARS) vi.stubEnv(name, "");
 	});
 
 	afterEach(() => {
 		if (existsSync(tempDir)) rmSync(tempDir, { recursive: true });
+		vi.unstubAllEnvs();
 	});
 
 	test("reports a configured provider as ready", async () => {
