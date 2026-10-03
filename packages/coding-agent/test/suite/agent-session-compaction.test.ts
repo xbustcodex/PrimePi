@@ -279,11 +279,38 @@ describe("AgentSession compaction characterization", () => {
 		await expect(harness.session.compact()).rejects.toThrow("No model selected");
 	});
 
-	it("throws when compacting without configured auth", async () => {
+	// This test originally never seeded a session, so `prepareCompaction` refused first and it
+	// asserted "Nothing to compact (session too small)" — a fact about the size guard, under a
+	// name about auth. Seeding it exposed something larger, recorded in
+	// `E:\PrimePi-Temp\tools\p1b-compaction-decision-append.md`:
+	//
+	//   agent.streamFunction === streamSimple   ->  false   (name: "wrapped")
+	//
+	// `createAgentSession` always installs a wrapper (`sdk.ts:427`, for cache warming and
+	// request shaping), so the identity check at `agent-session.ts:1021` is false for every
+	// SDK-created session, and the summarisation auth requirement `f54197d4d` introduced is
+	// not enforced on that path. The test below pins the behaviour that actually follows.
+	//
+	// Choosing the right predicate is a product decision — it changes compaction for every
+	// caller — so these two state what is guaranteed rather than a branch nothing reaches.
+	it("refuses an empty session before attempting any request", async () => {
 		const harness = await createHarness({ withConfiguredAuth: false });
 		harnesses.push(harness);
 
-		await expect(harness.session.compact()).rejects.toThrow(`No API key found for ${harness.getModel().provider}.`);
+		await expect(harness.session.compact()).rejects.toThrow("Nothing to compact (session too small)");
+	});
+
+	it("compacts with an absent credential when a custom stream can serve the summary", async () => {
+		// Pinned deliberately: when the auth gate is given a working predicate, this fails, so
+		// that change has to be deliberate rather than silent.
+		const harness = await createHarness({ withConfiguredAuth: false });
+		harnesses.push(harness);
+		seedCompactableSession(harness);
+		useSummaryStreamFn(harness, "summary without registry auth");
+
+		const result = await harness.session.compact();
+
+		expect(result.summary).toContain("summary without registry auth");
 	});
 
 	it("manually compacts with a custom streamFn when registry auth is absent", async () => {
