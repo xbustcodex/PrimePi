@@ -96,7 +96,36 @@ describe("createAgentSession session manager defaults", () => {
 			.map((item) => item.text)
 			.join("");
 
-		expect(realpathSync(output.trim())).toBe(realpathSync(sessionCwd));
+		// The bash tool runs a **POSIX shell** on Windows on purpose — `grep` flags, `&&`
+		// chaining, `/dev/null`, and approval patterns written against `rm -rf /tmp/*` all
+		// assume it (see core/shell/approval-patterns.ts:9). Git Bash is an MSYS layer with a
+		// POSIX view of the filesystem, so its `pwd` answers in that view. Probed directly:
+		//
+		//     Git Bash  pwd     ->  "/tmp/pi-msys-probe"
+		//     Git Bash  pwd -W  ->  "C:/Users/xkali/AppData/Local/Temp/pi-msys-probe"
+		//
+		// Both are correct, and `realpathSync` cannot bridge them because the POSIX spelling is
+		// not a Windows path. So the guarantee asserted here is the one that actually holds:
+		// the tool runs in the directory the session was created with, in whichever view the
+		// shell uses. On POSIX that is a string comparison; on Windows the shell is the only
+		// component that knows the mapping, so it is asked.
+		const reported = output.trim();
+		if (process.platform === "win32") {
+			const windowsForm = await bashTool!.execute("test", { command: "pwd -W" });
+			const windowsText = windowsForm.content
+				.filter((item): item is { type: "text"; text: string } => item.type === "text")
+				.map((item) => item.text)
+				.join("")
+				.trim();
+			// Either spelling is accepted, provided the shell itself agrees they name the same
+			// directory. A shell pointed somewhere else fails both ways.
+			const candidates = [reported, windowsText].filter((value) => value.length > 0);
+			expect(candidates.some((value) => existsSync(value) && realpathSync(value) === realpathSync(sessionCwd))).toBe(
+				true,
+			);
+		} else {
+			expect(realpathSync(reported)).toBe(realpathSync(sessionCwd));
+		}
 
 		session.dispose();
 	});
