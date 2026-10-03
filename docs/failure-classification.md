@@ -1,5 +1,10 @@
 # Failure classification: every remaining suite failure, with evidence
 
+> **Final state after the P0–P3 campaign: 106 → 22 failures in `packages/coding-agent`,
+> and `packages/client` and `packages/server` are fully green.** Sections B and the load
+> cases below are retained as the record of *how* each was decided, with the outcome noted
+> at the top of each.
+
 **45 failures across 13 files. Every one reproduced and classified by measurement.
 None is a regression from this campaign.**
 
@@ -268,3 +273,50 @@ Every repair was test-side, and every one had been hiding the thing it existed t
   never matched, and the fixture fell through to the failure it was asserting.
 - **A non-hermetic test**: ambient `OPENAI_API_KEY` made "no credentials configured" cases
   report `ready`.
+
+
+---
+
+## Final state
+
+    packages/coding-agent   22 failed | 3998 passed | 65 skipped   (was 106 failed at 748786749)
+    packages/client          0 failed |   32 passed | 11 skipped
+    packages/server          0 failed |   44 passed |  7 skipped
+    npm run check            exit 0, 0 errors, 0 warnings
+    npm run build            exit 0, 0 errors
+    tsgo --noEmit            0 errors
+    evidence ladder          0 violations, independent cross-check agrees at 69
+
+### The 22 that remain, and why each cannot be fixed locally
+
+| count | file | cause | why it stays |
+|---|---|---|---|
+| 14 | `experimental-remote-runtime.test.ts` | Windows cannot enumerate named pipes, so discovery-of-a-running-server and multi-server selection are unavailable | needs a registry file — new persisted state with its own staleness and ownership rules. `docs/handoff/` and `E:\PrimePi-Temp\tools\windows-discovery-gap.md` set out three options and a recommendation |
+| 3 | `trust-selector.test.ts` | module-load bound | passes alone (4 passed, 4.06s wall, 92ms of test time). PD-14 |
+| 2 | `interactive-mode-status.test.ts` | module-load bound | passes alone (33 passed, 31.92s wall, **313ms** of test time). PD-14 |
+| 1 | `bash-close-hang-windows.test.ts` | intermittent under suite contention | passes alone |
+| 1 | `extensions-discovery.test.ts` | jiti `tsconfigPaths` costs ~1.8s **per extension import** | byte-identical to upstream pi (`5fd446ca`). A real product startup cost |
+| 1 | `suite/regressions/extension-factory-cache.test.ts` | same defect | same |
+
+### Three genuine defects were found and fixed *behind* the failures
+
+1. **`process.ts:51` passed a path to `--import`, which takes a URL.** Every coordinator,
+   server and session worker died at spawn on Windows. The same bug existed in test
+   harnesses and was fixed there first (`70b42aba6`); production was missed because
+   nothing exercised it on this platform.
+2. **`createWindowsNamedPipeTransportFactory` was re-exported from the client root index**,
+   which put `node:net` into the browser bundle. `npm run check:browser-smoke` caught it.
+   Platform transports belong behind a subpath, as `./unix` already was.
+3. **`shortenImagePath` emitted `~\.pi\agent\shot.png`** — a POSIX tilde with a Windows
+   separator, which is not a path any shell accepts.
+
+### One defect was found and *not* fixed, deliberately
+
+The summarisation auth gate at `agent-session.ts:1021` compares
+`agent.streamFunction === streamSimple`, and `sdk.ts:427` always installs a wrapper — so
+for any session created through `createAgentSession` the branch never fires, and the
+requirement `f54197d4d` introduced is not enforced on that path. The correct predicate is a
+product decision: a declared capability, or always requiring auth, which would conflict
+with the sibling test asserting that a custom stream may compact without registry
+credentials. A test now **pins the current behaviour** so the eventual change is deliberate
+rather than silent.
