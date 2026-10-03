@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import {
@@ -354,8 +354,27 @@ describe("path helpers", () => {
 	});
 });
 
+/**
+ * The repository root, resolved from this file.
+ *
+ * `process.cwd()` is the repo root when this file is invoked directly and the package
+ * directory under the suite runner, so a path built from it resolves to
+ * `<package>/packages/coding-agent/...` - which does not exist - and the test fails in
+ * one invocation and passes in the other. This assertion shipped with that ambiguity:
+ * it was green when the file was run directly and red under vitest, which is why it sat
+ * in the failure list looking like a Phase 1 regression when nothing about the settings
+ * format had changed.
+ *
+ * See the identical note in `auto-resume-wiring.test.ts`, which established this
+ * convention.
+ */
+const REPO_ROOT = resolve(import.meta.dirname, "..", "..", "..");
+
 describe("persistence artifacts untouched by Phase 1", () => {
+	// The shrinkwrap is the artifact that would change if the settings registry started
+	// writing a new file format, so asserting its presence is the cheap guard. It is
+	// generated at `prepublishOnly` and tracked, so its absence is a real regression.
 	it("does not introduce a settings file format change", () => {
-		expect(existsSync(join(process.cwd(), "packages", "coding-agent", "npm-shrinkwrap.json"))).toBe(true);
+		expect(existsSync(join(REPO_ROOT, "packages", "coding-agent", "npm-shrinkwrap.json"))).toBe(true);
 	});
 });

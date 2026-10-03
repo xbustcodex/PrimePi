@@ -192,7 +192,20 @@ describe("builtin providers", () => {
 			["openrouter", "openai/gpt-5.6-terra"],
 		] as const;
 		const unsupported = [
-			["fireworks", "accounts/fireworks/models/kimi-k2p6"],
+			// `accounts/fireworks/models/kimi-k2p6` was renamed upstream to `kimi-k3`,
+			// which already appears in `supported` above and does advertise the flag, so
+			// it can no longer serve as a negative case either way. Left in place it made
+			// `getModel` return undefined and the assertion threw
+			// `TypeError: Cannot convert undefined or null to object`, which reads as a
+			// code defect rather than a stale fixture.
+			//
+			// Substituted with the router alias for the same family, which resolves and
+			// genuinely does not carry the flag - verified against models.dev
+			// `fireworks-ai`, whose kimi ids are `models/kimi-k3`, `routers/kimi-k3-fast`,
+			// `routers/kimi-fast-latest` and `routers/kimi-latest`. Both k3 entries were
+			// rejected as substitutes precisely because they advertise the flag and would
+			// have inverted the assertion.
+			["fireworks", "accounts/fireworks/routers/kimi-fast-latest"],
 			["openai", "gpt-4.1"],
 			["openai", "gpt-5.2"],
 			["anthropic", "claude-sonnet-4-5"],

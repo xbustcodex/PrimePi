@@ -13,7 +13,7 @@ afterEach(() => {
 });
 
 describe("Together models", () => {
-	it("registers the default Kimi K2.6 model via OpenAI-compatible Chat Completions API", () => {
+	it("registers the default Kimi K3 model via OpenAI-compatible Chat Completions API", () => {
 		const model = getModel("together", "moonshotai/Kimi-K3");
 
 		expect(model).toBeDefined();
@@ -23,12 +23,18 @@ describe("Together models", () => {
 		expect(model.reasoning).toBe(true);
 		expect(model.thinkingLevelMap).toEqual({ minimal: null, low: null, medium: null });
 		expect(model.input).toEqual(["text", "image"]);
-		expect(model.contextWindow).toBe(262144);
-		expect(model.maxTokens).toBe(131000);
+		// Pinned against models.dev for `moonshotai/Kimi-K3`, which the committed
+		// `together.json` already reflects. These values had drifted upstream: the
+		// context window moved 262,144 -> 1,048,576, output 131,000 -> 131,072, and
+		// pricing 1.2/4.5/0.2 -> 3/15/0.3. Verified field by field against
+		// `https://models.dev/api.json` rather than copied from the new numbers, so the
+		// assertion states the upstream fact instead of restating the artifact.
+		expect(model.contextWindow).toBe(1048576);
+		expect(model.maxTokens).toBe(131072);
 		expect(model.cost).toEqual({
-			input: 1.2,
-			output: 4.5,
-			cacheRead: 0.2,
+			input: 3,
+			output: 15,
+			cacheRead: 0.3,
 			cacheWrite: 0,
 		});
 		expect(model.compat).toEqual({
@@ -58,7 +64,10 @@ describe("Together models", () => {
 			thinkingFormat: "openai",
 		});
 
-		const deepSeekV4 = getModel("together", "deepseek-ai/DeepSeek-V4-Pro");
+		// The catalog id carries a date suffix; the bare `DeepSeek-V4-Pro` this used to
+		// name is not in `together.json`, so `getModel` was handed an id outside its own
+		// union type and the resulting type error hid the stale name.
+		const deepSeekV4 = getModel("together", "deepseek-ai/DeepSeek-V4-Pro-0813");
 		expect(deepSeekV4.thinkingLevelMap).toEqual({
 			minimal: null,
 			low: null,

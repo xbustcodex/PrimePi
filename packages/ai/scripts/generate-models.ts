@@ -198,7 +198,13 @@ const TOGETHER_REASONING_ONLY_MODELS = new Set([
 	"MiniMaxAI/MiniMax-M2.7",
 ]);
 const TOGETHER_REASONING_EFFORT_MODELS = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
-const TOGETHER_TOGGLE_REASONING_EFFORT_MODELS = new Set(["deepseek-ai/DeepSeek-V4-Pro"]);
+// The catalog's id is `deepseek-ai/DeepSeek-V4-Pro-0813`; the bare
+// `deepseek-ai/DeepSeek-V4-Pro` this used to name no longer exists, so every lookup
+// below missed and DeepSeek-V4-Pro-0813 was published with no `thinkingFormat`, no
+// `supportsReasoningEffort`, and the generic three-level map instead of the
+// DeepSeek-V4 map that was written for it. Both the compat fields and the level map
+// are gated on this one set, so the miss disabled the whole branch.
+const TOGETHER_TOGGLE_REASONING_EFFORT_MODELS = new Set(["deepseek-ai/DeepSeek-V4-Pro-0813"]);
 const TOGETHER_FIXED_REASONING_LEVEL_MAP = {
 	off: null,
 	minimal: null,

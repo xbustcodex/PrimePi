@@ -8,7 +8,12 @@ const EXPECTED_CURRENT_ADAPTIVE_THINKING_MODELS = [
 	"anthropic/claude-opus-5",
 	"anthropic/claude-sonnet-5",
 	"cloudflare-ai-gateway/claude-fable-5",
-	"fireworks/accounts/fireworks/models/deepseek-v4-flash-0731",
+	// Was `deepseek-v4-flash-0731`; renamed upstream to `deepseek-v4p1-flash`, so the old
+	// id resolved to nothing and the exact `arrayContaining` below lost this entry.
+	// Verified against models.dev `fireworks-ai`, whose only deepseek ids are
+	// `models/deepseek-v4p1-flash` and `routers/deepseek-flash-latest`; both carry
+	// `forceAdaptiveThinking`, so the entry keeps its meaning rather than being dropped.
+	"fireworks/accounts/fireworks/models/deepseek-v4p1-flash",
 	"fireworks/accounts/fireworks/models/gpt-oss-120b",
 	"fireworks/accounts/fireworks/models/qwen3p8-max",
 	"kimi-coding/kimi-for-coding",
