@@ -1022,29 +1022,27 @@ export class AgentSession {
 			return this._getRequiredRequestAuth(model, signal);
 		}
 
-		try {
-			const result = await this._modelRuntime.getAuth(model, { signal });
-			if (!result) return { model };
-			const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
-			return {
-				model: requestModel,
-				apiKey: result.auth.apiKey,
-				headers: withoutDeletedHeaders(result.auth.headers),
-				env: result.env,
-			};
-		} catch (error) {
-			// **A failure to resolve auth must not become an unauthenticated request.**
-			// The original code caught every error here and returned `{ model }` — no key, no
-			// headers — so an expired credential during summarization was sent to the
-			// provider with nothing attached. The provider then rejected it with a message
-			// about the *request* rather than about the credential, and the local cause was
-			// gone. `_getRequiredRequestAuth`, which serves the ordinary request path, has
-			// always thrown here; summarization was the odd one out.
-			//
-			// Aborts need no special case: an aborted signal surfaces as an AbortError, and
-			// rethrowing preserves that exactly.
-			throw error;
-		}
+		// **A failure to resolve auth must not become an unauthenticated request.**
+		//
+		// This used to catch every error and return `{ model }` — no key, no headers — so an
+		// expired credential during summarization was sent to the provider with nothing
+		// attached. The provider then rejected it with a message about the *request* rather
+		// than about the credential, and the local cause was gone by the time anyone read
+		// it. `_getRequiredRequestAuth`, which serves the ordinary request path, has always
+		// thrown here; summarization was the odd one out.
+		//
+		// No try/catch at all now: an error from `getAuth` propagates unchanged, so an
+		// aborted signal still surfaces as an AbortError and every other failure keeps
+		// its own cause rather than being flattened.
+		const result = await this._modelRuntime.getAuth(model, { signal });
+		if (!result) return { model };
+		const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
+		return {
+			model: requestModel,
+			apiKey: result.auth.apiKey,
+			headers: withoutDeletedHeaders(result.auth.headers),
+			env: result.env,
+		};
 	}
 
 	/**

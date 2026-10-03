@@ -75,12 +75,31 @@ function makeSelfUpdateCommandStep(command: string, args: string[]): SelfUpdateC
 	};
 }
 
+/**
+ * How this installation was installed.
+ *
+ * **The package location comes from {@link getPackageDir},** the single authority, and
+ * not from `__dirname` directly. `getPackageDir()` honours `PI_PACKAGE_DIR`, which
+ * `docs/environment-variables.md` documents as a supported override for Nix/Guix store
+ * paths; deriving the location independently here meant the override applied to every
+ * other consumer and was silently ignored for install detection, which is the same
+ * split this removed.
+ *
+ * `process.execPath` is still consulted. It describes how the running binary was
+ * launched - a fact about the process rather than a configured input - and it is what
+ * distinguishes a Bun binary from a Bun global install when both are in play.
+ *
+ * This detects and describes; it never acts. Every consumer goes on to decide whether
+ * an update may run, and the hard self-update barrier
+ * (`utils/self-update-barrier.ts`, consulted in `package-manager-cli.ts` before any of
+ * this is reached) is independent of what is returned here.
+ */
 export function detectInstallMethod(): InstallMethod {
 	if (isBunBinary) {
 		return "bun-binary";
 	}
 
-	const resolvedPath = `${__dirname}\0${process.execPath || ""}`.toLowerCase().replace(/\\/g, "/");
+	const resolvedPath = `${getPackageDir()}\0${process.execPath || ""}`.toLowerCase().replace(/\\/g, "/");
 
 	if (resolvedPath.includes("/pnpm/") || resolvedPath.includes("/.pnpm/")) {
 		return "pnpm";

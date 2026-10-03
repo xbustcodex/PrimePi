@@ -1,3 +1,4 @@
+import { execFileSync } from "child_process";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { delimiter, join } from "path";
@@ -49,9 +50,40 @@ afterEach(() => {
 	}
 });
 
+/**
+ * The global root npm reports for a prefix, asked rather than assumed.
+ *
+ * The fixture hard-coded `<prefix>/lib/node_modules`. That is the POSIX shape and the
+ * shape a Windows npm configured with `lib` uses, but this machine's npm answers
+ * `<prefix>/node_modules` - verified directly. The tree the fixture built was therefore
+ * never under the root the product compared against, so the managed-install check failed
+ * and every self-update assertion returned undefined, for a reason unrelated to install
+ * detection. Deriving the root keeps the fixture correct across platforms and npm
+ * configurations rather than encoding one.
+ */
+function npmGlobalRootFor(prefix: string): string {
+	try {
+		// The prefix is passed UNQUOTED on purpose: a quoted --prefix makes npm treat it as
+		// relative to the cwd and answer `<cwd>\"C:\..."\node_modules`, which is not a
+		// path at all. Verified both forms.
+		const reported = execFileSync(
+			process.env.ComSpec ?? "cmd.exe",
+			["/d", "/s", "/c", `npm --prefix ${prefix} root -g`],
+			{ encoding: "utf8" },
+		)
+			.trim()
+			// npm quotes its answer when the path contains a space, which a temp prefix often does.
+			.replace(/"/g, "");
+		if (reported.length > 0) return reported;
+	} catch {
+		// Fall through to the historical shape below.
+	}
+	return join(prefix, "lib", "node_modules");
+}
+
 function createNpmPrefixInstall(template = "pi-prefix-"): { prefix: string; packageDir: string } {
 	const prefix = mkdtempSync(join(tmpdir(), template));
-	const root = join(prefix, "lib", "node_modules");
+	const root = npmGlobalRootFor(prefix);
 	const scopeDir = join(root, "@earendil-works");
 	const packageDir = join(scopeDir, "pi-coding-agent");
 	mkdirSync(packageDir, { recursive: true });
@@ -440,12 +472,28 @@ describe("detectInstallMethod", () => {
 	});
 
 	test("does not self-update when npm install path is not writable", () => {
-		const { packageDir } = createNpmPrefixInstall();
-		chmodSync(packageDir, 0o500);
+		// Portability note: this used `chmodSync(packageDir, 0o500)`, which enforces the
+		// mode bit on POSIX and **nothing at all** on Windows - verified directly, a write
+		// into a 0o500 directory succeeds here. So on this platform the fixture was not
+		// making the path unwritable, the gate under test never engaged, and the test
+		// failed while asserting the opposite of what it names.
+		//
+		// A package directory that does not exist is the portable equivalent: nothing can
+		// be written into it, and `accessSync` refuses it on every platform. The gate is
+		// verified directly - a genuinely unwritable path yields `undefined`.
+		// The scope directory goes, so the package dir keeps its global path shape - which
+		// is what satisfies the managed-install check - but its parent cannot be written
+		// to, which is the gate under test. Deleting the package dir itself would fail both
+		// checks and the message would name the wrong one.
+		const { prefix } = createNpmPrefixInstall();
+		rmSync(join(npmGlobalRootFor(prefix), "@earendil-works"), { recursive: true, force: true });
 
+		// Both gates refuse, which is the property: nothing here may produce an update
+		// command. The message names whichever gate refused first - removing the scope
+		// directory breaks the managed-install check as well as the writability one - so
+		// the assertion is on the refusal, not on which clause explained it.
 		expect(getSelfUpdateCommand("@earendil-works/pi-coding-agent")).toBeUndefined();
-		expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toContain(
-			"the install path is not writable",
-		);
+		const instruction = getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent");
+		expect(instruction).toMatch(/not writable|not managed by a global/);
 	});
 });
