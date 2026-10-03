@@ -32,15 +32,21 @@ test("requires explicit listeners and a canonical UUIDv4 server identity", () =>
 	expect(() => new Server(host, { listeners: [], serverId: "invalid-server" })).toThrow(/serverId/);
 });
 
-test("rejects concurrent start calls without leaking the Unix listener", async () => {
-	const path = await makeSocketPath();
-	server = createUnixServer(host, { path, serverId: "00000000-0000-4000-8000-000000000001" });
-	const starting = server.start();
-	await expect(server.start()).rejects.toThrow(/starting/);
-	await starting;
-	await server.close();
-	await expect(lstat(path)).rejects.toMatchObject({ code: "ENOENT" });
-});
+// A real AF_UNIX listener cannot be bound on Windows, so this test cannot run there.
+// The Windows transport has its own coverage in `windows-named-pipe-auth.test.ts`.
+// Gated rather than failing: nothing in the body is reachable on this platform.
+test.runIf(process.platform !== "win32")(
+	"rejects concurrent start calls without leaking the Unix listener",
+	async () => {
+		const path = await makeSocketPath();
+		server = createUnixServer(host, { path, serverId: "00000000-0000-4000-8000-000000000001" });
+		const starting = server.start();
+		await expect(server.start()).rejects.toThrow(/starting/);
+		await starting;
+		await server.close();
+		await expect(lstat(path)).rejects.toMatchObject({ code: "ENOENT" });
+	},
+);
 
 test("handshake timeout closes with a final hello_error frame", async () => {
 	let resolveClosed: (() => void) | undefined;

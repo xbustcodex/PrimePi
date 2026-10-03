@@ -1,6 +1,7 @@
 import { type ChildProcess, fork } from "node:child_process";
 import { once } from "node:events";
 import { lstat, mkdtemp, readdir, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 import type { Server } from "../src/index.ts";
@@ -13,7 +14,7 @@ const children = new Set<ChildProcess>();
 const tempDirectories = new Set<string>();
 
 async function makeSocketPath(nested = false): Promise<string> {
-	const directory = await mkdtemp(join("/tmp", "ps-"));
+	const directory = await mkdtemp(join(tmpdir(), "ps-"));
 	tempDirectories.add(directory);
 	return nested ? join(directory, "p", "n", "server.sock") : join(directory, "server.sock");
 }
@@ -38,33 +39,43 @@ afterEach(async () => {
 	tempDirectories.clear();
 });
 
-test("creates an in-memory server ID and derives its explicit Unix socket path", async () => {
-	const directory = await mkdtemp(join("/tmp", "pi-server-"));
-	tempDirectories.add(directory);
-	const serverId = "00000000-0000-4000-8000-000000000001";
-	const path = getUnixSocketPath(serverId, directory);
+// A real AF_UNIX listener cannot be bound on Windows, so this test cannot run there.
+// The Windows transport has its own coverage in `windows-named-pipe-auth.test.ts`.
+// Gated rather than failing: nothing in the body is reachable on this platform.
+test.runIf(process.platform !== "win32")(
+	"creates an in-memory server ID and derives its explicit Unix socket path",
+	async () => {
+		const directory = await mkdtemp(join(tmpdir(), "pi-server-"));
+		tempDirectories.add(directory);
+		const serverId = "00000000-0000-4000-8000-000000000001";
+		const path = getUnixSocketPath(serverId, directory);
 
-	expect(path).toBe(join(directory, `${serverId}.sock`));
-	const first = createUnixServer(new TestServerHost(), { serverId, path });
-	servers.add(first);
-	await first.start();
-	const firstClient = await connectUnixTestClient(path);
-	clients.add(firstClient);
-	expect(await firstClient.hello()).toMatchObject({ serverId });
-	await firstClient.close();
-	clients.delete(firstClient);
-	await first.close();
-	servers.delete(first);
+		expect(path).toBe(join(directory, `${serverId}.sock`));
+		const first = createUnixServer(new TestServerHost(), { serverId, path });
+		servers.add(first);
+		await first.start();
+		const firstClient = await connectUnixTestClient(path);
+		clients.add(firstClient);
+		expect(await firstClient.hello()).toMatchObject({ serverId });
+		await firstClient.close();
+		clients.delete(firstClient);
+		await first.close();
+		servers.delete(first);
 
-	const replacement = createUnixServer(new TestServerHost(), { serverId, path });
-	servers.add(replacement);
-	await replacement.start();
-	const replacementClient = await connectUnixTestClient(path);
-	clients.add(replacementClient);
-	expect(await replacementClient.hello()).toMatchObject({ serverId });
-});
+		const replacement = createUnixServer(new TestServerHost(), { serverId, path });
+		servers.add(replacement);
+		await replacement.start();
+		const replacementClient = await connectUnixTestClient(path);
+		clients.add(replacementClient);
+		expect(await replacementClient.hello()).toMatchObject({ serverId });
+	},
+);
 
-describe("Unix listener filesystem lifecycle", () => {
+// Every test in this block binds a real AF_UNIX socket and inspects its filesystem
+// entry — the inode and permission checks the POSIX listener is built on. None of that
+// exists for a Windows named pipe, which is a kernel object with no directory entry.
+// The Windows transport has its own coverage in `windows-named-pipe-auth.test.ts`.
+describe.runIf(process.platform !== "win32")("Unix listener filesystem lifecycle", () => {
 	test("rejects a live listener without unlinking it", async () => {
 		const path = await makeSocketPath();
 		const first = makeServer(path);
