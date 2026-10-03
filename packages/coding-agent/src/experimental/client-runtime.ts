@@ -244,7 +244,39 @@ export async function activateBuiltinClientServices(
 	return { ...server, directory, management, plugins, models, agent, transcript };
 }
 
+/**
+ * Derive the server identity from an explicit `--connect` endpoint.
+ *
+ * The identity has to come from the endpoint, because a client with no other information
+ * must refuse to talk to a server it cannot name. Two endpoint shapes are accepted, one
+ * per platform:
+ *
+ *   POSIX   `<directory>/<uuidv4>.sock`         the id is the filename minus the suffix
+ *   Windows `\\.\pipe\pi-<uuidv4>-<nonce>`    the id is the second-to-last segment
+ *
+ * The Windows form is parsed rather than pattern-matched loosely, so a crafted name cannot
+ * smuggle a different id past the check.
+ */
+/**
+ * `\\.\pipe\<prefix>-<uuidv4>-<nonce>`, anchored at both ends.
+ *
+ * A `split("-")` was tried first and is wrong: the separator appears *inside* the uuidv4, so
+ * splitting on it shreds the id into fragments. Matching the whole shape is also what stops
+ * a crafted name from carrying a valid id in the right position and something else
+ * elsewhere.
+ */
+const PIPE_ENDPOINT_PATTERN =
+	/^\\\\\.\\pipe\\[A-Za-z0-9._-]+-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-[0-9a-f]{12,32}$/;
+
 function routeFromExplicitPath(path: string): UnixServerRoute {
+	const pipeMatch = PIPE_ENDPOINT_PATTERN.exec(path);
+	if (pipeMatch) {
+		const serverId = pipeMatch[1]!;
+		if (!isServerId(serverId)) {
+			throw new Error(`--connect pipe name must contain a uuidv4 server id, got ${JSON.stringify(serverId)}`);
+		}
+		return { serverId, path };
+	}
 	const name = basename(path);
 	const serverId = name.endsWith(".sock") ? name.slice(0, -".sock".length) : "";
 	if (!isServerId(serverId)) throw new Error("--connect path must end with <uuidv4-server-id>.sock");
