@@ -3,9 +3,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localEndpointIsNamedPipe } from "../src/experimental/local-client-endpoint.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { readFacetBundleManifest } from "@earendil-works/chord/node";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	activateBuiltinClientServices,
 	type ClientRuntime,
@@ -28,6 +29,8 @@ import { PresentationPlugins } from "../src/experimental/services/plugins.ts";
  */
 const scratch = (prefix: string): Promise<string> => mkdtemp(join(tmpdir(), prefix));
 
+const TEST_AUTH_TOKEN = "test-auth-token-not-a-real-secret";
+
 const runtimes = new Set<ClientRuntime>();
 const runningServers = new Set<RunningServer>();
 const directories = new Set<string>();
@@ -42,6 +45,12 @@ afterEach(async () => {
 });
 
 describe("server-selected presentation facets", () => {
+	beforeEach(() => {
+		// A named pipe cannot be restricted to the owner by `node:net`, so the server and
+		// client share a credential. Ignored on POSIX, where the `0600` socket inside a
+		// `0700` directory already does that work.
+		if (localEndpointIsNamedPipe()) vi.stubEnv("PI_SERVER_AUTH_TOKEN", TEST_AUTH_TOKEN);
+	});
 	test("rejects local plugin paths for Radius servers", async () => {
 		await expect(
 			openClientRuntime({
@@ -136,7 +145,13 @@ describe("server-selected presentation facets", () => {
 		runningServers.add(running);
 		const runtime = await openClientRuntime({
 			command: "client",
-			connect: { transport: "unix", path: running.socketPath },
+			// The endpoint this platform actually bound: a `0600` socket on POSIX, a named
+			// pipe plus a shared credential on Windows. Naming it "unix" unconditionally
+			// described a transport that does not exist here.
+			connect: {
+				transport: localEndpointIsNamedPipe() ? "named-pipe" : "unix",
+				path: running.socketPath,
+			},
 			pluginPackages: [packagePath, secondPackagePath],
 		});
 		runtimes.add(runtime);
