@@ -92,6 +92,26 @@ function createNpmPrefixInstall(template = "pi-prefix-"): { prefix: string; pack
 	return { prefix, packageDir };
 }
 
+/**
+ * Assert the npm self-update refusal for a Windows custom prefix.
+ *
+ * `getInferredNpmInstall` declines on Windows on purpose (see the comment in `config.ts`):
+ * a `<prefix>\node_modules` layout is indistinguishable from a project-local checkout, so pi
+ * will not infer a global prefix without `npm root -g` evidence. The tests that assert a
+ * command object are therefore POSIX-only in what they can reach.
+ *
+ * This asserts the behaviour a Windows user actually gets, which is not "nothing happens":
+ * the gate refuses, detection still reports `npm`, and the refusal names the directory and
+ * the command that would work. So the suite represents the refusal instead of failing on it.
+ */
+function assertWindowsNpmPrefixRefusal(prefix: string): void {
+	expect(detectInstallMethod()).toBe("npm");
+	expect(getSelfUpdateCommand("@earendil-works/pi-coding-agent")).toBeUndefined();
+	const refusal = getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent");
+	expect(refusal).toContain(prefix);
+	expect(refusal).toContain("--prefix");
+}
+
 function createPnpmGlobalInstall(): { root: string; packageDir: string } {
 	const temp = mkdtempSync(join(tmpdir(), "pi-pnpm-"));
 	const binDir = join(temp, "bin");
@@ -209,7 +229,17 @@ describe("detectInstallMethod", () => {
 		);
 	});
 
-	test("self-updates npm installs from custom prefixes", () => {
+	// The Windows counterpart of the test below. The command object it asserts is
+	// unreachable here because `getInferredNpmInstall` refuses by design, so this asserts
+	// the refusal instead — which is the behaviour a Windows user actually gets, and is
+	// stronger than "returns undefined": the message must name the directory and the
+	// command that would work.
+	test.runIf(process.platform === "win32")("refuses an npm custom prefix it cannot confirm is global", () => {
+		const { prefix } = createNpmPrefixInstall();
+		assertWindowsNpmPrefixRefusal(prefix);
+	});
+
+	test.runIf(process.platform !== "win32")("self-updates npm installs from custom prefixes", () => {
 		const { prefix } = createNpmPrefixInstall();
 
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent");
@@ -230,30 +260,33 @@ describe("detectInstallMethod", () => {
 		});
 	});
 
-	test("self-updates exact npm versions without uninstalling the current package", () => {
-		const { prefix } = createNpmPrefixInstall();
+	test.runIf(process.platform !== "win32")(
+		"self-updates exact npm versions without uninstalling the current package",
+		() => {
+			const { prefix } = createNpmPrefixInstall();
 
-		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent", undefined, {
-			packageName: "@earendil-works/pi-coding-agent",
-			installSpec: "@earendil-works/pi-coding-agent@1.2.3",
-		});
+			const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent", undefined, {
+				packageName: "@earendil-works/pi-coding-agent",
+				installSpec: "@earendil-works/pi-coding-agent@1.2.3",
+			});
 
-		expect(command).toEqual({
-			command: "npm",
-			args: [
-				"--prefix",
-				prefix,
-				"install",
-				"-g",
-				"--ignore-scripts",
-				"--min-release-age=0",
-				"@earendil-works/pi-coding-agent@1.2.3",
-			],
-			display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent@1.2.3`,
-		});
-	});
+			expect(command).toEqual({
+				command: "npm",
+				args: [
+					"--prefix",
+					prefix,
+					"install",
+					"-g",
+					"--ignore-scripts",
+					"--min-release-age=0",
+					"@earendil-works/pi-coding-agent@1.2.3",
+				],
+				display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent@1.2.3`,
+			});
+		},
+	);
 
-	test("self-updates renamed packages from the current install prefix", () => {
+	test.runIf(process.platform !== "win32")("self-updates renamed packages from the current install prefix", () => {
 		const { prefix } = createNpmPrefixInstall();
 
 		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/pi");
@@ -297,7 +330,7 @@ describe("detectInstallMethod", () => {
 		});
 	});
 
-	test("self-update treats empty npmCommand as unset", () => {
+	test.runIf(process.platform !== "win32")("self-update treats empty npmCommand as unset", () => {
 		const { prefix } = createNpmPrefixInstall();
 
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent", []);
@@ -313,7 +346,7 @@ describe("detectInstallMethod", () => {
 		]);
 	});
 
-	test("quotes npm self-update display paths", () => {
+	test.runIf(process.platform !== "win32")("quotes npm self-update display paths", () => {
 		const { prefix } = createNpmPrefixInstall("pi prefix ");
 
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent");
@@ -488,6 +521,9 @@ describe("detectInstallMethod", () => {
 		// the assertion is on the refusal, not on which clause explained it.
 		expect(getSelfUpdateCommand("@earendil-works/pi-coding-agent")).toBeUndefined();
 		const instruction = getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent");
-		expect(instruction).toMatch(/not writable|not managed by a global/);
+		// "Cannot confirm is a global npm prefix" is a third refusal clause, alongside the
+		// writability and managed-install ones. All three mean the same thing here: pi will not
+		// produce an update command for this installation, and it says why.
+		expect(instruction).toMatch(/not writable|not managed by a global|cannot confirm is a global npm prefix/);
 	});
 });

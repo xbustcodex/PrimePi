@@ -67,6 +67,26 @@ function makeSelfUpdateCommand(
 	};
 }
 
+/**
+ * The same command, with `--prefix <prefix>` supplied when the layout declares one.
+ *
+ * The refusal names a prefix; the command it suggests has to use it, or the advice does not
+ * work for the directory pi just told the user about. Used only in messages — it never
+ * gates anything.
+ */
+function npmCommandWithPrefix(command: SelfUpdateCommand, prefix: string): SelfUpdateCommand {
+	if (command.args.includes("--prefix")) return command;
+	const installIndex = command.args.indexOf("install");
+	if (installIndex === -1) return command;
+	const args = [...command.args.slice(0, installIndex), "--prefix", prefix, ...command.args.slice(installIndex)];
+	return {
+		steps: (command.steps ?? []).map((step, index) => (index === 0 ? { ...step, args } : step)),
+		command: command.command,
+		args,
+		display: [command.command, ...args].map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg)).join(" "),
+	};
+}
+
 function makeSelfUpdateCommandStep(command: string, args: string[]): SelfUpdateCommandStep {
 	return {
 		command,
@@ -117,7 +137,14 @@ export function detectInstallMethod(): InstallMethod {
 	return "unknown";
 }
 
-function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
+/**
+ * The `<prefix>\node_modules` layout this installation sits in, if any.
+ *
+ * This is a **shape** fact only: where the directory is, not whether npm installed it
+ * globally. Kept separate from {@link getInferredNpmInstall} so a refusal message can name
+ * the directory pi was looking at without that becoming evidence for a self-update.
+ */
+function describeNpmInstallLayout(): { root: string; prefix: string } | undefined {
 	const packageDir = getPackageDir();
 	const path = process.platform === "win32" || packageDir.includes("\\") ? win32 : { basename, dirname };
 	const parent = path.dirname(packageDir);
@@ -128,11 +155,20 @@ function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
 		root = parent;
 	}
 	if (!root) return undefined;
-	const rootParent = path.dirname(root);
-	if (path.basename(rootParent) === "lib") return { root, prefix: path.dirname(rootParent) };
-	// Windows global npm prefixes use `<prefix>\\node_modules`, which is
+	return { root, prefix: path.dirname(root) };
+}
+
+function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
+	const layout = describeNpmInstallLayout();
+	if (!layout) return undefined;
+	const path = process.platform === "win32" || getPackageDir().includes("\\") ? win32 : { basename, dirname };
+	if (path.basename(layout.prefix) === "lib") return layout;
+	// Windows global npm prefixes use `<prefix>\node_modules`, which is
 	// indistinguishable from local project installs by path shape alone. Do not
 	// infer unsupported Windows custom prefixes without `npm root -g` evidence.
+	//
+	// The shape is still reported by `describeNpmInstallLayout` so a refusal can name the
+	// directory: naming it is not the same as trusting it.
 	return undefined;
 }
 
@@ -363,6 +399,30 @@ export function getSelfUpdateUnavailableInstruction(
 	if (command) {
 		if (isManagedByGlobalPackageManager(method, packageName, npmCommand) && !isSelfUpdatePathWritable()) {
 			return `This installation is managed by a global ${method} install, but the install path is not writable. Update it yourself with: ${command.display}`;
+		}
+		if (method === "npm") {
+			// The refusal has to be actionable. This branch is reached when
+			// `getInferredNpmInstall` declined — see the comment there: on Windows a
+			// `<prefix>\node_modules` shape is indistinguishable from a project-local checkout,
+			// so pi will not infer a global prefix without `npm root -g` evidence. The user
+			// now knows pi refuses; they do not know pi *would* update with an explicit
+			// `--prefix`, nor which directory it was looking at. Both are stated here.
+			//
+			// Additive only: this message describes a decision `getSelfUpdateCommand` has
+			// already made. No gate is relaxed and no command is permitted.
+			const layout = describeNpmInstallLayout();
+			if (layout) {
+				return (
+					`This installation is under ${layout.prefix}, which pi cannot confirm is a global npm ` +
+					`prefix - a \`<prefix>${sep}node_modules\` layout is indistinguishable from a project-local ` +
+					`checkout - so it will not self-update here. If that prefix is yours and global, update it ` +
+					`yourself with: ${npmCommandWithPrefix(command, layout.prefix).display}`
+				);
+			}
+			return (
+				`This installation is not managed by a global ${method} install. ` +
+				`Update it with the package manager, wrapper, or source checkout that provides it.`
+			);
 		}
 		return `This installation is not managed by a global ${method} install. Update it with the package manager, wrapper, or source checkout that provides it.`;
 	}

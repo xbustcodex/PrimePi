@@ -128,7 +128,7 @@ describe("install-method detection resolves through the package-directory author
 		// The gated authority is the only one left, and it still applies both gates: the
 		// override alone is not sufficient to produce an update command.
 		expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toMatch(
-			/Update it with|not managed by|not writable/,
+			/Update it with|not managed by|not writable|cannot confirm is a global npm prefix/,
 		);
 	});
 
@@ -149,7 +149,7 @@ describe("install-method detection resolves through the package-directory author
 		} else {
 			// Refused: the message must explain, and must not instruct a replacement.
 			expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toMatch(
-				/Update it with|not managed by|not writable/,
+				/Update it with|not managed by|not writable|cannot confirm is a global npm prefix/,
 			);
 		}
 
