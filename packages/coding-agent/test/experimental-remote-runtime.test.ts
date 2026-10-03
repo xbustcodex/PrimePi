@@ -4,12 +4,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type Context, createFacetHost, defineFacet, defineService } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import {
-	Client,
-	ServerError as ClientServerError,
-	createWindowsNamedPipeTransportFactory,
-} from "@earendil-works/pi-client";
+import { Client, ServerError as ClientServerError } from "@earendil-works/pi-client";
 import { createUnixTransportFactory } from "@earendil-works/pi-client/unix";
+import { createWindowsNamedPipeTransportFactory } from "@earendil-works/pi-client/windows-named-pipe";
 
 const TEST_AUTH_TOKEN = "test-auth-token-not-a-real-secret";
 

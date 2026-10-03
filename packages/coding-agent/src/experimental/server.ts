@@ -28,7 +28,6 @@ import { resolvePath } from "../utils/paths.ts";
 import { CoordinatorConnection, type CoordinatorStartupLease, ensureCoordinator } from "./coordinator.ts";
 import {
 	createLocalTransportFactory,
-	type LocalClientRoute,
 	localAuthTokenFromEnvironment,
 	localRouteForPath,
 } from "./local-client-endpoint.ts";

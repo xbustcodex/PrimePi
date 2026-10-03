@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localEndpointIsNamedPipe } from "../src/experimental/local-client-endpoint.ts";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { readFacetBundleManifest } from "@earendil-works/chord/node";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -12,6 +11,7 @@ import {
 	type ClientRuntime,
 	openClientRuntime,
 } from "../src/experimental/client-runtime.ts";
+import { localEndpointIsNamedPipe } from "../src/experimental/local-client-endpoint.ts";
 import { createPresentationFacetData, createPresentationFacetLoaders } from "../src/experimental/plugins/bundled.ts";
 import { createServerPluginPackage, restoreServerPluginPackageProfile } from "../src/experimental/plugins/package.ts";
 import { type RunningServer, startServer } from "../src/experimental/server.ts";

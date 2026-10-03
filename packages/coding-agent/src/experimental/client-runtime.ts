@@ -6,7 +6,6 @@ import { isServerId, type ServerId } from "@earendil-works/pi-protocol";
 import type { ClientCommand } from "../cli/experimental/commands/client.ts";
 import {
 	createLocalTransportFactory,
-	type LocalClientRoute,
 	localAuthTokenFromEnvironment,
 	localEndpointIsNamedPipe,
 	localRouteForPath,

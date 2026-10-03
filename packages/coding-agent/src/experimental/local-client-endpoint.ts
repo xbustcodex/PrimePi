@@ -1,6 +1,6 @@
 import type { ByteTransportFactory } from "@earendil-works/pi-client";
-import { createWindowsNamedPipeTransportFactory } from "@earendil-works/pi-client";
 import { createUnixTransportFactory } from "@earendil-works/pi-client/unix";
+import { createWindowsNamedPipeTransportFactory } from "@earendil-works/pi-client/windows-named-pipe";
 import type { ServerId } from "@earendil-works/pi-protocol";
 
 /**
