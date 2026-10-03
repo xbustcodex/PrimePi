@@ -8,7 +8,6 @@ import {
 	findNodePackageDir,
 	getSelfUpdateCommand,
 	getSelfUpdateUnavailableInstruction,
-	getUpdateInstruction,
 } from "../src/config.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
@@ -198,9 +197,6 @@ describe("detectInstallMethod", () => {
 		);
 
 		expect(detectInstallMethod()).toBe("pnpm");
-		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
-			"Run: pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @earendil-works/pi-coding-agent",
-		);
 	});
 
 	test("does not self-update unknown wrapper installs", () => {
@@ -208,7 +204,7 @@ describe("detectInstallMethod", () => {
 
 		expect(detectInstallMethod()).toBe("unknown");
 		expect(getSelfUpdateCommand("@earendil-works/pi-coding-agent")).toBeUndefined();
-		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
+		expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toBe(
 			"Update @earendil-works/pi-coding-agent using the package manager, wrapper, or source checkout that provides this installation.",
 		);
 	});
@@ -333,9 +329,7 @@ describe("detectInstallMethod", () => {
 		setExecPath(`${packageDir}\\dist\\cli.js`);
 
 		expect(detectInstallMethod()).toBe("npm");
-		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toBe(
-			"Run: npm install -g --ignore-scripts --min-release-age=0 @earendil-works/pi-coding-agent",
-		);
+		expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toContain("npm");
 	});
 
 	test("self-updates bun global installs from bun pm bin", () => {

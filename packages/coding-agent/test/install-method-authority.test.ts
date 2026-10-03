@@ -7,7 +7,6 @@ import {
 	getPackageDir,
 	getSelfUpdateCommand,
 	getSelfUpdateUnavailableInstruction,
-	getUpdateInstruction,
 } from "../src/config.ts";
 
 /**
@@ -126,39 +125,39 @@ describe("install-method detection resolves through the package-directory author
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent");
 		expect(command === undefined || typeof command.display === "string").toBe(true);
 		// And the guidance must never claim an automatic replacement is available.
-		expect(getUpdateInstruction("@earendil-works/pi-coding-agent")).toContain("@earendil-works/pi-coding-agent");
+		// The gated authority is the only one left, and it still applies both gates: the
+		// override alone is not sufficient to produce an update command.
+		expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toMatch(
+			/Update it with|not managed by|not writable/,
+		);
 	});
 
-	it("composes the two consumers without either contradicting the barrier", () => {
+	it("gives one answer, from the gated authority, and never claims an automatic replacement", () => {
 		const { packageDir } = globalInstall("npm");
 		process.env.PI_PACKAGE_DIR = packageDir;
 		setExecPath("/usr/local/bin/node");
 
-		const instruction = getUpdateInstruction("@earendil-works/pi-coding-agent");
 		const command = getSelfUpdateCommand("@earendil-works/pi-coding-agent");
 
-		// Both derive from the SAME detection. That is the invariant this change
-		// establishes, and it is what makes the difference below explainable rather
-		// than arbitrary.
-		expect(typeof instruction).toBe("string");
-		expect(instruction.length).toBeGreaterThan(0);
-
+		// One authority. `getSelfUpdateCommand` applies the managed-install and
+		// writability gates, and it is the function production uses
+		// (`package-manager-cli.ts`). There is no second, ungated entry point left to
+		// disagree with it: `getUpdateInstruction` was removed as dead exported API,
+		// having had no production caller and no counterpart in current OMP.
 		if (command !== undefined) {
-			// The gated consumer allowed it, so the instruction must name that command.
-			expect(instruction).toContain(command.display);
+			expect(typeof command.display).toBe("string");
 		} else {
-			// The gated consumer refused it. `getUpdateInstruction` still suggests a
-			// command, because it applies neither the managed-install nor the
-			// writability gate - a pre-existing inconsistency, recorded rather than
-			// encoded here as correct. What must hold regardless is that no path claims
-			// an automatic replacement is available.
-			expect(instruction).not.toMatch(/automatically|will update itself/i);
-			// The generic guidance deliberately omits the package name, so assert the
-			// property that matters: it explains rather than commands, and never claims an
-			// automatic replacement.
+			// Refused: the message must explain, and must not instruct a replacement.
 			expect(getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")).toMatch(
 				/Update it with|not managed by|not writable/,
 			);
 		}
+
+		// No exported path may describe an automatic self-update or replacement.
+		const guidance =
+			command === undefined
+				? getSelfUpdateUnavailableInstruction("@earendil-works/pi-coding-agent")
+				: command.display;
+		expect(guidance).not.toMatch(/automatically|will update itself|replace itself/i);
 	});
 });

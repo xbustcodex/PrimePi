@@ -369,14 +369,26 @@ export function getSelfUpdateUnavailableInstruction(
 	return `Update ${target.installSpec} using the package manager, wrapper, or source checkout that provides this installation.`;
 }
 
-export function getUpdateInstruction(packageName: string): string {
-	const method = detectInstallMethod();
-	const command = getSelfUpdateCommandForMethod(method, packageName);
-	if (command) {
-		return `Run: ${command.display}`;
-	}
-	return getSelfUpdateUnavailableInstruction(packageName);
-}
+// `getUpdateInstruction` used to live here. It was removed as dead exported API, not
+// as a behavioural fix: it had **no production caller**, it is not re-exported from
+// the package index, and no other workspace package imports it (the one
+// cross-package mention of `@earendil-works/pi-coding-agent` in
+// `packages/agent/src/tool-approval.ts` is a doc comment; `packages/evals` imports
+// session APIs, not this).
+//
+// It also disagreed with the function that *is* used. `getSelfUpdateCommand` applies
+// `isManagedByGlobalPackageManager` and `isSelfUpdatePathWritable`; this composed the
+// ungated `getSelfUpdateCommandForMethod`, so it could say `Run: npm install -g ...`
+// for an installation the gated consumer had refused. Two answers to "what should this
+// user run?" from one authority - the exact split the install-method unification
+// removed elsewhere. Production self-update goes through the gated function and its
+// messaging goes through `getSelfUpdateUnavailableInstruction`, so nothing observable
+// changes; leaving a third, contradictory answer exported only invited the split to
+// recur.
+//
+// No compatibility alias is kept: it would preserve the redundant authority rather
+// than the API. Current OMP has no equivalent function and no self-update barrier at
+// all, so there is no upstream surface to stay compatible with.
 
 // =============================================================================
 // Package Asset Paths (shipped with executable)
