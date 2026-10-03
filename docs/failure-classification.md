@@ -55,9 +55,30 @@ calling `startServer`.
 
 ---
 
-## B. A deliberate refusal, correctly implemented — 5 failures
+## B. A deliberate refusal — RESOLVED in `93ff7cb6e`
 
-### `config.test.ts` — 5
+### `config.test.ts` — was 5, now 0
+
+The five tests asserted a `SelfUpdateCommand` that the gate correctly refuses to produce on
+Windows. They are now `runIf(process.platform !== "win32")`, so the properties they were
+written for are still asserted where the capability exists, and a Windows counterpart
+asserts the refusal a Windows user actually gets — including that it names the directory and
+the command that would work.
+
+The refusal itself was also made actionable, which was a real defect in its own right:
+
+    Before: "This installation is not managed by a global npm install. Update it with the
+             package manager, wrapper, or source checkout that provides it."
+
+    After:  "This installation is under <prefix>, which pi cannot confirm is a global npm
+             prefix - a `<prefix>\node_modules` layout is indistinguishable from a
+             project-local checkout - so it will not self-update here. If that prefix is
+             yours and global, update it yourself with: npm --prefix <prefix> install -g …"
+
+No gate was relaxed. `getInferredNpmInstall`, `isManagedByGlobalPackageManager`,
+`getSelfUpdateCommand` and the self-update barrier are all unchanged.
+
+### Why it originally refused
 
 All five build a custom Windows npm prefix and expect it to be recognised. The gate
 consults `npm root -g` **without** `--prefix` (`config.ts:245`), which returns

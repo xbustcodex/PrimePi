@@ -512,3 +512,61 @@ never a *sufficient* one for a cross-package change.
 For a change that touches an exported contract, run the full `npm run build` rather than
 stopping at `check`. The build is slower and it is the only command that proves the
 dependency actually agrees with the shipped declarations.
+
+---
+
+## PD-14: several suites are module-load bound, not test bound
+
+**Status:** performance, not behavioural. No test is failing because of a defect, and
+**no timeout was raised** — see "why not a timeout" below.
+
+### Measured, not assumed
+
+Each suite re-run alone, reporting vitest's own split of wall time from test time:
+
+| suite | result | wall | **test time** |
+|---|---|---|---|
+| `startup-session-name.test.ts` | 1 passed | 5.27s | 4.49s |
+| `trust-selector.test.ts` | 4 passed | 4.06s | 92ms |
+| `interactive-mode-status.test.ts` | 33 passed | 31.92s | 313ms |
+| `experimental-cli-entry.test.ts` | 3 passed | 13.79s | 12.99s |
+
+`interactive-mode-status.test.ts` run two ways settles the mechanism:
+
+    whole file, 33 tests     wall 35527ms   test-time 324ms
+    one test, 32 skipped     wall 35094ms   test-time  23ms
+
+**Adding 32 tests costs 1ms of test time.** The 35 seconds is vitest transforming and
+importing modules, paid once per worker however many tests run. The cause is the import graph:
+that file imports `InteractiveMode`, which pulls in the whole interactive surface (TUI, themes,
+autocomplete, extensions) — `transform 18.66s, import 31.19s`.
+
+Under the full suite several workers transform overlapping graphs at once and contend, so the
+30s default is breached. Alone, every one passes.
+
+### Why this must not be fixed by raising `testTimeout`
+
+Because it would hide the three failures that **are** real:
+
+| | test time | verdict |
+|---|---|---|
+| these 4 suites | 92ms – 4.5s | module-load bound, healthy |
+| `extensions-discovery.test.ts` | 30s of real work | **genuine defect** — jiti `tsconfigPaths`, ~1.8s per extension import |
+| `extension-factory-cache.test.ts` | 30s of real work | **same defect** |
+
+A global increase makes all of them green by allowing the loader more time, and would be
+indistinguishable from fixing the two that matter. Keeping them separated is the whole point.
+
+### What would actually help
+
+Precompiling the test transform graph, or splitting `InteractiveMode` so a test needing only
+`showLoadedResources` does not import the entire surface. Both are performance work rather
+than failure repair, so neither is attempted here — recorded so the cost is visible to
+whoever picks up the TUI next.
+
+### Scope note
+
+The cases previously grouped as "load-sensitive" are these four suites plus the two
+interactive-mode cases the full suite reports. Each was re-run in isolation with its siblings
+skipped, which excludes concurrency as an explanation for the *test* behaviour — what remains
+is loader contention, measured above.
