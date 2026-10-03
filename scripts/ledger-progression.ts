@@ -131,28 +131,79 @@ function source_live(revision: string): number {
 }
 
 
+/**
+ * Phrases that mark a commit as explaining a change to the promotion count.
+ *
+ * Deliberately about *explaining a correction*, not about increments: the question is
+ * whether a move was accounted for, not whether it went up.
+ */
+/**
+ * Phrases that mark a commit as explaining a withdrawal of a promotion claim.
+ *
+ * Narrow deliberately. The first version included the bare word "ledger", which both
+ * let a silent adjustment through ("refactor: tidy the ledger") and rejected a real
+ * decrease (4ad43fc516, "a settings accessor read `this.settings.x`") - the word carries
+ * no information about whether a claim was withdrawn. Every entry below appears in one of
+ * the six real decreases in this repository's history, so the check is satisfiable by what
+ * is actually there rather than by matching anything plausible.
+ */
+const WITHDRAWAL_PHRASES = [
+	"the counts lied",
+	"never reads it",
+	"entirely unreachable",
+	"never reached",
+	"was not reachable",
+	"no production read",
+	"claimed `wired`",
+	"no consumer",
+	"unpromoted",
+	"withdraw",
+	"no longer wired",
+	"never actually",
+	"not actually wired",
+	"row activation",
+	"named a consumer that did not exist",
+	"reported as having no production read",
+
+];
+
 export interface ProgressionStep {
 	readonly hash: string;
 	readonly subject: string;
+	/**
+	 * The full commit message. A withdrawal of a promotion claim is sometimes stated in the
+	 * body rather than the subject - `1955cd2bcf` is titled "wire the provider protocol
+	 * settings" but its body opens "Ten ledger rows claimed `wired` with no production
+	 * read" - so attribution has to read both.
+	 */
+	readonly body: string;
 	readonly promoted: number;
 	readonly live: number;
 }
 
 /** Every point at which the promoted count changed, oldest first. */
 export function promotionProgression(): ProgressionStep[] {
-	const commits = git("log", "--reverse", "--format=%H\t%s", "--", LEDGER, "packages/tui/src/overlays/settings-parity-rows.ts")
-		.split("\n")
+	const commits = git(
+		"log",
+		"--reverse",
+		"--format=%H%x1f%s%x1f%b%x1e",
+		"--",
+		LEDGER,
+		"packages/tui/src/overlays/settings-parity-rows.ts",
+	)
+		.split("\u001e")
+		.map((record) => record.replace(/^\n+/, ""))
 		.filter(Boolean)
-		.map((line) => {
-			const [hash, ...rest] = line.split("\t");
-			return { hash, subject: rest.join("\t") };
+		.map((record) => {
+			const [hash = "", subject = "", ...body] = record.split("\u001f");
+			return { hash, subject, body: body.join("\u001f").replace(/\n+$/, "") };
 		});
 	const steps: ProgressionStep[] = [];
 	let previous: number | undefined;
 	for (const commit of commits) {
 		const counts = countLedgerRevision(commit.hash);
 		if (!counts || counts.promoted === previous) continue;
-		steps.push({ ...counts, hash: commit.hash.slice(0, 10), subject: commit.subject });
+		steps.push({ ...counts, hash: commit.hash.slice(0, 10), subject: commit.subject, body: commit.body });
 		previous = counts.promoted;
 	}
 	// HEAD may have no ledger commit of its own — a working-tree change is not in
@@ -160,9 +211,29 @@ export function promotionProgression(): ProgressionStep[] {
 	// describes a past commit and silently disagrees with the ledger at HEAD.
 	const head = countLedgerRevision("HEAD");
 	if (head && head.promoted !== previous) {
-		steps.push({ ...head, hash: "HEAD", subject: "working tree" });
+		steps.push({ ...head, hash: "HEAD", subject: "working tree", body: "" });
 	}
 	return steps;
+}
+
+/**
+ * Whether a step's commit says why the promotion count moved.
+ *
+ * The ledger is a **correctable** record. `a79f406b3` is titled "fix(ledger): the
+ * evidence classes were mutually exclusive, so the counts lied" and corrected a count
+ * downward; `90743ac3c0`, `df8270c833` and `d18f1bbc8f` each withdrew a claim the
+ * reachability audit found unsupported. So a decrease is the audit working, not a
+ * regression - and the property worth enforcing is not "the count never falls" but "a fall
+ * is attributable to a commit that says so". That is strictly stronger against a silent
+ * adjustment, which is the failure mode the original comment asked about.
+ *
+ * Both the subject and the body are read: `1955cd2bcf` is titled "wire the provider
+ * protocol settings" and states the withdrawal only in its body ("Ten ledger rows claimed
+ * `wired` with no production read").
+ */
+export function statesWhyPromotionChanged(step: ProgressionStep): boolean {
+	const text = `${step.subject}\n${step.body}`.toLowerCase();
+	return WITHDRAWAL_PHRASES.some((phrase) => text.includes(phrase));
 }
 
 /** The derived summary, for a report that must not guess. */

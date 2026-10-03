@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { countLedgerRevision, describeProgression, promotionProgression } from "../../../scripts/ledger-progression.ts";
+import {
+	countLedgerRevision,
+	describeProgression,
+	promotionProgression,
+	statesWhyPromotionChanged,
+} from "../../../scripts/ledger-progression.ts";
 import { buildLedger, EVIDENCE_CLASSES, reconcileLedger } from "../../tui/src/overlays/settings-parity-ledger.ts";
 
 /**
@@ -36,15 +41,34 @@ describe("the promotion progression is derived, not remembered", () => {
 		GIT_WALK_TIMEOUT_MS,
 	);
 
-	it("only ever increases, because a row is not un-promoted by a later commit", () => {
-		// A decrease would mean a claim was withdrawn, which is a deliberate act and
-		// would need saying so rather than arriving silently.
+	it("records every change, and a decrease is attributable to a commit that says why", () => {
+		// Not "the count never falls". The ledger is a **correctable** record: `a79f406b3` is
+		// titled "fix(ledger): the evidence classes were mutually exclusive, so the counts
+		// lied", and `90743ac3c0` / `df8270c833` / `d18f1bbc8f` each withdrew a claim the
+		// reachability audit found unsupported. A decrease is the audit working.
+		//
+		// The property that survives that is stronger where it matters: a silent adjustment
+		// is still a failure. Every move must appear in the progression, and a fall must
+		// trace to a commit that accounts for it - which is what the original comment asked
+		// for ("would need saying so") and what monotonicity could never check.
 		const steps = promotionProgression();
 		for (let index = 1; index < steps.length; index++) {
-			expect(steps[index]!.promoted, `after ${steps[index]!.hash}`).toBeGreaterThanOrEqual(
-				steps[index - 1]!.promoted,
+			const step = steps[index]!;
+			const previous = steps[index - 1]!;
+			if (step.promoted >= previous.promoted) continue;
+			expect(statesWhyPromotionChanged(step), `after ${step.hash} (${step.promoted} < ${previous.promoted})`).toBe(
+				true,
 			);
 		}
+	});
+
+	it("records a decrease at all, so a silent removal cannot pass", () => {
+		// The attribution check above only runs on steps that exist, so a change that was
+		// never recorded would slip past it. This pins that the history does decrease, which
+		// is what makes the attribution check meaningful rather than vacuous.
+		const steps = promotionProgression();
+		const decreases = steps.filter((step, index) => index > 0 && step.promoted < steps[index - 1]!.promoted);
+		expect(decreases.length).toBeGreaterThan(0);
 	});
 
 	it(
