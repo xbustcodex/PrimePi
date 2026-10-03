@@ -25,7 +25,12 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	"azure-openai-responses": "gpt-5.4",
 	"openai-codex": "gpt-5.5",
 	radius: "balanced",
-	nvidia: "nvidia/nemotron-3-super-120b-a12b",
+	// Was `nvidia/nemotron-3-super-120b-a12b`. NVIDIA **retired** it rather than renaming
+	// it: models.dev still lists it, but `https://integrate.api.nvidia.com/v1/models` no
+	// longer serves it, and the generator gates the nvidia catalog on that live list
+	// (`generate-models.ts:2150`) - so regenerating drops it. The successor chosen here is
+	// the same Nemotron-3 family and present in the committed catalog.
+	nvidia: "nvidia/nemotron-3-ultra-550b-a55b",
 	deepseek: "deepseek-v4-pro",
 	google: "gemini-3.1-pro-preview",
 	"google-vertex": "gemini-3.1-pro-preview",

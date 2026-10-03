@@ -809,8 +809,15 @@ describe("Generate E2E Tests", () => {
 		});
 	});
 
-	describe.skipIf(!process.env.NVIDIA_API_KEY)("NVIDIA NIM Provider (Nemotron 3 Super via OpenAI Completions)", () => {
-		const llm = getModel("nvidia", "nvidia/nemotron-3-super-120b-a12b");
+	describe.skipIf(!process.env.NVIDIA_API_KEY)("NVIDIA NIM Provider (Nemotron 3 Ultra via OpenAI Completions)", () => {
+		// Nemotron 3 **Super** was retired by NVIDIA, not renamed: models.dev still lists
+		// it, but `https://integrate.api.nvidia.com/v1/models` no longer serves it, and the
+		// generator gates the nvidia catalog on that live list
+		// (`packages/ai/scripts/generate-models.ts:2150`) so regenerating drops it.
+		//
+		// This block is skipped without an NVIDIA_API_KEY, but the reference is still
+		// typechecked - so the stale id broke `npm run check` without ever running.
+		const llm = getModel("nvidia", "nvidia/nemotron-3-ultra-550b-a55b");
 
 		it("should complete basic text generation", { retry: 3 }, async () => {
 			await basicTextGeneration(llm);

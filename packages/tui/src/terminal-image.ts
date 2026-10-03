@@ -701,13 +701,25 @@ export function hyperlink(text: string, url: string): string {
 	return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
-/** Shorten home-prefixed absolute paths to ~/... for compact display. */
+/**
+ * Shorten home-prefixed absolute paths to ~/... for compact display.
+ *
+ * The prefix test accepts either separator, but the **replacement must normalise to
+ * "/"**: `~` is a POSIX home shorthand, so on Windows the visible text has to read
+ * `~/.pi/agent/shot.png`. Slicing the original path kept the native separator and
+ * produced `~\.pi\agent\shot.png` - not a path any shell accepts, and not recognisable
+ * to the user as their own home. The hyperlink target keeps the original path, since a
+ * tilde means nothing to a `file://` URL.
+ */
 function shortenImagePath(filename: string): string {
 	const home = homedir();
-	if (home && (filename === home || filename.startsWith(`${home}/`) || filename.startsWith(`${home}\\`))) {
-		return `~${filename.slice(home.length)}`;
+	if (!home) return filename;
+	const normalised = filename.replace(/\\/g, "/");
+	const normalisedHome = home.replace(/\\/g, "/");
+	if (normalised !== normalisedHome && !normalised.startsWith(`${normalisedHome}/`)) {
+		return filename;
 	}
-	return filename;
+	return `~${normalised.slice(normalisedHome.length)}`;
 }
 
 /**
