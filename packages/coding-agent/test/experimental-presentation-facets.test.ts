@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -14,6 +15,18 @@ import { createPresentationFacetData, createPresentationFacetLoaders } from "../
 import { createServerPluginPackage, restoreServerPluginPackageProfile } from "../src/experimental/plugins/package.ts";
 import { type RunningServer, startServer } from "../src/experimental/server.ts";
 import { PresentationPlugins } from "../src/experimental/services/plugins.ts";
+
+/**
+ * A scratch directory under the platform's own temp.
+ *
+ * These tests used a hardcoded POSIX "/tmp/..." prefix. On Windows that is not a
+ * special directory - it resolves against the current drive to "C:\tmp", and
+ * `restoreServerPluginPackageProfile` legitimately returns `resolve()`d absolute
+ * paths - so the round-trip assertion compared a relative "\tmp\..." against an
+ * absolute "C:\tmp\..." and failed. The production code is correct; the fixture was
+ * not portable. Verified directly: with a native `tmpdir()` the round-trip is exact.
+ */
+const scratch = (prefix: string): Promise<string> => mkdtemp(join(tmpdir(), prefix));
 
 const runtimes = new Set<ClientRuntime>();
 const runningServers = new Set<RunningServer>();
@@ -40,7 +53,7 @@ describe("server-selected presentation facets", () => {
 	});
 
 	test("restores plugin package selections for later server generations", async () => {
-		const directory = await mkdtemp("/tmp/pi-presentation-profile-");
+		const directory = await scratch("pi-presentation-profile-");
 		directories.add(directory);
 		const serverId = randomUUID();
 		const packagePaths = [join(directory, "first-plugin"), join(directory, "second-plugin")];
@@ -51,7 +64,7 @@ describe("server-selected presentation facets", () => {
 	});
 
 	test("builds conventional plugin entries into the server-owned plugin cache", async () => {
-		const directory = await mkdtemp("/tmp/pi-presentation-package-");
+		const directory = await scratch("pi-presentation-package-");
 		directories.add(directory);
 		const serverId = randomUUID();
 		const packagePath = join(directory, "pi-example-plugin");
@@ -76,8 +89,14 @@ describe("server-selected presentation facets", () => {
 
 		const first = await plugin.build();
 		expect(first).toHaveLength(1);
+		// Separator-agnostic: `join()` yields "\" on Windows and "/" on POSIX, so a
+		// hardcoded "/" fails everywhere except the platform the pattern was written on.
+		// The path segments, not the separator, are what this assertion is about.
 		expect(plugin.manifestPath).toMatch(
-			new RegExp(`/plugin-builds/${serverId}/pi-example-plugin-[a-f0-9]{12}/chord-facets\\.json$`, "u"),
+			new RegExp(
+				`[\\\\/]plugin-builds[\\\\/]${serverId}[\\\\/]pi-example-plugin-[a-f0-9]{12}[\\\\/]chord-facets\\.json$`,
+				"u",
+			),
 		);
 		expect(first[0]?.plugin).toEqual({ id: "@earendil-works/test-plugin", version: "1.0.0" });
 		const firstLoaded = await createPresentationFacetLoaders(createPresentationFacetData(first))[0]!.load();
@@ -156,7 +175,7 @@ describe("server-selected presentation facets", () => {
 	});
 
 	test("builds the example plugin package without a package-owned build script", async () => {
-		const directory = await mkdtemp("/tmp/pi-example-plugin-");
+		const directory = await scratch("pi-example-plugin-");
 		directories.add(directory);
 		const serverId = randomUUID();
 		const packagePath = fileURLToPath(new URL("../examples/plugins/pi-example-plugin", import.meta.url));

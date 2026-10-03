@@ -2,10 +2,17 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { VERSION } from "../src/config.ts";
 
-const sourceResolverPath = resolve(__dirname, "../src/experimental/source-resolver.ts");
+// `--import` takes a **URL specifier**, not a path. On Windows an absolute path has
+// the scheme `c:`, which Node's ESM loader rejects with
+// `ERR_UNSUPPORTED_ESM_URL_SCHEME: ... Received protocol 'c:'` before the CLI ever
+// runs. `src/experimental/process.ts:51` already converts; this harness passed the raw
+// path, so all three tests failed on the spawn rather than on the entrypoint boundary
+// they exist to check.
+const sourceResolverUrl = pathToFileURL(resolve(__dirname, "../src/experimental/source-resolver.ts")).href;
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -19,7 +26,7 @@ function runEntry(entry: string, experimental: boolean) {
 		process.execPath,
 		[
 			"--import",
-			sourceResolverPath,
+			sourceResolverUrl,
 			resolve(__dirname, "../src", entry),
 			"server",
 			"--server-id",
