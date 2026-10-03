@@ -34,6 +34,26 @@ export interface CompactionThresholds {
 	readonly thresholdPercent?: number;
 	/** Absolute token count. Fires at or below this, regardless of window. */
 	readonly thresholdTokens?: number;
+	/**
+	 * The reserve the settings layer resolved for this model, already carrying the
+	 * per-model override.
+	 *
+	 * Present because the configured reserve **governs the trigger**, not just the
+	 * compaction that follows: `_checkCompaction` used to overwrite it with a value
+	 * derived only from `thresholdPercent`/`thresholdTokens`, so a model override of
+	 * `compaction.reserveTokens` decided what compaction *kept* but not whether it
+	 * ran. See `resolveCompactionLimits`.
+	 */
+	readonly reserveTokens?: number;
+	/**
+	 * Whether `reserveTokens` was **explicitly configured** rather than defaulted.
+	 *
+	 * Provenance, not value, decides the fallback: a user who types 16384 has chosen it
+	 * and it wins even though it equals the default, whereas a *defaulted* 16384 on a
+	 * window too small to hold it is impossible and the proportional reserve takes over.
+	 * Matching by value would make those two indistinguishable.
+	 */
+	readonly reserveWasDefaulted?: boolean;
 }
 
 export interface ResolvedCompactionLimits {
@@ -49,23 +69,40 @@ export interface ResolvedCompactionLimits {
 export const DEFAULT_RESERVE_TOKENS = 16_384;
 
 /**
- * Where compaction fires on a window too small to hold `DEFAULT_RESERVE_TOKENS`.
+ * Share of the window reserved when a *defaulted* reserve cannot fit.
  *
- * The default reserve is an absolute number of tokens, so it only expresses a sensible
- * idea on a window with that much headroom to spare. Below that, the equivalent intent
- * is a proportion of the window: compact once the context is **this** full. Chosen so a
- * window that exactly cannot hold the reserve lands near the trigger a large window
- * would reach for the same absolute headroom.
+ * 15%, matching the reference implementation
+ * (`oh-my-pi/packages/agent/src/compaction/compaction.ts`, `resolveBudgetReserveTokens`).
+ * Replaces the previous 85% trigger constant, which was a guess at the same quantity:
+ * a defaulted 16,384 reserve leaves nothing usable on a small model, and "leave 15% of
+ * the window" is both what the reference does and the more conservative reading - a
+ * larger reserve compacts later.
  */
-const SMALL_WINDOW_TRIGGER_PERCENT = 85;
+const PROPORTIONAL_RESERVE_FRACTION = 0.15;
 
 /**
- * Resolves the two configured limits into the engine's reserved-token field.
+ * Resolves the configured limits into the engine's reserved-token field.
  *
- * The engine compares `contextTokens > contextWindow - reserveTokens`, so a
- * *lower* reserve fires *later*. Both configured limits are therefore converted
- * to the trigger point they describe, the earlier trigger is taken, and that is
- * turned back into a reserve.
+ * The engine compares `contextTokens > contextWindow - reserveTokens`, so a *larger*
+ * reserve fires *later*. Precedence, matching the reference implementation
+ * (`oh-my-pi/packages/agent/src/compaction/compaction.ts`):
+ *
+ * 1. **`thresholdTokens`** — an explicit absolute limit. It is a trigger in its own
+ *    right, not a way of deriving a reserve, and it takes priority.
+ * 2. **`thresholdPercent`** — likewise an independent trigger, applied as a share of
+    the window.
+ * 3. **`reserveTokens`** — the settings layer's resolved reserve for this model,
+ *    carrying the per-model override. This **governs the trigger** when neither
+ *    threshold is set, which is what the setting promises.
+ * 4. **`DEFAULT_RESERVE_TOKENS`** — and only when the reserve was *defaulted*, never
+ *    explicitly configured.
+ *
+ * The step-4 guard exists because the default is an absolute count that predates small
+ * windows: 16,384 on a 10,000-token model leaves no usable budget, and the comparison
+ * would then be true on every turn. A **defaulted** reserve that cannot fit is replaced
+ * by a proportional one. An **explicit** reserve always wins, even when it equals the
+ * default, because provenance says the user chose it. That distinction is carried by
+ * `reserveWasDefaulted` and never by comparing values.
  */
 export function resolveCompactionLimits(input: {
 	readonly contextWindow: number;
@@ -81,92 +118,54 @@ export function resolveCompactionLimits(input: {
 	const percent = input.thresholds.thresholdPercent;
 	const tokens = input.thresholds.thresholdTokens;
 
+	// 1 + 2: an explicit threshold is an independent trigger, not a source of reserve.
 	const percentTrigger =
 		window > 0 && typeof percent === "number" && Number.isFinite(percent) && percent > 0 && percent <= 100
-			? Math.floor((window * Math.min(100, percent)) / 100)
+			? Math.floor((window * Math.min(99, Math.max(1, percent))) / 100)
 			: undefined;
 	const tokenTrigger =
 		typeof tokens === "number" && Number.isFinite(tokens) && tokens > 0 ? Math.floor(tokens) : undefined;
 
-	if (percentTrigger === undefined && tokenTrigger === undefined) {
-		// **The fallback needs the same clamp as a configured trigger, and this is where
-		// it was missing.** `shouldCompact` fires on
-		// `contextTokens > contextWindow - reserveTokens`, so a reserve larger than the
-		// window makes the right-hand side negative and the comparison true for ANY
-		// context size. With DEFAULT_RESERVE_TOKENS at 16,384 that is every window below
-		// 16k: compaction then ran on every single turn, however small the context, and
-		// whatever reserve the caller passed in `settings` was never consulted here.
-		//
-		// Found through six failing tests that each looked like "an unexpected compaction
-		// happened" - a message that reads as the threshold genuinely being crossed. The
-		// fix is bounded to the unconfigured path and leaves every configured threshold
-		// exactly as it was, including the deliberate absence of a cap at `fallback`.
-		//
-		// With no configured threshold, the engine default is expressed as a *reserve*:
-		// compact when `contextTokens > contextWindow - reserveTokens`. The hazard is that
-		// this reserve is absolute while the window is a property of the chosen model, so
-		// on any window below DEFAULT_RESERVE_TOKENS the right-hand side goes negative and
-		// compaction fires on **every turn**.
-		//
-		// Clamping it to the window is not sufficient either: reserve == window means
-		// "fires above 0", which is the same defect in a smaller window. What has to be
-		// preserved is the *ratio*: the default expresses 16,384 tokens of headroom,
-		// which is meaningful on a 200k window and impossible on a 10k one.
-		//
-		// So on a window that cannot hold the default reserve, fall back to a percentage
-		// that expresses the same intent - compact when the context is most of the way
-		// full - rather than to a limit of zero. A window smaller than the default reserve
-		// is a small-window model, and for those "nearly full" is the correct reading of
-		// "16k of headroom", not "always full".
-		if (window > 0 && fallback < window) {
-			return { reserveTokens: fallback, decidedBy: "none" };
-		}
-		if (window > 0) {
-			// The window cannot hold the default reserve. Use the percentage that the
-			// default represents for a large window, so behaviour degrades smoothly.
-			const trigger = Math.floor((window * SMALL_WINDOW_TRIGGER_PERCENT) / 100);
-			return { reserveTokens: window - trigger, decidedBy: "percent" };
-		}
-		return { reserveTokens: fallback, decidedBy: "none" };
+	if (percentTrigger !== undefined || tokenTrigger !== undefined) {
+		// Fixed token limit takes priority over percentage, matching the reference.
+		// Each is clamped to [1, window - 1] so the trigger never reaches the whole
+		// window, which would leave no room for the response.
+		const trigger = Math.min(
+			window > 0 ? window - 1 : Number.MAX_SAFE_INTEGER,
+			tokenTrigger ?? Number.MAX_SAFE_INTEGER,
+			percentTrigger ?? Number.MAX_SAFE_INTEGER,
+		);
+		const decidedBy =
+			percentTrigger === undefined
+				? "tokens"
+				: tokenTrigger === undefined
+					? "percent"
+					: tokenTrigger === percentTrigger
+						? "both"
+						: tokenTrigger < percentTrigger
+							? "tokens"
+							: "percent";
+		return {
+			reserveTokens: window > 0 ? Math.max(0, window - trigger) : fallback,
+			thresholdTokens: tokenTrigger,
+			decidedBy,
+		};
 	}
 
-	// The earlier trigger wins. A percentage that would fire *later* than an
-	// absolute limit the user typed would silently ignore the typed one, so the
-	// minimum is taken rather than letting either field win by precedence.
-	const triggers: number[] = [];
-	if (percentTrigger !== undefined) triggers.push(percentTrigger);
-	if (tokenTrigger !== undefined) triggers.push(tokenTrigger);
-	const trigger = Math.min(...triggers);
+	// 3 + 4: no threshold, so the configured reserve governs the trigger.
+	const configured = input.thresholds.reserveTokens;
+	const reserveTokens = Math.max(0, configured ?? fallback);
+	const proportional = Math.max(1, Math.floor(window * PROPORTIONAL_RESERVE_FRACTION));
+	const wasDefaulted = input.thresholds.reserveWasDefaulted ?? configured === undefined;
+	const defaultedReserveIsImpossible = wasDefaulted && window > 0 && reserveTokens >= window - proportional;
+	const reserveExceedsWindow = window > 0 && reserveTokens >= window;
 
-	const decidedBy =
-		percentTrigger === undefined
-			? "tokens"
-			: tokenTrigger === undefined
-				? "percent"
-				: percentTrigger === tokenTrigger
-					? "both"
-					: trigger === tokenTrigger
-						? "tokens"
-						: "percent";
+	const effective =
+		defaultedReserveIsImpossible || reserveExceedsWindow ? (window > 0 ? proportional : fallback) : reserveTokens;
 
-	// Clamped once, and the direction matters.
-	//
-	// The engine fires when `contextTokens > contextWindow - reserveTokens`, so a
-	// *larger* reserve compacts *later*. What therefore has to be bounded is the
-	// trigger: it must not fall below zero, and it must not exceed the window — a
-	// negative reserve makes the comparison true on every single turn.
-	//
-	// There is deliberately **no cap at `fallback`**. Capping there would forbid a
-	// user from compacting later than the engine default, which is a legitimate
-	// choice on a large window. The first draft made exactly that mistake: it
-	// clamped every configured reserve to 16k, so a 40% threshold was silently
-	// rewritten as 8%.
-	const safeTrigger = Math.max(0, Math.min(trigger, window));
-	const reserveTokens = window > 0 ? Math.min(window, window - safeTrigger) : fallback;
 	return {
-		reserveTokens,
-		thresholdTokens: tokenTrigger,
-		decidedBy,
+		reserveTokens: effective,
+		decidedBy: "none",
 	};
 }
 

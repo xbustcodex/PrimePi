@@ -4622,11 +4622,27 @@ ${context}`
 		} else {
 			contextTokens = directContextTokens;
 		}
-		// The configured threshold percent and token count are resolved into the
-		// engine reserved-token field here, so the engine keeps one comparison and the
-		// two settings keep their distinct meanings. An absolute token limit that would
-		// fire earlier than the percentage wins; see resolveCompactionLimits.
-		const limits = this.settingsManager.getCompactionLimits(contextWindow);
+		// **One effective reserve for both the decision and the compaction that follows.**
+		//
+		// This used to be:
+		//
+		//     const limits = getCompactionLimits(contextWindow);
+		//     shouldCompact(tokens, contextWindow, { ...settings, reserveTokens: limits.reserveTokens })
+		//
+		// which *overwrote* the configured reserve with a value derived only from
+		// thresholdPercent/thresholdTokens. `settings.reserveTokens` - including the
+		// per-model override that regression #8133 exists to cover - still reached
+		// `prepareCompaction`, so it decided what compaction *kept* but not whether
+		// compaction *ran*. Two authorities for one policy.
+		//
+		// `getCompactionLimits` now takes the model and returns a policy that already
+		// accounts for the configured reserve, so the trigger and the compaction are the
+		// same decision read twice. An explicit thresholdPercent/thresholdTokens still wins
+		// where it is configured, because those are independent triggers and not a way of
+		// deriving a reserve; see `resolveCompactionLimits`.
+		// The same model `settings` above was resolved from, so the trigger and the
+		// compaction read one policy for one model.
+		const limits = this.settingsManager.getCompactionLimits(contextWindow, this.model);
 		if (shouldCompact(contextTokens, contextWindow, { ...settings, reserveTokens: limits.reserveTokens })) {
 			return await this._runAutoCompaction("threshold", false);
 		}

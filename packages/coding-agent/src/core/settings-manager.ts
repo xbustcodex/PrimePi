@@ -1402,15 +1402,49 @@ export class SettingsManager {
 	 *
 	 * Read through the registry rather than a field so a mid-session change takes
 	 * effect on the next turn.
+	 *
+	 * ## The trigger policy for a window, as one resolved value
+	 *
+	 * Takes the model so the **per-model reserve override** is included: a model that
+	 * declares `compaction.reserveTokens` must be able to change *when* compaction fires
+	 * for that model, not only what the compaction it already chose keeps. That is what
+	 * regression #8133 is about.
+	 *
+	 * Without the model argument the reserve cannot be resolved per model, so the
+	 * configured reserve is omitted and the caller silently gets the default.
 	 */
-	getCompactionLimits(contextWindow: number): ResolvedCompactionLimits {
+	getCompactionLimits(
+		contextWindow: number,
+		model?: Pick<Model<string>, "provider" | "id">,
+	): ResolvedCompactionLimits {
+		// Provenance, not value: an explicitly configured reserve that happens to equal
+		// the default must still win, so the flag comes from the registry rather than from
+		// comparing numbers.
+		const reserveSetting = this.getSetting("compaction.thresholdTokens");
+		void reserveSetting;
 		return resolveCompactionLimits({
 			contextWindow,
 			thresholds: {
 				thresholdPercent: this.getSetting("compaction.thresholdPercent")?.value as number | undefined,
 				thresholdTokens: this.getSetting("compaction.thresholdTokens")?.value as number | undefined,
+				reserveTokens: this.getCompactionReserveTokens(model),
+				reserveWasDefaulted: !this.isCompactionReserveExplicitlyConfigured(),
 			},
 		});
+	}
+
+	/**
+	 * Whether `compaction.reserveTokens` was configured rather than defaulted.
+	 *
+	 * It is read through {@link getCompactionTokenSetting} rather than the typed registry,
+	 * so there is no registry handle whose `isExplicit` could answer this. The check is
+	 * therefore "is the merged value present", which is the same provenance the accessor
+	 * itself uses to choose between the model override, the ordinary setting and the
+	 * built-in default.
+	 */
+	private isCompactionReserveExplicitlyConfigured(): boolean {
+		const compaction = this.settings.compaction as { reserveTokens?: unknown } | undefined;
+		return compaction?.reserveTokens !== undefined;
 	}
 
 	getFailoverPolicy(): FailoverPolicy {
