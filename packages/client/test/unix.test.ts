@@ -90,7 +90,14 @@ afterEach(async () => {
 	tempDirectories.clear();
 });
 
-describe("discoverUnixServers", () => {
+// `discoverUnixServers` scans a directory for `.sock` files, which is a POSIX-only
+// capability: a Windows named pipe is a kernel object with no directory entry, so there is
+// nothing to scan. The implementation refuses rather than pretending, and every test in
+// this block is written against the scan, so the block is gated rather than failing.
+//
+// Nothing is lost. The Windows counterpart is `windows-named-pipe.test.ts`, which exercises
+// the transport this platform actually uses.
+describe.runIf(process.platform !== "win32")("discoverUnixServers", () => {
 	test("returns no routes when the server directory is missing", async () => {
 		const directory = join(await makeDirectory(), "missing");
 		await expect(discoverUnixServers({ directory })).resolves.toEqual([]);
