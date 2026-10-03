@@ -404,8 +404,22 @@ describe("regression #5943: session_start transient UI", () => {
 			};
 
 			await interactiveModePrototype.rebindCurrentSession.call(context, { renderBeforeBind: true });
+			// `pi.sendUserMessage` returns **void** — `agent-session.ts:4990` discards the promise
+			// and routes any rejection to `emitError` — so the prompt it starts is submitted but
+			// not yet picked up by the agent loop. `waitForIdle()` therefore resolves while the
+			// loop is legitimately idle, roughly 10ms before the turn runs. Measured:
+			//
+			//     after bindExtensions   pending: 1  entries: 0
+			//     after waitForIdle      pending: 1  entries: 0   <- where the old assert ran
+			//       + 10ms               pending: 0  entries: 3
+			//
+			// Waiting on the observable fact — the queued response being consumed — rather than on
+			// a duration, so this is deterministic rather than a sleep.
+			await vi.waitFor(() => expect(harness.getPendingResponseCount()).toBe(0));
 			await harness.session.agent.waitForIdle();
 
+			// The invariant #5943 protects: the subscriber is registered before the handlers
+			// that send messages run, so it observes them rather than missing them.
 			expect(events.slice(0, 3)).toEqual(["render", "subscribe", "bind"]);
 			expect(events).toContain("message_start:user:user from start");
 			expect(events).toContain("message_end:user:user from start");
