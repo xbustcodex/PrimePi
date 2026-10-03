@@ -73,12 +73,23 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 	it("keeps extension tools active when built-in defaults are disabled", async () => {
 		const session = await createSession({ noTools: "builtin" });
 
-		expect(
-			session
-				.getAllTools()
-				.map((tool) => tool.name)
-				.sort(),
-		).toEqual(["bash", "dynamic_tool", "edit", "find", "grep", "ls", "powershell", "read", "write"]);
+		// Availability, not activeness. `noTools: "builtin"` clears the **active** set
+		// (`sdk.ts:294`) and leaves the registry intact, which is why the assertion below -
+		// `getActiveToolNames()` is exactly `["dynamic_tool"]` - is the one carrying the
+		// regression. This list is the whole registry, so it has to track every built-in
+		// the fork added (`apply_patch`, `checkpoint`, `git_*`, `task`, `todo`); a
+		// hardcoded list went stale the moment any of them landed.
+		//
+		// Asserted by relation rather than by literal, so adding a built-in tool does not
+		// break a test about tool *exclusion*: the extension tool must be present, the
+		// built-ins must be registered, and none may be active.
+		const available = session
+			.getAllTools()
+			.map((tool) => tool.name)
+			.sort();
+		expect(available).toContain("dynamic_tool");
+		expect(available).toContain("read");
+		expect(available).toContain("bash");
 		expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
 		expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
 		expect(session.systemPrompt).not.toContain("- read:");

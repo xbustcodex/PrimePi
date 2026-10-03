@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /**
@@ -39,7 +40,15 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 	});
 
 	it("process should survive an error event on the theme FSWatcher", () => {
-		const themeModulePath = join(__dirname, "../../../src/modes/interactive/theme/theme.ts").replace(/\\/g, "/");
+		// A `file://` URL, not a path. The generated child script is ESM, so a bare
+		// absolute path is a specifier with the scheme `c:` on Windows, and Node rejects it
+		// before the script runs:
+		//   ERR_UNSUPPORTED_ESM_URL_SCHEME: Only URLs with a scheme in: file, data, and
+		//   node are supported ... Received protocol 'c:'
+		// which surfaced here as "Child crashed (exit 1)" and said nothing about the
+		// watcher. Rewriting the separators to "/" does not help: a Windows path is still
+		// not a URL.
+		const themeModuleUrl = pathToFileURL(join(__dirname, "../../../src/modes/interactive/theme/theme.ts")).href;
 		const agentDir = join(tempRoot, "agent").replace(/\\/g, "/");
 
 		// Script that sets up the watcher and emits a synthetic error on it.
@@ -49,7 +58,7 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 		writeFileSync(
 			scriptPath,
 			`
-import { setTheme, stopThemeWatcher } from "${themeModulePath}";
+import { setTheme, stopThemeWatcher } from "${themeModuleUrl}";
 
 process.env.PI_CODING_AGENT_DIR = "${agentDir}";
 

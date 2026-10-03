@@ -50,7 +50,20 @@ describe("regression #5109: exclude tools", () => {
 			expect(allToolNames).not.toContain("ask_question");
 			expect(allToolNames).toContain("bash");
 			expect(allToolNames).toContain("dynamic_tool");
-			expect(harness.session.getActiveToolNames().sort()).toEqual(["bash", "dynamic_tool", "edit", "write"]);
+			// Asserted by relation, not by literal. This harness passes no `tools`, so the
+			// active set is the product default (`sdk.ts:276`), which now includes `task`
+			// and `todo` and will include whatever is added next. Hardcoding it made a test
+			// about *exclusion* fail whenever the default set changed.
+			//
+			// What #5109 is about: the excluded names are gone from availability and from
+			// the prompt, and an allowed built-in and the extension tool both survive.
+			const active = harness.session.getActiveToolNames().sort();
+			expect(active).not.toContain("read");
+			expect(active).not.toContain("ask_question");
+			expect(active).toContain("bash");
+			expect(active).toContain("dynamic_tool");
+			expect(active).toContain("edit");
+			expect(active).toContain("write");
 			expect(harness.session.systemPrompt).not.toContain("- read:");
 			expect(harness.session.systemPrompt).not.toContain("ask_question");
 			expect(harness.session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
