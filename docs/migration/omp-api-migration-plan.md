@@ -17,6 +17,24 @@ feature-by-feature worthiness judgement. Excluded: automatic self-update paths,
 untrusted project discovery, destructive rewind semantics, and the cancelled
 local-model/Ollama workstream.
 
+### Capability gaps found by the failure campaign (not ports)
+
+These are gaps in *our* tree, identified while working individual test failures. They
+are not OMP ports, so they carry no parity obligation — but they are real missing
+capability, and on Windows they are missing entirely rather than degraded.
+
+| Gap | Where | Symptom | Why it is a gap, not a test artifact | Required design |
+|---|---|---|---|---|
+| **Windows transport for the experimental server** | `packages/client/src/unix.ts` (`discoverUnixServers`, `createUnixTransportFactory`), `packages/coding-agent/src/experimental/server.ts` (`ensurePrivateServerDirectory`) | 25 tests in `experimental-remote-runtime.test.ts` reject; the subsystem cannot start on Windows | the throws are in `src/`, not fixtures: `unix.ts:38` and `:99` throw on `process.platform === "win32"`, and `server.ts:59` throws because `process.getuid` does not exist on Windows. No alternative transport exists — `transport.ts` declares only the `ByteTransport` interface and a factory *type*, and a search for `\\.\pipe` / `namedPipe` returns nothing | named pipes (`\\.\pipe\...`) **plus a Windows discovery mechanism** — there is no directory to scan, so discovery needs a registry entry, lock directory, or explicit config. **The security model must move too:** the Unix path's barrier is `mkdir 0o700` + `lstat` uid comparison in `ensurePrivateServerDirectory`, and `process.getuid` is also how `server.ts` proves directory ownership. Porting the transport without an equivalent ACL check would ship a *weaker* barrier on the one platform where it is currently absent |
+
+OMP comparison: OMP has no `client` package at all, and a search for
+`createUnixTransportFactory` / `discoverUnixServers` across the reference tree returns
+nothing, so this subsystem is PrimePi-original and no upstream design exists to match.
+Worth recording that OMP treats the missing POSIX uid as **ordinary**, using
+`process.getuid?.()` with a fallback in four places (`collab/registry.ts:376,407`,
+`ssh/connection-manager.ts:137,186`, `utils/shell-snapshot.ts:242`), where we treat it
+as fatal.
+
 ## 0. Preserved authorities (never re-derived by ported code)
 
 | Authority | Pi home | Rule for ported code |
