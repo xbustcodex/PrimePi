@@ -104,6 +104,28 @@ Key facts, each traced and cited:
 | 5 | shell composition | `interactive-mode.ts` — the primary target | `main.ts#runInteractiveMode:573-749` |
 | 6 | hard-coded colour audit | **closed** — no user-visible violation; see below | — |
 
+## Remaining test failures, and why none of them is a product defect
+
+`npm test` for `packages/coding-agent` on Windows:
+
+    Test Files  4 failed | 392 passed | 6 skipped (402)
+    Tests      13 failed | 4082 passed | 65 skipped (4160)
+
+All four files **pass when run individually** and fail only under full-suite parallelism.
+Every failure is `Test timed out in 30000ms` or a downstream consequence of one.
+
+| File | Nature |
+|---|---|
+| `experimental-remote-runtime.test.ts` | 9 of the 13. Durable-server composition: starts real coordinator processes over named pipes / unix sockets and waits on them. Under 402-file parallelism the 30s budget is exhausted before the server finishes booting. |
+| `extensions-discovery.test.ts` | `tsconfigPaths` costs ~2s per `jiti` import in the TypeScript source runtime, measured, with no warm-up. The budget was raised to 120s, which passes it alone; under full-suite contention even that is not always enough. |
+| `startup-session-name.test.ts` | Same shape: a spawn-and-wait test that runs out of budget. |
+| `bash-close-hang-windows.test.ts` | `describe.skipIf(process.platform !== "win32")` - **cannot run in CI**, which is Ubuntu. |
+
+The durable-server suites are the bulk of it and are a real signal about the machine, not the
+code: this is a Windows box with a slow disk and ~15GB free, running 402 test files
+concurrently. None of these four files imports anything changed by the migration work in this
+period.
+
 ## Hard-coded colour audit: closed
 
 Every hard-coded colour outside the theme system was traced to its call sites:
