@@ -8,7 +8,6 @@ import {
 } from "@earendil-works/pi-tui";
 import { existsSync } from "fs";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, getAgentDir, getSettingsPath, PACKAGE_NAME } from "../config.ts";
-import { areExperimentalFeaturesEnabled } from "../core/experimental.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
 import { SettingsManager } from "../core/settings-manager.ts";
@@ -169,11 +168,32 @@ export async function showStartupSplash(settingsManager: SettingsManager): Promi
 }
 
 /**
+ * Whether an environment variable opts in.
+ *
+ * Deliberately permissive about spelling, because a user who sets a skip flag should not be
+ * surprised by which word they typed: `1`, `true`, `yes` and `on` all mean yes, and `0`,
+ * `false`, `no`, and the empty string all mean no. This mirrors the reference's own
+ * `setupSkipEnvEnabled`, which uses the same rule, so a user carrying a habit from the
+ * reference is not caught out.
+ */
+function isTruthyEnvFlag(value: string | undefined): boolean {
+	if (value === undefined) return false;
+	const normalized = value.trim().toLowerCase();
+	return normalized !== "" && normalized !== "0" && normalized !== "false" && normalized !== "no";
+}
+
+/**
  * First-time setup runs when all of these hold:
- * - this is the official Pi distribution (not a fork/rebrand)
- * - experimental features are enabled (PI_EXPERIMENTAL=1)
+ * - this is the official Prime Pi distribution (not a third-party fork)
+ * - the setup was not skipped (PI_SKIP_SETUP, matching the reference's OMP_SKIP_SETUP)
  * - the default agent directory is used (no custom agent dir override)
  * - setup was not completed before (settings.json does not exist)
+ *
+ * The `PI_EXPERIMENTAL` gate this used to carry was wrong on two counts. It put the
+ * product's default first-run experience behind a flag nobody sets, and the reference does
+ * not gate it that way at all: it offers `OMP_SKIP_SETUP` instead, i.e. on by default with
+ * an opt-out. The name keeps the established `PI_` prefix so it reads as a
+ * compatibility-consistent variable rather than a new convention.
  */
 export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
 	if (
@@ -185,7 +205,7 @@ export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()
 	) {
 		return false;
 	}
-	if (!areExperimentalFeaturesEnabled()) {
+	if (isTruthyEnvFlag(process.env.PI_SKIP_SETUP)) {
 		return false;
 	}
 	if (process.env[ENV_AGENT_DIR]) {
