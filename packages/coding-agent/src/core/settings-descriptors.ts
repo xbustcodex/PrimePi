@@ -3308,7 +3308,7 @@ export const taskAgentIdleTtlMs = registerSetting({
 export const themeDark = registerSetting({
 	key: "theme.dark",
 	type: "string",
-	default: "primepi-dark",
+	default: "titanium",
 	ui: {
 		label: "Dark Theme",
 		description: "Theme applied when the terminal reports a dark background",
@@ -3320,7 +3320,7 @@ export const themeDark = registerSetting({
 export const themeLight = registerSetting({
 	key: "theme.light",
 	type: "string",
-	default: "primepi-light",
+	default: "light",
 	ui: {
 		label: "Light Theme",
 		description: "Theme applied when the terminal reports a light background",

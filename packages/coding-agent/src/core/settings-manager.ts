@@ -1206,10 +1206,58 @@ export class SettingsManager {
 		this.save();
 	}
 
+	/**
+	 * The theme this session should use, as a registered theme name.
+	 *
+	 * Resolved through the documented `theme.dark` / `theme.light` slots rather than a flat
+	 * `theme` key. The flat key is still honoured, last, so an existing config keeps working -
+	 * but it is no longer the only thing consulted, which is why writing the slots previously
+	 * had no effect at all.
+	 *
+	 * The slot is chosen from the terminal's reported appearance, with the other slot as the
+	 * fallback when appearance cannot be determined, so a user who configured only one slot
+	 * still gets a deliberate theme rather than the built-in default.
+	 */
 	getThemeSetting(): string | undefined {
-		const value = this.settings.theme;
-		if (typeof value === "string") return value;
-		return undefined;
+		// `theme` is a flat string on the merged Settings shape, so the slots are read from the
+		// global container by path rather than by property access. `readPath` is the same
+		// accessor the registry uses, so this follows whatever the settings loader accepted.
+		const dark = this.readThemeSlot("theme.dark");
+		const light = this.readThemeSlot("theme.light");
+		const preferLight = this.prefersLightAppearance();
+		const preferred = preferLight ? light : dark;
+		const alternate = preferLight ? dark : light;
+		if (preferred) return preferred;
+		if (alternate) return alternate;
+		// Backwards compatibility: an existing flat `theme` value still applies.
+		return typeof this.settings.theme === "string" ? this.settings.theme : undefined;
+	}
+
+	/** A `theme.dark` / `theme.light` slot from the global settings, if the user set one. */
+	private readThemeSlot(path: string): string | undefined {
+		const raw = readPath(this.globalSettings, path);
+		return typeof raw === "string" && raw.length > 0 ? raw : undefined;
+	}
+
+	/**
+	 * Whether the terminal reports a light background.
+	 *
+	 * Derived from the environment the reference also uses, rather than from a probe, because
+	 * this runs before any terminal exists. `COLORFGBG` encodes the background index:
+	 * below 8 is dark, 8 and above is light. Absent information resolves to dark, which is
+	 * the reference's own fallback order.
+	 */
+	private prefersLightAppearance(): boolean {
+		const colorFgBg = process.env.COLORFGBG;
+		if (!colorFgBg) return false;
+		// `COLORFGBG` is "<fg>;<bg>". The background is the **second** field; reading the
+		// last field happens to work for two-field values but silently inverts on any
+		// three-field form, and it swapped the dark and light slots in testing.
+		const parts = colorFgBg.split(";");
+		if (parts.length < 2) return false;
+		const background = Number.parseInt(parts[1]!, 10);
+		if (!Number.isFinite(background)) return false;
+		return background >= 8;
 	}
 
 	getTheme(): string | undefined {
