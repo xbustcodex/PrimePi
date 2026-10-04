@@ -413,7 +413,7 @@ export function getSelfUpdateUnavailableInstruction(
 			const layout = describeNpmInstallLayout();
 			if (layout) {
 				return (
-					`This installation is under ${layout.prefix}, which pi cannot confirm is a global npm ` +
+					`This installation is under ${layout.prefix}, which ${APP_NAME} cannot confirm is a global npm ` +
 					`prefix - a \`<prefix>${sep}node_modules\` layout is indistinguishable from a project-local ` +
 					`checkout - so it will not self-update here. If that prefix is yours and global, update it ` +
 					`yourself with: ${npmCommandWithPrefix(command, layout.prefix).display}`
@@ -595,9 +595,22 @@ export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
 export const VERSION: string = pkg.version || "0.0.0";
 
-// e.g., PI_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
-export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
-export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
+/**
+ * Environment variable names are **frozen at `PI_*`**, deliberately decoupled from
+ * `APP_NAME`.
+ *
+ * These used to be derived as `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`, which meant
+ * that rebranding the product noun would have silently renamed the environment
+ * variables. That would break every existing script, doc and `PI_CODING_AGENT_DIR`
+ * override a user already has - `AGENTS.md`, the test suites and the acceptance harness
+ * all set it. A display name must never move an identity.
+ *
+ * The `pi` prefix is a compatibility identifier (category B), not a product name, and it
+ * stays regardless of how the product is branded. `APP_NAME` may be anything.
+ */
+// e.g., PI_CODING_AGENT_DIR
+export const ENV_AGENT_DIR = "PI_CODING_AGENT_DIR";
+export const ENV_SESSION_DIR = "PI_CODING_AGENT_SESSION_DIR";
 
 export function expandTildePath(path: string): string {
 	return normalizePath(path);

@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import type { Container, EditorComponent, TUI } from "@earendil-works/pi-tui";
 import { getAuthCredential } from "../../cli/auth-command.ts";
+import { APP_NAME } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
 import {
 	BUG_REPORT_CUSTOM_ENTRY_TYPE,
@@ -41,8 +42,7 @@ interface BugReportOptions {
 
 type Overlay = Container & { dispose?: () => void };
 
-const DISCLAIMER =
-	"This report goes to the Pi developers (Earendil) and is not shared publicly. It includes your pi version, operating system, the current model and provider configuration (without API keys), loaded extensions, settings, and provider error diagnostics from this session.";
+const DISCLAIMER = `This report goes to the ${APP_NAME} developers (Earendil) and is not shared publicly. It includes your ${APP_NAME} version, operating system, the current model and provider configuration (without API keys), loaded extensions, settings, and provider error diagnostics from this session.`;
 const TRANSCRIPT_NOTE =
 	"The transcript contains your messages, model output, tool calls and their results, including file contents and command output read during this session.";
 

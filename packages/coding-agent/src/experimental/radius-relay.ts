@@ -2,6 +2,7 @@ import type { ByteTransport, ByteTransportFactory, ByteTransportHandlers, Client
 import { DEFAULT_MAX_FRAME_LENGTH, type ServerId } from "@earendil-works/pi-protocol";
 import type { Server } from "@earendil-works/pi-server";
 import { WebSocket } from "undici";
+import { APP_NAME } from "../config.ts";
 import type { RadiusRelayAuthResolver } from "./radius-auth.ts";
 
 export const RADIUS_RELAY_HOST_SUBPROTOCOL = "pi-session-relay.host.v1";
@@ -127,7 +128,7 @@ export class RadiusRelayHost {
 		this.#closed = true;
 		this.#abortController.abort();
 		this.#writer?.close();
-		this.#socket?.close(1000, "Pi server stopped");
+		this.#socket?.close(1000, `${APP_NAME} server stopped`);
 		this.#dropConnections();
 		await this.#loop;
 	}
@@ -473,7 +474,7 @@ class RadiusClientByteTransport implements ByteTransport {
 
 	close(): void {
 		if (!this.#markClosed()) return;
-		this.#socket.close(1000, "Pi client closed");
+		this.#socket.close(1000, `${APP_NAME} client closed`);
 	}
 
 	#fail(error: Error): void {

@@ -70,7 +70,7 @@ import {
 	type RetryCallbacks,
 	resetApiProviders,
 } from "@earendil-works/pi-ai/compat";
-import { getAgentDir } from "../config.ts";
+import { APP_NAME, getAgentDir } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -2874,7 +2874,7 @@ ${context}`
 		}
 
 		this._extensionRunner.invalidate(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
+			`This extension ctx is stale after session replacement or reload. Do not use a captured ${APP_NAME} or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().`,
 		);
 		this._disconnectFromAgent();
 		// A disposed session must stop reacting to settings: the listener rebuilds

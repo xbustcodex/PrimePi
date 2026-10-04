@@ -30,7 +30,6 @@ import {
 } from "../modes/interactive/theme/theme.ts";
 
 const OFFICIAL_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
-const OFFICIAL_APP_NAME = "pi";
 const OFFICIAL_CONFIG_DIR_NAME = ".pi";
 
 interface DistributionMetadata {
@@ -39,12 +38,20 @@ interface DistributionMetadata {
 	configDirName: string;
 }
 
-function isOfficialDistribution({ packageName, appName, configDirName }: DistributionMetadata): boolean {
-	return (
-		packageName === OFFICIAL_PACKAGE_NAME &&
-		appName === OFFICIAL_APP_NAME &&
-		configDirName === OFFICIAL_CONFIG_DIR_NAME
-	);
+/**
+ * Whether this is the Prime Pi distribution rather than a rebranded third-party build.
+ *
+ * The test is on the **package name and config directory**, never on the display name.
+ * It used to compare `appName === "pi"`, which meant renaming the product silently
+ * disabled the first-time setup experience — the gate that decides whether the startup
+ * splash appears at all. A product's own name is not evidence about its provenance; the
+ * npm scope it ships under and the directory it reads are.
+ *
+ * `appName` stays in the metadata shape because callers pass it, but is deliberately not
+ * compared: any display name is legitimate for an official build.
+ */
+function isOfficialDistribution({ packageName, configDirName }: DistributionMetadata): boolean {
+	return packageName === OFFICIAL_PACKAGE_NAME && configDirName === OFFICIAL_CONFIG_DIR_NAME;
 }
 
 function loadThemes(resources: ResolvedResource[]): Theme[] {
