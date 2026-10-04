@@ -161,7 +161,10 @@ export async function showStartupSplash(settingsManager: SettingsManager): Promi
 		};
 		paint();
 		const timer = setInterval(paint, SETUP_TICK_MS);
-		timer.unref();
+		// Deliberately **not** unref'd. `unref` lets the event loop exit while the splash is
+		// still on screen, so a short-lived invocation can terminate before `finish` runs and the
+		// splash never clears - it is left painted with no interactive mode behind it. The
+		// timer is cleared by `finish`, so it cannot outlive the splash either way.
 	});
 }
 
