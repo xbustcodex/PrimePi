@@ -26,7 +26,12 @@ import type { AuthInput } from "../cli/experimental/command-options.ts";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { CoordinatorConnection, type CoordinatorStartupLease, ensureCoordinator } from "./coordinator.ts";
-import { publishEndpoint, retractEndpoint } from "./endpoint-registry.ts";
+import {
+	endpointRegistryDirectory,
+	parseEndpointRegistryEntry,
+	publishEndpoint,
+	retractEndpoint,
+} from "./endpoint-registry.ts";
 import {
 	createLocalTransportFactory,
 	localAuthTokenFromEnvironment,
@@ -175,12 +180,21 @@ export async function activateServer(options: ActivateServerOptions): Promise<Ac
 	const profile = await acquireServerProfile(options.directory, options.requestedServerId);
 	const serverId = profile.serverId;
 	await profile.release();
-	const route = {
-		serverId,
-		path: resolveServerEndpoint(serverId, options.directory, randomUUID().replaceAll("-", "")).path,
-	};
+	// The endpoint this activator expects to find. On POSIX the socket name is a pure
+	// function of (serverId, directory), so a guess is enough and discovery scans for it
+	// anyway. On Windows the pipe name carries a **per-generation nonce the server
+	// chooses for itself**, so a guessed nonce can never match — which is why activation
+	// below reads the registered endpoint instead of inventing one.
 	const release = await acquireServerActivation(options.directory, serverId);
 	try {
+		// A server that is already up: its registration names the endpoint. Falling back to
+		// the POSIX-shaped guess keeps that path unchanged on both platforms.
+		const registered =
+			process.platform === "win32" ? await findRegisteredEndpoint(options.directory, serverId) : undefined;
+		const route: { serverId: ServerId; path: string } = {
+			serverId,
+			path: registered ?? resolveServerEndpoint(serverId, options.directory, randomUUID().replaceAll("-", "")).path,
+		};
 		const existing = await connect(route);
 		if (existing) {
 			// Another activator won the race, so startup-only selections can no longer be applied.
@@ -207,6 +221,13 @@ export async function activateServer(options: ActivateServerOptions): Promise<Ac
 		try {
 			const deadline = Date.now() + ACTIVATION_TIMEOUT_MS;
 			while (true) {
+				// Re-read the registration each round. On Windows the server picks its own
+				// generation nonce and publishes it, so the endpoint is only knowable once it
+				// has started — polling a guessed name would wait forever.
+				if (process.platform === "win32") {
+					const endpoint = await findRegisteredEndpoint(options.directory, serverId);
+					if (endpoint !== undefined) route.path = endpoint;
+				}
 				const client = await connect(route);
 				if (client) return { client, route };
 				if (spawnError) throw new Error("Failed to automatically activate server", { cause: spawnError });
@@ -222,6 +243,18 @@ export async function activateServer(options: ActivateServerOptions): Promise<Ac
 		}
 	} finally {
 		await release();
+	}
+}
+
+/** The endpoint a server has registered for itself, or undefined if it has not. */
+async function findRegisteredEndpoint(directory: string, serverId: ServerId): Promise<string | undefined> {
+	try {
+		const raw = await readFile(join(endpointRegistryDirectory(directory), `${serverId}.json`), "utf8");
+		const entry = parseEndpointRegistryEntry(raw);
+		return entry?.endpoint;
+	} catch {
+		// Not registered yet, or unreadable. Either way there is nothing to connect to yet.
+		return undefined;
 	}
 }
 

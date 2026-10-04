@@ -100,7 +100,7 @@ function entryPath(directory: string, serverId: ServerId): string {
 }
 
 /** Accept only the shape we wrote. Anything else is ignored, never partially believed. */
-function parseEntry(raw: string): EndpointRegistryEntry | undefined {
+export function parseEndpointRegistryEntry(raw: string): EndpointRegistryEntry | undefined {
 	let value: unknown;
 	try {
 		value = JSON.parse(raw);
@@ -236,7 +236,7 @@ export async function discoverEndpoints(
 			if (!isErrnoCode(error, "ENOENT")) throw error;
 			continue;
 		}
-		const entry = parseEntry(raw);
+		const entry = parseEndpointRegistryEntry(raw);
 		if (!entry) {
 			// Unparseable or wrong-version. Left in place rather than deleted: we cannot tell
 			// a corrupt file from one written by a newer version, and removing either would
