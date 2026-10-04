@@ -69,7 +69,6 @@ import {
 	modelsAreEqual,
 	type RetryCallbacks,
 	resetApiProviders,
-	streamSimple,
 } from "@earendil-works/pi-ai/compat";
 import { getAgentDir } from "../config.ts";
 import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
@@ -1018,10 +1017,6 @@ export class AgentSession {
 		headers?: Record<string, string>;
 		env?: Record<string, string>;
 	}> {
-		if (this.agent.streamFunction === streamSimple) {
-			return this._getRequiredRequestAuth(model, signal);
-		}
-
 		// **A failure to resolve auth must not become an unauthenticated request.**
 		//
 		// This used to catch every error and return `{ model }` — no key, no headers — so an
@@ -1034,13 +1029,47 @@ export class AgentSession {
 		// No try/catch at all now: an error from `getAuth` propagates unchanged, so an
 		// aborted signal still surfaces as an AbortError and every other failure keeps
 		// its own cause rather than being flattened.
+		//
+		// ## The predicate is behavioural, not a function reference
+		//
+		// This was `if (this.agent.streamFunction === streamSimple) return
+		// this._getRequiredRequestAuth(...)`, with the *else* branch degrading to an
+		// unauthenticated request. That check compared a function reference against a
+		// transport that nothing guarantees is the bare one:
+		//
+		//     core/sdk.ts:427  streamFn: async (model, context, options) => { … }
+		//
+		// `createAgentSession` always installs that wrapper, for cache warming and request
+		// shaping. So for **every session created through the SDK** the identity test was
+		// false, the else branch ran, and the requirement this function exists to enforce
+		// never applied. It was unreachable, not merely untested.
+		//
+		// What actually distinguishes the two cases is not *which function* is installed
+		// but *whether a credential can be resolved for this request*. So the question is
+		// asked of the resolution itself: no key and no headers means the request would go
+		// out unauthenticated, and that is refused here rather than at the provider.
+		//
+		// A custom `streamFn` that serves a request without credentials is still allowed —
+		// `manually compacts with a custom streamFn when registry auth is absent` depends
+		// on it. What is refused is *degrading* a resolvable provider request to an
+		// unauthenticated one.
 		const result = await this._modelRuntime.getAuth(model, { signal });
 		if (!result) return { model };
 		const requestModel = result.auth.baseUrl ? { ...model, baseUrl: result.auth.baseUrl } : model;
+		const apiKey = result.auth.apiKey;
+		const headers = withoutDeletedHeaders(result.auth.headers);
+		// `hasConfiguredAuth` is the behavioural question the identity check was trying to
+		// approximate: the runtime knows whether this provider has credentials at all, and
+		// that survives any transport wrapper. Combined with "nothing was resolved", it
+		// means the provider is reachable and configured yet this request would carry no
+		// credential — the exact condition `_getRequiredRequestAuth` throws on.
+		if (!apiKey && !headers && this._modelRuntime.hasConfiguredAuth(model.provider)) {
+			return this._getRequiredRequestAuth(model, signal);
+		}
 		return {
 			model: requestModel,
-			apiKey: result.auth.apiKey,
-			headers: withoutDeletedHeaders(result.auth.headers),
+			apiKey,
+			headers,
 			env: result.env,
 		};
 	}
