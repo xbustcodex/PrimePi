@@ -572,6 +572,12 @@ async function restrictSocket(path: string): Promise<void> {
 }
 
 async function removeStaleSocket(path: string): Promise<void> {
+	// A named pipe has no filesystem entry, so there is nothing to remove and `lstat` would
+	// silently answer about the *current directory* instead - reporting a non-socket and
+	// throwing. On Windows the equivalent question is "is anything already bound to this
+	// pipe name", which `listen` itself answers with EADDRINUSE, so there is no stale
+	// filesystem state to clear here.
+	if (process.platform === "win32") return;
 	try {
 		const stats = await lstat(path);
 		if (!stats.isSocket()) throw new Error(`Coordinator path is not a socket: ${path}`);
