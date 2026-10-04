@@ -1,4 +1,5 @@
 import { compare, valid } from "semver";
+import { PACKAGE_NAME, UPDATE_CHANNEL } from "../config.ts";
 import { fetchWithRetry } from "./management-http.ts";
 import { getPiUserAgent } from "./pi-user-agent.ts";
 
@@ -8,6 +9,8 @@ const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 export interface LatestPiRelease {
 	version: string;
 	packageName?: string;
+	/** Release channel the announcement belongs to, when the authority declares one. */
+	channel?: string;
 	note?: string;
 }
 
@@ -71,6 +74,7 @@ export async function getLatestPiRelease(
 
 	const data = (await response.json()) as {
 		packageName?: unknown;
+		channel?: unknown;
 		version?: unknown;
 		note?: unknown;
 	};
@@ -79,10 +83,12 @@ export async function getLatestPiRelease(
 	}
 	const packageName =
 		typeof data.packageName === "string" && data.packageName.trim() ? data.packageName.trim() : undefined;
+	const channel = typeof data.channel === "string" && data.channel.trim() ? data.channel.trim() : undefined;
 	const note = typeof data.note === "string" && data.note.trim() ? data.note.trim() : undefined;
 	return {
 		version: data.version.trim(),
 		packageName,
+		...(channel ? { channel } : {}),
 		...(note ? { note } : {}),
 	};
 }
@@ -94,12 +100,45 @@ export async function getLatestPiVersion(
 	return (await getLatestPiRelease(currentVersion, options))?.version;
 }
 
-export async function checkForNewPiVersion(currentVersion: string): Promise<LatestPiRelease | undefined> {
+/**
+ * Whether an announced release belongs to **this** product's release channel.
+ *
+ * The version endpoint is upstream Pi's, and it answers with
+ * `@earendil-works/pi-coding-agent` — which is also *our* inherited npm package name, so
+ * comparing package names cannot discriminate. Upstream's payload also carries no
+ * `channel`, so requiring ours rejects it.
+ *
+ * If this product has no declared channel, there is no way to tell an upstream release
+ * from one of ours, so nothing is treated as an update. That is the conservative
+ * direction: the user is never told to run an update for a package they did not install.
+ */
+export function releaseMatchesThisProduct(
+	release: LatestPiRelease,
+	thisChannel: string | undefined = UPDATE_CHANNEL,
+	thisPackageName: string = PACKAGE_NAME,
+): boolean {
+	if (thisChannel === undefined) return false;
+	if (release.channel !== thisChannel) return false;
+	// Belt and braces: a channel match alone is not enough if the payload also names a
+	// different package.
+	if (release.packageName !== undefined && release.packageName !== thisPackageName) return false;
+	return true;
+}
+
+export async function checkForNewPiVersion(
+	currentVersion: string,
+	thisChannel: string | undefined = UPDATE_CHANNEL,
+	thisPackageName: string = PACKAGE_NAME,
+): Promise<LatestPiRelease | undefined> {
 	if (process.env.PI_SKIP_VERSION_CHECK) return undefined;
 
 	try {
 		const latestRelease = await getLatestPiRelease(currentVersion);
-		if (latestRelease && isNewerPackageVersion(latestRelease.version, currentVersion)) {
+		if (!latestRelease) return undefined;
+		// Upstream-awareness is kept for migration and parity work, but an upstream release
+		// is not a Prime Pi update and must not be presented as one.
+		if (!releaseMatchesThisProduct(latestRelease, thisChannel, thisPackageName)) return undefined;
+		if (isNewerPackageVersion(latestRelease.version, currentVersion)) {
 			return latestRelease;
 		}
 		return undefined;

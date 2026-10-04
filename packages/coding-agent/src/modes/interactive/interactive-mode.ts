@@ -1003,7 +1003,7 @@ export class InteractiveMode {
 			);
 			const onboarding = theme.fg(
 				"dim",
-				`Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.`,
+				`${APP_NAME} can explain its own features and look up its docs. Ask it how to use or extend ${APP_NAME}.`,
 			);
 			this.builtInHeader = new ExpandableText(
 				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
@@ -4601,6 +4601,13 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	/**
+	 * Show an available update **for this product**.
+	 *
+	 * Callers must have checked the release identifies this package; `checkForNewPiVersion`
+	 * does that. An upstream Pi release must never reach here, because presenting it as a
+	 * Prime Pi update would point the user at an installer for a package they do not run.
+	 */
 	showNewVersionNotification(release: LatestPiRelease): void {
 		const action = theme.fg("accent", `${APP_NAME} update`);
 		const updateInstruction = theme.fg("muted", `New version ${release.version} is available. Run `) + action;

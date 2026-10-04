@@ -577,6 +577,13 @@ interface PackageJson {
 	piConfig?: {
 		name?: string;
 		configDir?: string;
+		/**
+		 * Identifies this product's own release channel to an update authority. Upstream's
+		 * version endpoint answers for `@earendil-works/pi-coding-agent`, which is also
+		 * *our* inherited package name, so the package name cannot tell the two apart. This
+		 * field can: a release that does not declare our channel is not a Prime Pi update.
+		 */
+		updateChannel?: string;
 	};
 }
 
@@ -593,6 +600,11 @@ export const PACKAGE_NAME: string = pkg.name || "@earendil-works/pi-coding-agent
 export const APP_NAME: string = piConfigName || "pi";
 export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
+/**
+ * This product's release channel, as declared by package metadata. An update
+ * announcement that does not carry it belongs to a different product.
+ */
+export const UPDATE_CHANNEL: string | undefined = pkg.piConfig?.updateChannel;
 export const VERSION: string = pkg.version || "0.0.0";
 
 /**

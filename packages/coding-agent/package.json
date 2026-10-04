@@ -5,7 +5,8 @@
 	"type": "module",
 	"piConfig": {
 		"name": "Prime Pi",
-		"configDir": ".pi"
+		"configDir": ".pi",
+		"updateChannel": "primepi"
 	},
 	"bin": {
 		"pi": "dist/bundle/cli.js"
