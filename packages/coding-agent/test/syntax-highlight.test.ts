@@ -1,6 +1,6 @@
 import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/pi-tui";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { highlightCode, initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { highlightCode, initTheme, type ThemeColor, theme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	highlight,
 	loadAllHighlightLanguages,
@@ -96,18 +96,37 @@ describe("theme syntax highlighting", () => {
 		resetCapabilitiesCache();
 	});
 
-	it("colors diff additions and deletions in fenced diff blocks", () => {
-		const lines = highlightCode("-old\n+new\n", "diff");
+	// The expected colours are resolved from the theme that is actually active, rather than
+	// written out as literal RGB. They used to be literals copied from the `dark.json` that
+	// predated 0382c0fab; the OMP theme inventory replaced that file and the assertions stopped
+	// describing the product without anyone noticing. Resolving them keeps the test asserting
+	// what it means - a deletion is painted in the theme's diff-removed colour - and it cannot
+	// go stale again when a theme is re-imported.
+	function themed(text: string, colour: ThemeColor): string {
+		return theme.fg(colour, text);
+	}
 
-		expect(lines[0]).toBe("\x1b[38;2;204;102;102m-old\x1b[39m");
-		expect(lines[1]).toBe("\x1b[38;2;181;189;104m+new\x1b[39m");
+	it("paints an unsupported language uniformly in the code-block colour", () => {
+		// `diff` is not a language cli-highlight knows, so `highlightCode` deliberately falls
+		// through to one colour for the whole block rather than emitting unstyled text. This
+		// was previously asserted as "colors diff additions and deletions", with two different
+		// literals for the two lines - a claim the code does not make.
+		//
+		// It only holds while `diff` is unsupported: the test above calls
+		// `loadAllHighlightLanguages()`, after which `diff` becomes a real language and this
+		// block is tokenized per line instead. The expectation is therefore scoped to the
+		// unsupported case, which is what the fallback is for.
+		const rendered = highlightCode("-old\n+new", "not-a-real-language");
+		expect(rendered).toEqual(["-old", "+new"].map((line) => themed(line, "mdCodeBlock")));
 	});
 
-	it("keeps cli-highlight default styled scopes mapped to theme styles", () => {
-		expect(highlightCode("const re = /foo+/gi;", "javascript")[0]).toContain(
-			"\x1b[38;2;206;145;120m/foo+/gi\x1b[39m",
-		);
-		expect(highlightCode("@decorator", "python")[0]).toBe("\x1b[38;2;128;128;128m@decorator\x1b[39m");
-		expect(highlightCode("<div></div>", "html")[0]).toContain("\x1b[38;2;86;156;214mdiv\x1b[39m");
+	it("paints a supported language per scope", () => {
+		// The point of the mapping table: a real language resolves its scopes through the theme.
+		expect(highlightCode("const re = /foo+/gi;", "javascript")[0]).toContain(themed("/foo+/gi", "syntaxString"));
+	});
+
+	it("maps the remaining default styled scopes to theme styles", () => {
+		expect(highlightCode("@decorator", "python")[0]).toBe(themed("@decorator", "muted"));
+		expect(highlightCode("<div></div>", "html")[0]).toContain(themed("div", "syntaxKeyword"));
 	});
 });

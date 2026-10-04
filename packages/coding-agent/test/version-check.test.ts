@@ -34,12 +34,32 @@ describe("version checks", () => {
 		expect(isNewerPackageVersion("0.70.6", "0.70.5")).toBe(true);
 	});
 
-	it("returns only newer versions", async () => {
-		const fetchMock = vi.fn(async () => Response.json({ version: "1.2.3" }));
-		vi.stubGlobal("fetch", fetchMock);
+	// The channel argument is passed explicitly rather than left to `UPDATE_CHANNEL`, so this
+	// test states which release it is talking about instead of depending on what this build
+	// happens to be. `releaseMatchesThisProduct` rejects a payload that does not carry the
+	// channel, which is the self-update barrier and is exercised below.
+	it("returns only newer versions on this product's own channel", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ version: "1.2.3", channel: "primepi" })),
+		);
 
-		await expect(checkForNewPiVersion("1.2.3")).resolves.toBeUndefined();
-		await expect(checkForNewPiVersion("1.2.2")).resolves.toEqual({ version: "1.2.3" });
+		await expect(checkForNewPiVersion("1.2.3", "primepi")).resolves.toBeUndefined();
+		await expect(checkForNewPiVersion("1.2.2", "primepi")).resolves.toEqual({
+			version: "1.2.3",
+			channel: "primepi",
+		});
+	});
+
+	it("does not present an upstream release as one of ours", async () => {
+		// Upstream answers for `@earendil-works/pi-coding-agent`, which is also our inherited
+		// package name, and carries no channel. That is not a Prime Pi update.
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => Response.json({ version: "9.9.9" })),
+		);
+
+		await expect(checkForNewPiVersion("1.2.2", "primepi")).resolves.toBeUndefined();
 	});
 
 	it("uses the pi.dev version check api with a pi user agent", async () => {
