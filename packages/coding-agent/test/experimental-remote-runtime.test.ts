@@ -319,8 +319,14 @@ describe("experimental durable server composition", () => {
 		servers.add(first);
 		servers.add(second);
 
-		expect((await lstat(join(directory, `control-${firstId}.sock`))).isSocket()).toBe(true);
-		expect((await lstat(join(directory, `control-${secondId}.sock`))).isSocket()).toBe(true);
+		// POSIX keeps a `control-<id>.sock` file per server; a Windows named pipe has no
+		// directory entry at all, so what proves a second server is running here is that both
+		// are *registered and reachable* - which is what the list below demonstrates. The
+		// filesystem assertions are the POSIX counterpart and cannot hold on Windows.
+		if (process.platform !== "win32") {
+			expect((await lstat(join(directory, `control-${firstId}.sock`))).isSocket()).toBe(true);
+			expect((await lstat(join(directory, `control-${secondId}.sock`))).isSocket()).toBe(true);
+		}
 		await expect(runClient({ command: "client" }, { directory })).resolves.toEqual({
 			kind: "list",
 			sessions: [

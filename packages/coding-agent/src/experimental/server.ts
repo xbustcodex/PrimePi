@@ -26,6 +26,7 @@ import type { AuthInput } from "../cli/experimental/command-options.ts";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { CoordinatorConnection, type CoordinatorStartupLease, ensureCoordinator } from "./coordinator.ts";
+import { publishEndpoint, retractEndpoint } from "./endpoint-registry.ts";
 import {
 	createLocalTransportFactory,
 	localAuthTokenFromEnvironment,
@@ -680,6 +681,21 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 		await coordinator.connect();
 		startupLease.close();
 		startupLease = undefined;
+		// Register for discovery. Windows only: a POSIX socket is a directory entry, so
+		// `discoverUnixServers` finds it by scanning and registering would be redundant state
+		// with its own lifecycle for no gain. Unix behaviour is untouched.
+		//
+		// Discovery only. The entry nominates this endpoint and nothing more; the credential
+		// the server requires in its `hello` frame is what authorises a connection, and no
+		// credential is written here.
+		if (process.platform === "win32") {
+			await publishEndpoint(directory, {
+				serverId,
+				endpoint: serverPath,
+				pid: process.pid,
+				createdAt: new Date().toISOString(),
+			});
+		}
 		await workers.discover(coordinator.peerIds);
 		await backend.refreshSessions();
 		relay = new RadiusRelayHost({
@@ -723,6 +739,12 @@ export async function startServer(options: StartServerOptions = {}): Promise<Run
 							else await activeWorkers.shutdown();
 						} finally {
 							activeCoordinator.close();
+							// Remove only this server's registration, named by its own serverId, so another
+							// server in the same directory is untouched. A crash leaves the entry behind, which
+							// `discoverEndpoints` prunes once it is past the grace period and the pid is gone.
+							if (process.platform === "win32") {
+								await retractEndpoint(directory, serverId);
+							}
 						}
 					}
 				})();

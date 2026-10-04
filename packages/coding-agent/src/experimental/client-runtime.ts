@@ -4,6 +4,7 @@ import { Client, ServerError } from "@earendil-works/pi-client";
 import { discoverUnixServers, type UnixServerRoute } from "@earendil-works/pi-client/unix";
 import { isServerId, type ServerId } from "@earendil-works/pi-protocol";
 import type { ClientCommand } from "../cli/experimental/commands/client.ts";
+import { discoverEndpoints, type EndpointRegistryEntry } from "./endpoint-registry.ts";
 import {
 	createLocalTransportFactory,
 	localAuthTokenFromEnvironment,
@@ -87,7 +88,38 @@ export async function openClientRuntime(
 		// cannot apply. Discovery on Windows means activating, which connects first and starts a
 		// server only if nothing answers. That is the same shape as a POSIX scan that finds
 		// nothing, and it needs no privileged enumeration of another process's endpoints.
-		routes = [];
+		// A named pipe has no directory entry, so `discoverUnixServers` cannot apply.
+		// Instead each server registers itself in the same directory, and every registered
+		// candidate is **probed by connecting and completing the authenticated handshake** —
+		// exactly what the POSIX scan does with a socket file. An entry naming a pipe no
+		// reachable server answers on, or one that refuses our credential, is omitted rather
+		// than trusted.
+		//
+		// So the registry nominates candidates and the transport authenticates them, in that
+		// order. Nothing here can turn a file on disk into a usable server.
+		const authToken = localAuthTokenFromEnvironment();
+		const discovered = await discoverEndpoints(directory, {
+			probe: (entry) => probeRegisteredEndpoint(entry, authToken),
+		});
+		routes = discovered.map((entry) => ({
+			transport: "named-pipe" as const,
+			serverId: entry.serverId,
+			path: entry.endpoint,
+		}));
+		if (routes.length > 0 && command.model !== undefined) {
+			throw new Error("Model selection is only valid when automatically activating a new server");
+		}
+		if (routes.length === 0) {
+			const activated = await activateServer({
+				directory,
+				requestedServerId: process.env[ENV_SERVER_ID],
+				sessionDir: resolveSessionDirectory(),
+				provider: command.provider,
+				model: command.model,
+			});
+			routes = [localRouteForPath(activated.route.serverId, activated.route.path)];
+			activatedClient = activated.client;
+		}
 	} else {
 		routes = (await discoverUnixServers({ directory })).map((route) => ({ transport: "unix", ...route }));
 		if (routes.length > 0 && command.model !== undefined) {
@@ -266,6 +298,54 @@ export async function activateBuiltinClientServices(
  */
 const PIPE_ENDPOINT_PATTERN =
 	/^\\\\\.\\pipe\\[A-Za-z0-9._-]+-([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})-[0-9a-f]{12,32}$/;
+
+const DISCOVERY_PROBE_TIMEOUT_MS = 1_000;
+
+/**
+ * Decide whether a registered endpoint is a usable server.
+ *
+ * **The registry nominates; this authenticates.** A full `Client` connects and completes the
+ * `hello` handshake, so the entry's credential is verified by the same constant-time check the
+ * ordinary request path uses. Only a completed handshake makes the endpoint a route.
+ *
+ * Consequences, which are the point:
+ *
+ * - a registry entry naming a pipe no reachable server answers on is omitted;
+ * - a registry entry naming an impostor's pipe is omitted, because the impostor cannot
+ *   present the credential;
+ * - a registry entry naming the *right* server is usable, which is the capability that was
+ *   missing.
+ *
+ * Any failure is `false`. A probe that throws is not evidence of death — `discoverEndpoints`
+ * treats a thrown probe as "leave the entry alone" — so this only reports positive results
+ * and lets the caller's own error handling distinguish the cases.
+ */
+async function probeRegisteredEndpoint(entry: EndpointRegistryEntry, authToken: string | undefined): Promise<boolean> {
+	if (authToken === undefined || authToken.length === 0) return false;
+	const client = new Client({
+		serverId: entry.serverId,
+		authToken,
+		transportFactory: createLocalTransportFactory({ transport: "named-pipe", path: entry.endpoint }, authToken),
+	});
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await Promise.race([
+			client.connect(),
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => reject(new Error("Endpoint probe timed out")), DISCOVERY_PROBE_TIMEOUT_MS);
+				timeout.unref();
+			}),
+		]);
+		return true;
+	} catch {
+		// Missing pipe, refused connection, wrong credential, protocol mismatch, timeout —
+		// all mean "not a usable server", which is the only answer this returns.
+		return false;
+	} finally {
+		if (timeout) clearTimeout(timeout);
+		await client.dispose().catch(() => undefined);
+	}
+}
 
 function routeFromExplicitPath(path: string): UnixServerRoute {
 	const pipeMatch = PIPE_ENDPOINT_PATTERN.exec(path);
