@@ -3305,6 +3305,30 @@ export const taskAgentIdleTtlMs = registerSetting({
 		group: "Isolation",
 	},
 });
+/**
+ * Whether the animated startup splash runs on an ordinary interactive launch.
+ *
+ * Defaults to **false**, matching the reference: `startup.showSplash` is `default: false`
+ * there, because the reference's splash is phase 0 of the setup wizard, and the wizard is
+ * what a first run gets. Running the animation on *every* launch is Prime Pi's choice and
+ * it was the wrong one - it spends 2.6s of every session on decoration.
+ *
+ * First run still shows it regardless, because that is the wizard's phase 0 and the whole
+ * point of the onboarding experience. This setting only governs the repeat case.
+ */
+export const startupShowSplash = registerSetting({
+	key: "startup.showSplash",
+	type: "boolean",
+	default: false,
+	ui: {
+		label: "Show Startup Splash",
+		description:
+			"Show the full animated splash on normal interactive startup. First-run onboarding shows it either way, since it is the first scene of the wizard",
+		tab: "appearance",
+		group: "Startup",
+	},
+});
+
 export const themeDark = registerSetting({
 	key: "theme.dark",
 	type: "string",

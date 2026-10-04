@@ -1542,6 +1542,17 @@ export class SettingsManager {
 		return parseTimeoutSetting(this.settings.websocketConnectTimeoutMs, "websocketConnectTimeoutMs");
 	}
 
+	/**
+	 * Whether an ordinary launch should run the animated startup splash.
+	 *
+	 * Read through the registry rather than by raw property access, so the typed
+	 * descriptor, its layer precedence and its default are all authoritative here - the
+	 * same rule the typed-settings work established.
+	 */
+	getStartupShowSplash(): boolean {
+		return this.getSetting<boolean>("startup.showSplash")?.value === true;
+	}
+
 	getHideThinkingBlock(): boolean {
 		return this.settings.hideThinkingBlock ?? false;
 	}

@@ -678,9 +678,13 @@ export async function main(args: string[], options?: MainOptions) {
 
 	// Experimental first-time setup: theme choice and analytics opt-in.
 	// Runs before any runtime services are created so the chosen settings apply everywhere.
+	// The setup wizard is the first run's splash: it draws the same artwork as its opening
+	// scene, so the separate splash must not run again afterwards.
+	let ranFirstTimeSetup = false;
 	if (appMode === "interactive" && !parsed.help && parsed.listModels === undefined && shouldRunFirstTimeSetup()) {
 		await showFirstTimeSetup(startupSettingsManager);
 		time("firstTimeSetup");
+		ranFirstTimeSetup = true;
 	}
 
 	if (appMode === "interactive" && parsed.useTheme !== undefined) {
@@ -957,12 +961,21 @@ export async function main(args: string[], options?: MainOptions) {
 	// rather than flashing default styling first, after piped stdin has demoted a piped run
 	// to print mode so a scripted invocation is never blocked for 2.6s, and before the
 	// interactive mode is constructed so it is the first painted frame.
+	// A first run shows the splash because it is the first scene of the setup wizard, which is
+	// what the reference actually does. An ordinary launch shows it only when the user asked
+	// for it: the reference's `startup.showSplash` defaults to false, and spending 2.6s of
+	// every subsequent session on decoration was Prime Pi's mistake, not parity.
 	const wantsStartupSplash =
 		appMode === "interactive" &&
 		!parsed.help &&
 		parsed.listModels === undefined &&
 		!parsed.resume &&
-		stdinContent === undefined;
+		stdinContent === undefined &&
+		// A first run already got the artwork from the wizard's opening scene. Running the
+		// splash again would play it twice in one launch, so it is excluded here rather than
+		// shown "because it is a first run" - the wizard already covered that case.
+		!ranFirstTimeSetup &&
+		startupSettingsManager.getStartupShowSplash();
 	if (wantsStartupSplash) {
 		await showStartupSplash(startupSettingsManager);
 		time("startupSplash");
