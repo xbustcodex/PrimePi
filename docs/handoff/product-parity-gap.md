@@ -33,11 +33,12 @@ Confirmed at the module level - the reference has whole directories this tree la
 
 | # | Failure | Status |
 |---|---|---|
-| 1 | Prime Pi launches and operates like stock Pi | **partly closed** — splash now on the launch path; composition still stock |
+| 1 | Prime Pi launches and operates like stock Pi | **partly closed** — launch path corrected; composition still stock |
 | 2 | Prime Pi branding incomplete | **closed for prose** (`product-branding.test.ts`), shell identity still to audit |
-| 3 | OMP themes missing from the running product | **inventory complete** (102/102 applied); reachability from the UI still to verify |
-| 4 | OMP startup/splash missing | **closed** — rendered by the shipped binary, captured |
+| 3 | OMP themes missing from the running product | **closed** — 102/102 applied and **selection verified** (`46359ce7a`) |
+| 4 | OMP startup/splash missing | **closed** — rendered by the shipped binary (`5c5955905`, `b1f8bbbac`) |
 | 5 | Upstream Pi update leaks as a Prime Pi update | **closed and verified** (`688cce541`) |
+| 6 | First-run onboarding unreachable | **closed** (`4314b93f7`) — on by default, skippable |
 
 ### Verified by running the built application
 
@@ -48,6 +49,22 @@ Captured from the shipped binary at 120x34, not from source:
 - **Startup splash:** starfield, 2x brand mark in the diagonal gradient, and the rippling
   water surface all appear at ~2s in a real launch. The skip hint has not yet been
   confirmed visually.
+
+## Failures found by running the application, after the ledger said "done"
+
+These are not in the original table because they were invisible to it. Each was found by
+launching the shipped binary, not by reading code.
+
+| Failure | Fix |
+|---|---|
+| The splash **never cleared** - `timer.unref()` let the event loop exit mid-animation, leaving a visibly stuck terminal | `5c5955905` |
+| `theme.dark` / `theme.light` were declared in the registry but **never read**; the runtime read a flat `theme` key, so configuring a slot did nothing | `46359ce7a` |
+| Both theme defaults named themes that **were never registered** (`primepi-dark`), so an unconfigured lookup failed silently | `46359ce7a` |
+| First-run onboarding was gated behind `PI_EXPERIMENTAL=1`, so a fresh install got an empty prompt | `4314b93f7` |
+| The splash ran on **every** launch; the reference defaults it off because there it is the wizard's first scene | `b1f8bbbac` |
+
+Two of these were introduced by the migration work itself (the unref, the gate), which is
+the argument for the running-application standard: none of them failed a test.
 
 ## What OMP's root composition is (traced from source)
 
@@ -82,7 +99,7 @@ Key facts, each traced and cited:
 |---|---|---|---|
 | 1 | splash visual completeness (skip hint, compact fallback) | `modes/interactive/startup-splash.ts` | `tui/src/setup/scenes/splash.ts` |
 | 2 | startup composer prepaint, so there is no unthemed flash | `cli`/`main` startup path | `modes/startup-composer.ts:71-112` |
-| 3 | 5-scene first-run setup wizard | new `modes/interactive/setup/` | `tui/src/setup/{wizard,wizard-overlay}.ts` |
+| 3 | 5-scene first-run setup wizard - **reachable now**, scenes still to port | new `modes/interactive/setup/` | `tui/src/setup/{wizard,wizard-overlay}.ts` |
 | 4 | theme selector reachable from the UI, with live preview | settings `appearance` tab | `main.ts:1835`, `previewTheme` |
 | 5 | shell composition | `interactive-mode.ts` — the primary target | `main.ts#runInteractiveMode:573-749` |
 | 6 | hard-coded colour audit | every component bypassing `theme` | — |
