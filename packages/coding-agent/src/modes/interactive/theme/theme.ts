@@ -404,15 +404,63 @@ export class Theme {
 
 let BUILTIN_THEMES: Record<string, ThemeJson> | undefined;
 
+/**
+ * Diagnostics for a theme that could not be loaded.
+ *
+ * Collected rather than printed: a broken built-in must be visible in a log without
+ * spraying the terminal during startup, and without being allowed to fail the registry.
+ */
+const themeDiagnostics: string[] = [];
+
+function reportThemeDiagnostic(message: string): void {
+	themeDiagnostics.push(message);
+}
+
+/** Everything reported since startup, for tests and for `--print` diagnostics. */
+export function getThemeDiagnostics(): readonly string[] {
+	return themeDiagnostics;
+}
+
+/**
+ * Every theme shipped with the product, keyed by its `name`.
+ *
+ * The inventory is the complete current OMP set - `dark`, `light`, and the 100 files under
+ * `theme/defaults/` - carried across verbatim, because the palettes and their semantic
+ * token mappings are the parity surface. `docs/handoff/theme-inventory.md` records the
+ * comparison against the reference.
+ *
+ * The defaults are read from disk rather than imported one by one, so a theme is added by
+ * dropping in a file and cannot drift from what ships.
+ */
 function getBuiltinThemes(): Record<string, ThemeJson> {
 	if (!BUILTIN_THEMES) {
 		const themesDir = getThemesDir();
-		const darkPath = path.join(themesDir, "dark.json");
-		const lightPath = path.join(themesDir, "light.json");
-		BUILTIN_THEMES = {
-			dark: JSON.parse(stripBom(fs.readFileSync(darkPath, "utf-8"))) as ThemeJson,
-			light: JSON.parse(stripBom(fs.readFileSync(lightPath, "utf-8"))) as ThemeJson,
+		const read = (file: string): ThemeJson => JSON.parse(stripBom(fs.readFileSync(file, "utf-8"))) as ThemeJson;
+		const themes: Record<string, ThemeJson> = {
+			dark: read(path.join(themesDir, "dark.json")),
+			light: read(path.join(themesDir, "light.json")),
 		};
+		// A single unreadable default must not take the whole registry down, so each is
+		// isolated and reported rather than allowed to throw.
+		let entries: string[] = [];
+		try {
+			entries = fs.readdirSync(path.join(themesDir, "defaults")).filter((entry) => entry.endsWith(".json"));
+		} catch {
+			entries = [];
+		}
+		for (const entry of entries) {
+			try {
+				const theme = read(path.join(themesDir, "defaults", entry));
+				if (typeof theme.name === "string" && theme.name.length > 0) {
+					themes[theme.name] = theme;
+				}
+			} catch (error) {
+				reportThemeDiagnostic(
+					`Failed to load built-in theme ${entry}: ${error instanceof Error ? error.message : String(error)}`,
+				);
+			}
+		}
+		BUILTIN_THEMES = themes;
 	}
 	return BUILTIN_THEMES;
 }

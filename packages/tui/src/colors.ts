@@ -85,7 +85,16 @@ const OKLCH_PATTERN = new RegExp(
 export function parseColor(value: string | number): Color {
 	if (typeof value === "number") return indexedColor(value);
 
-	const hex = /^#([\da-f]{3}|[\da-f]{6})$/i.exec(value);
+	// 3, 6, or 8 digits. 8 is `#RRGGBBAA`, which 70 of the 102 built-in themes use for
+	// translucent selections - the reference passes such values through unchanged
+	// (`resolveToHex` in `theme/color.ts` returns the string as-is), so rejecting them here
+	// made `dark-poimandres` and `light-poimandres` fail to load at all.
+	//
+	// The alpha byte is dropped rather than composited: a theme declares the colour it wants
+	// the cell to read as, and the renderer owns background blending. Compositing here would
+	// bake in a guess about what is behind the cell, which differs between the chat surface,
+	// a dialog and the status line.
+	const hex = /^#([\da-f]{3}|[\da-f]{6}|[\da-f]{8})$/i.exec(value);
 	if (hex) {
 		const digits = hex[1].length === 3 ? [...hex[1]].map((digit) => digit + digit).join("") : hex[1];
 		return rgbColor(
