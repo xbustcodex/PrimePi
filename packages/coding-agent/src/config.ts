@@ -574,6 +574,8 @@ export function getBundledInteractiveAssetPath(name: string): string {
 interface PackageJson {
 	name?: string;
 	version?: string;
+	/** The executables this package installs. A string is shorthand for one entry keyed by the package name. */
+	bin?: string | Record<string, string>;
 	piConfig?: {
 		name?: string;
 		configDir?: string;
@@ -599,6 +601,15 @@ const piConfigName: string | undefined = pkg.piConfig?.name;
 export const PACKAGE_NAME: string = pkg.name || "@earendil-works/pi-coding-agent";
 export const APP_NAME: string = piConfigName || "pi";
 export const APP_TITLE: string = piConfigName ? APP_NAME : "π";
+
+/**
+ * The executable this package installs, as declared by its `bin` map.
+ *
+ * Distinct from `APP_NAME`, which is the product's *display* name (`Prime Pi`). Anything that
+ * has to locate, spawn or name a file on disk must use this one: `APP_NAME` is a label for
+ * messages, and using it as a path silently produces a filename that does not exist.
+ */
+export const BIN_NAME: string = typeof pkg.bin === "string" ? pkg.bin : Object.keys(pkg.bin ?? {})[0] || "pi";
 export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
 /**
  * This product's release channel, as declared by package metadata. An update

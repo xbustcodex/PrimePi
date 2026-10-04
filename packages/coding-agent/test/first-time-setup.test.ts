@@ -1,60 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
-import { ENV_AGENT_DIR } from "../src/config.ts";
+import { describe, expect, it } from "vitest";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
-describe("shouldRunFirstTimeSetup", () => {
-	const originalPiExperimental = process.env.PI_EXPERIMENTAL;
-	const originalAgentDir = process.env[ENV_AGENT_DIR];
-	let tempDir: string;
-	let settingsPath: string;
-
-	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "pi-first-time-setup-"));
-		settingsPath = join(tempDir, "settings.json");
-		process.env.PI_EXPERIMENTAL = "1";
-		delete process.env[ENV_AGENT_DIR];
-	});
-
-	afterEach(() => {
-		rmSync(tempDir, { recursive: true, force: true });
-		if (originalPiExperimental === undefined) {
-			delete process.env.PI_EXPERIMENTAL;
-		} else {
-			process.env.PI_EXPERIMENTAL = originalPiExperimental;
-		}
-		if (originalAgentDir === undefined) {
-			delete process.env[ENV_AGENT_DIR];
-		} else {
-			process.env[ENV_AGENT_DIR] = originalAgentDir;
-		}
-	});
-
-	it("returns true when experimental, default agent dir, and no settings.json", () => {
-		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(true);
-	});
-
-	it("returns false when experimental features are disabled", () => {
-		delete process.env.PI_EXPERIMENTAL;
-
-		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-	});
-
-	it("returns false when a custom agent dir is set", () => {
-		process.env[ENV_AGENT_DIR] = tempDir;
-
-		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-	});
-
-	it("returns false when settings.json already exists", () => {
-		writeFileSync(settingsPath, "{}", "utf-8");
-
-		expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-	});
-});
+// The `shouldRunFirstTimeSetup` gating cases live in `first-run-setup-gate.test.ts`, which
+// covers the current contract: on by default, skipped by `PI_SKIP_SETUP`. The block that used
+// to live here asserted the previous `PI_EXPERIMENTAL` gate, which is no longer part of the
+// behaviour, and duplicated the custom-agent-dir and settings-exists cases.
 
 describe("analytics settings", () => {
 	it("defaults to disabled with no tracking identifier", () => {

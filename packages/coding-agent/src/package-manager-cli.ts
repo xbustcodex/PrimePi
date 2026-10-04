@@ -16,6 +16,7 @@ import { selectConfig } from "./cli/config-selector.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import {
 	APP_NAME,
+	BIN_NAME,
 	CONFIG_DIR_NAME,
 	detectInstallMethod,
 	getAgentDir,
@@ -104,11 +105,16 @@ async function runManagedNpmCi(stageDir: string): Promise<void> {
 }
 
 function verifyManagedRelease(releaseDir: string, expectedVersion: string): void {
+	// The installed executable is named by the package's `bin` map, which is `pi`. `APP_NAME`
+	// is the *product* name (`Prime Pi`) and is only ever a label in messages, so using it to
+	// build a filename meant `Prime Pi.cmd` was looked up on every managed update - a file that
+	// does not exist, so verification always failed and the update was abandoned at the
+	// pre-activation smoke test.
 	const binPath = join(
 		releaseDir,
 		"node_modules",
 		".bin",
-		process.platform === "win32" ? `${APP_NAME}.cmd` : APP_NAME,
+		process.platform === "win32" ? `${BIN_NAME}.cmd` : BIN_NAME,
 	);
 	const result = spawnProcessSync(binPath, ["--version"], {
 		encoding: "utf8",
