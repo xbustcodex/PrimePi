@@ -117,7 +117,12 @@ function parseEntry(raw: string): EndpointRegistryEntry | undefined {
 	// client at an arbitrary filesystem path or host:port.
 	if (!candidate.endpoint.startsWith("\\\\.\\pipe\\")) return undefined;
 	if (typeof candidate.pid !== "number" || !Number.isInteger(candidate.pid) || candidate.pid <= 0) return undefined;
-	if (typeof candidate.createdAt !== "string" || candidate.createdAt.length === 0) return undefined;
+	// A timestamp that cannot be parsed is not a usable age, so the entry is not usable
+	// either. It is ignored here and stays on disk; the pruning rule can still remove it
+	// once the probe fails and the pid is gone.
+	if (typeof candidate.createdAt !== "string" || Number.isNaN(Date.parse(candidate.createdAt))) {
+		return undefined;
+	}
 	return {
 		version: ENDPOINT_REGISTRY_VERSION,
 		serverId: candidate.serverId,
@@ -161,6 +166,12 @@ export async function publishEndpoint(
 	serverDirectory: string,
 	entry: Omit<EndpointRegistryEntry, "version">,
 ): Promise<EndpointRegistryEntry> {
+	// Validated before anything is written. The serverId becomes a **filename**, so an
+	// unvalidated one is a path-traversal vector — `../../escape` would place the entry
+	// outside the registry directory. `discoverEndpoints` re-checks on read because a file
+	// can be tampered with independently, but a writer that cannot emit an invalid name is
+	// the cheaper and stronger guarantee.
+	assertPublishable(entry);
 	const directory = endpointRegistryDirectory(serverDirectory);
 	// recursive, so two servers registering for the first time cannot fail each other.
 	await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -255,6 +266,22 @@ export async function discoverEndpoints(
 
 	await Promise.all(prunable.map((path) => rm(path, { force: true }).catch(() => undefined)));
 	return routes.sort((left, right) => left.serverId.localeCompare(right.serverId));
+}
+
+/** Reject anything that could not be a legitimate entry, before it reaches the filesystem. */
+function assertPublishable(entry: Omit<EndpointRegistryEntry, "version">): void {
+	if (!isServerId(entry.serverId)) {
+		throw new Error(`Endpoint registry serverId must be a canonical lowercase UUIDv4: ${entry.serverId}`);
+	}
+	if (!entry.endpoint.startsWith("\\\\.\\pipe\\")) {
+		throw new Error(`Endpoint registry endpoint must be a named pipe: ${entry.endpoint}`);
+	}
+	if (!Number.isInteger(entry.pid) || entry.pid <= 0) {
+		throw new Error(`Endpoint registry pid must be a positive integer: ${entry.pid}`);
+	}
+	if (Number.isNaN(Date.parse(entry.createdAt))) {
+		throw new Error(`Endpoint registry createdAt must be a parseable timestamp: ${entry.createdAt}`);
+	}
 }
 
 function randomSuffix(): string {
