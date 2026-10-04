@@ -40,7 +40,15 @@ describe("extensions discovery", () => {
 		}
 	`;
 
-	it("discovers direct .ts files in extensions/", async () => {
+	// Measured, not guessed: in the TypeScript source runtime `tsconfigPaths: true` costs about
+	// 2s per `jiti` import with no warm-up (461ms without it, ~2000ms with it, on every import),
+	// and the first load in a process additionally pays a one-time ~16s warm-up. Loading two
+	// trivial `.ts` extensions therefore took ~35s and blew the 30s suite default.
+	//
+	// Shipped builds are unaffected: `isTypeScriptSourceRuntime` is false for the compiled
+	// `loader.js`, so `tsconfigPaths` is only charged when the loader itself runs from source,
+	// which is this suite. The budget below reflects that cost rather than hiding it.
+	it("discovers direct .ts files in extensions/", { timeout: 120_000 }, async () => {
 		fs.writeFileSync(path.join(extensionsDir, "foo.ts"), extensionCode);
 		fs.writeFileSync(path.join(extensionsDir, "bar.ts"), extensionCode);
 
