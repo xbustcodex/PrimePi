@@ -32,7 +32,12 @@ import { buildInitialMessage } from "./cli/initial-message.ts";
 import { listModels } from "./cli/list-models.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import { selectSession } from "./cli/session-picker.ts";
-import { shouldRunFirstTimeSetup, showFirstTimeSetup, showStartupSelector } from "./cli/startup-ui.ts";
+import {
+	shouldRunFirstTimeSetup,
+	showFirstTimeSetup,
+	showStartupSelector,
+	showStartupSplash,
+} from "./cli/startup-ui.ts";
 import { APP_NAME, ENV_SESSION_DIR, expandTildePath, getAgentDir, getPackageDir, VERSION } from "./config.ts";
 import { type CreateAgentSessionRuntimeFactory, createAgentSessionRuntime } from "./core/agent-session-runtime.ts";
 import {
@@ -944,6 +949,23 @@ export async function main(args: string[], options?: MainOptions) {
 			.refresh({ signal: controller.signal })
 			.catch(() => {})
 			.finally(() => clearTimeout(timeout));
+	}
+
+	// The startup presentation, on the real launch path.
+	//
+	// Placed here deliberately: after `initTheme` so the splash is drawn in the user's theme
+	// rather than flashing default styling first, after piped stdin has demoted a piped run
+	// to print mode so a scripted invocation is never blocked for 2.6s, and before the
+	// interactive mode is constructed so it is the first painted frame.
+	const wantsStartupSplash =
+		appMode === "interactive" &&
+		!parsed.help &&
+		parsed.listModels === undefined &&
+		!parsed.resume &&
+		stdinContent === undefined;
+	if (wantsStartupSplash) {
+		await showStartupSplash(startupSettingsManager);
+		time("startupSplash");
 	}
 
 	if (appMode === "rpc") {

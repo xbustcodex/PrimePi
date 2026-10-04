@@ -2,6 +2,7 @@ import {
 	ProcessTerminal,
 	setCapabilityOverrides,
 	setKeybindings,
+	Text,
 	type TUI,
 	TuiMainScreen,
 } from "@earendil-works/pi-tui";
@@ -17,6 +18,7 @@ import {
 	FirstTimeSetupComponent,
 	type FirstTimeSetupResult,
 } from "../modes/interactive/components/first-time-setup.ts";
+import { renderSetupSplash, SETUP_SPLASH_MS, SETUP_TICK_MS } from "../modes/interactive/startup-splash.ts";
 import {
 	detectTerminalBackgroundFromEnv,
 	detectTerminalThemeForAuto,
@@ -117,6 +119,50 @@ async function clearStartupTui(ui: TUI): Promise<void> {
 	ui.clear();
 	ui.requestRender();
 	await new Promise((resolve) => setTimeout(resolve, 25));
+}
+
+/**
+ * Show the animated startup splash on the real launch path.
+ *
+ * Runs on the same primitives the other startup surfaces use - `createStartupTui` paints a
+ * throwaway TUI and `clearStartupTui` takes it down - so it needs no new wiring and cannot
+ * leave the terminal in a state the next screen cannot recover from.
+ *
+ * Gated as the reference gates it: interactive mode only, never while resuming or piping, and
+ * suppressed by `PI_SKIP_STARTUP_SPLASH` for scripted and benchmark runs. The reference's
+ * own default is **off**; here it is on, because the brief asks for the startup experience
+ * to be visible, and the escape hatch is one environment variable.
+ *
+ * Returns after `SETUP_SPLASH_MS`, or immediately when the terminal is too small for the
+ * full scene, so a narrow window costs nothing.
+ */
+export async function showStartupSplash(settingsManager: SettingsManager): Promise<void> {
+	if (process.env.PI_SKIP_STARTUP_SPLASH) return;
+	const ui = await createStartupTui(settingsManager);
+	const startedAt = Date.now();
+	return new Promise((resolve) => {
+		let settled = false;
+		const finish = async (): Promise<void> => {
+			if (settled) return;
+			settled = true;
+			clearInterval(timer);
+			await clearStartupTui(ui);
+			ui.stop();
+			resolve();
+		};
+		const paint = (): void => {
+			const elapsed = Date.now() - startedAt;
+			ui.clear();
+			for (const line of renderSetupSplash(ui.terminal.columns, ui.terminal.rows, elapsed)) {
+				ui.addChild(new Text(line));
+			}
+			ui.requestRender();
+			if (elapsed >= SETUP_SPLASH_MS) void finish();
+		};
+		paint();
+		const timer = setInterval(paint, SETUP_TICK_MS);
+		timer.unref();
+	});
 }
 
 /**
