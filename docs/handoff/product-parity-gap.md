@@ -102,7 +102,21 @@ Key facts, each traced and cited:
 | 3 | 5-scene first-run setup wizard - **reachable now**, scenes still to port | new `modes/interactive/setup/` | `tui/src/setup/{wizard,wizard-overlay}.ts` |
 | 4 | theme selector reachable from the UI, with live preview | settings `appearance` tab | `main.ts:1835`, `previewTheme` |
 | 5 | shell composition | `interactive-mode.ts` — the primary target | `main.ts#runInteractiveMode:573-749` |
-| 6 | hard-coded colour audit | every component bypassing `theme` | — |
+| 6 | hard-coded colour audit | **closed** — no user-visible violation; see below | — |
+
+## Hard-coded colour audit: closed
+
+Every hard-coded colour outside the theme system was traced to its call sites:
+
+| Site | Verdict |
+|---|---|
+| `theme/theme.ts:266,328` | Default-foreground resets (`\x1b[39m`/`49m`). Correct as-is. |
+| `tui/colors.ts:367` | Default-foreground reset. Correct as-is. |
+| `tui/components/scroll-view.ts:53-54` | Fixed ANSI 90/37, but `scrollbar` defaults to `hidden`, so the styles are unreachable unless a caller opts in. Every caller that does opt in supplies themed styles - `interactive-mode.ts:938-939` and `experimental/client-tui.ts:149-150`. |
+| `export-html/ansi-to-html.ts:16-31` | The 16 standard ANSI colours. Required: that table *is* the mapping from ANSI codes. |
+| `export-html/index.ts:120,154` | `#343541` is a documented fallback, consulted only when the theme has no value for `userMessageBg`. |
+
+No component bypasses the theme on a path a user can reach.
 
 ## Constraints that must survive
 
