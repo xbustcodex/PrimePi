@@ -3367,6 +3367,46 @@ export const colorBlindMode = registerSetting({
 	},
 });
 
+/**
+ * How far onboarding has progressed.
+ *
+ * Version-gated rather than a boolean, so a *later* release can add or revise a scene and
+ * have only the new work appear for a user who already finished onboarding - matching the
+ * reference, where `CURRENT_SETUP_VERSION` is `max(scene.minVersion)` across the scene list.
+ *
+ * 0 means never completed. There is deliberately no "settings.json exists" substitute: a
+ * user who interrupts onboarding still has a settings file, and treating its presence as
+ * completion would silently strand them mid-wizard with no way back in.
+ */
+export const setupVersion = registerSetting({
+	key: "setup.version",
+	type: "number",
+	default: 0,
+	// No `ui` block: this is progress state, not a preference. A setting with no `ui` is
+	// config-file only and never appears in the picker, so there is no dead control for a user
+	// to change and desynchronise from the wizard.
+});
+
+/**
+ * Whether first-run onboarding may run.
+ *
+ * Defaults to true, matching the reference's `startup.setupWizard`. The opt-out is
+ * `PI_SKIP_SETUP`; this is the settings-panel equivalent for someone who wants the gate to
+ * read from configuration rather than the environment.
+ */
+export const startupSetupWizard = registerSetting({
+	key: "startup.setupWizard",
+	type: "boolean",
+	default: true,
+	ui: {
+		label: "Run Setup Wizard",
+		description:
+			"Run first-run onboarding on an incomplete setup. Unsaved onboarding is resumable; PI_SKIP_SETUP suppresses it entirely",
+		tab: "interaction",
+		group: "Startup & Updates",
+	},
+});
+
 export const symbolPreset = registerSetting({
 	key: "symbolPreset",
 	type: "enum",

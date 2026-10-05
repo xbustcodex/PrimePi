@@ -1553,6 +1553,31 @@ export class SettingsManager {
 		return this.getSetting<boolean>("startup.showSplash")?.value === true;
 	}
 
+	/**
+	 * How far first-run onboarding has progressed.
+	 *
+	 * Read through the registry so the typed descriptor and its layer precedence stay
+	 * authoritative. 0 means onboarding has never completed.
+	 */
+	getSetupVersion(): number {
+		const value = this.getSetting<number>("setup.version")?.value;
+		return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+	}
+
+	/** Record onboarding completion. Bumping this is what suppresses the wizard next launch. */
+	async setSetupVersion(version: number): Promise<void> {
+		// Written through the registry so the value lands in the same persisted store the
+		// runtime reads it back from, rather than in an override layer that dies with the
+		// process. A wizard that recorded completion in memory would replay on every launch.
+		this.setSetting("setup.version", version);
+		await this.flush();
+	}
+
+	/** Whether first-run onboarding is permitted at all. */
+	getStartupSetupWizard(): boolean {
+		return this.getSetting<boolean>("startup.setupWizard")?.value !== false;
+	}
+
 	getHideThinkingBlock(): boolean {
 		return this.settings.hideThinkingBlock ?? false;
 	}
