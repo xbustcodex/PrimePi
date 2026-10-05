@@ -15,14 +15,54 @@
 
 import type { ThemeBg, ThemeColor } from "./tokens.ts";
 
+/** The box glyphs a bordered surface needs. */
+export interface BoxSymbols {
+	readonly topLeft: string;
+	readonly topRight: string;
+	readonly bottomLeft: string;
+	readonly bottomRight: string;
+	readonly horizontal: string;
+	readonly vertical: string;
+	readonly teeDown: string;
+	readonly teeUp: string;
+	readonly teeLeft: string;
+	readonly teeRight: string;
+	readonly cross: string;
+}
+
 /** The theme surface `tui` code is allowed to depend on. */
 export interface ThemeSource {
 	fg(color: ThemeColor, text: string): string;
 	bg(color: ThemeBg, text: string): string;
+	bold(text: string): string;
+	italic(text: string): string;
 	/** Precomputed SGR sequence for a foreground token, for reverse colour lookup. */
 	getFgAnsi(color: ThemeColor): string;
+	/** A foreground escape that contrasts against `fill`, for a fill of unknown luminance. */
+	getContrastFgAnsi(fill: ThemeColor): string;
 	getBgAnsi(color: ThemeBg): string;
 	symbol(key: string): string;
+	/**
+	 * Box glyph groups.
+	 *
+	 * Properties rather than methods, matching the reference: a caller draws a border by
+	 * reading `theme.boxRound.topLeft` and friends, and the tees/crosses a rounded box reuses
+	 * come from `boxSharp` so a theme's sharp-junction overrides still apply.
+	 */
+	/** Powerline separator glyphs, grouped as the reference exposes them. */
+	readonly sep: { readonly powerlineRight: string; readonly powerlineLeft: string; readonly powerlineThin: string };
+	/** Tree-drawing glyphs, grouped as the reference exposes them. */
+	readonly tree: {
+		readonly branch: string;
+		readonly last: string;
+		readonly vertical: string;
+		readonly horizontal: string;
+		readonly hook: string;
+	};
+	readonly boxRound: BoxSymbols;
+	readonly boxSharp: BoxSymbols;
+	readonly boxDotted: { readonly horizontal: string; readonly vertical: string };
+	readonly name?: string;
 }
 
 let active: ThemeSource | undefined;

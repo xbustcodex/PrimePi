@@ -62,7 +62,9 @@ export type ThemeColor =
 	| "thinkingHigh"
 	| "thinkingXhigh"
 	| "thinkingMax"
-	| "bashMode";
+	| "bashMode"
+	// Present in the shipped themes and used by the status line, but absent from the union.
+	| "statusLineSep";
 
 export type ThemeBg =
 	| "selectedBg"
@@ -137,6 +139,7 @@ export const THEME_COLOR_ORDER: readonly ThemeColor[] = [
 	"thinkingXhigh",
 	"thinkingMax",
 	"bashMode",
+	"statusLineSep",
 ];
 
 const THEME_COLOR_SET: ReadonlySet<string> = new Set<ThemeColor>(THEME_COLOR_ORDER);

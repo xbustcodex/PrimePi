@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
+	type BoxSymbols,
 	backgroundAnsi,
 	type Color,
 	colorToHex,
@@ -183,8 +184,104 @@ export class Theme {
 	 * never contain a literal character. This is the same accessor: a theme selects a preset and
 	 * may override individual keys, and everything drawn resolves through here.
 	 */
+	/**
+	 * A foreground escape that contrasts against `fill`.
+	 *
+	 * Used where a glyph is drawn over a fill of unknown luminance - the Powerline caps in the
+	 * status line, for instance. Returns the escape rather than a token because the answer is
+	 * literal black or white, not one of the theme's named colours.
+	 */
+	getContrastFgAnsi(fill: ThemeColor): string {
+		const sequence = this.getFgAnsi(fill);
+		const match = /38;2;(\d+);(\d+);(\d+)/.exec(sequence);
+		if (!match) return this.getFgAnsi("text");
+		// Rec. 601 luma: the weights are not the WCAG ones, and the threshold is 140 on the
+		// 0-255 scale. Both are the reference's, and a subtly different weighting changes which
+		// fills get dark text.
+		const luma = 0.299 * Number(match[1]) + 0.587 * Number(match[2]) + 0.114 * Number(match[3]);
+		return luma > 140 ? "\x1b[38;2;0;0;0m" : "\x1b[38;2;255;255;255m";
+	}
+
 	symbol(key: SymbolKey): string {
 		return this.symbols[key] ?? SYMBOL_PRESETS.ascii[key] ?? "";
+	}
+
+	/**
+	 * Rounded box glyphs.
+	 *
+	 * Junctions have no rounded Unicode variant, so a rounded box reuses the sharp tee/cross
+	 * glyphs. Sourcing them from the `boxSharp.*` tokens is what keeps a theme's sharp-junction
+	 * overrides effective for rounded-box dividers.
+	 */
+	/** Tree-drawing glyphs, for the transcript's file-tree rendering. */
+	get tree(): {
+		readonly branch: string;
+		readonly last: string;
+		readonly vertical: string;
+		readonly horizontal: string;
+		readonly hook: string;
+	} {
+		return {
+			branch: this.symbol("tree.branch"),
+			last: this.symbol("tree.last"),
+			vertical: this.symbol("tree.vertical"),
+			horizontal: this.symbol("tree.horizontal"),
+			hook: this.symbol("tree.hook"),
+		};
+	}
+
+	/** Powerline separator glyphs. */
+	get sep(): { readonly powerlineRight: string; readonly powerlineLeft: string; readonly powerlineThin: string } {
+		return {
+			powerlineRight: this.symbol("sep.powerlineRight"),
+			powerlineLeft: this.symbol("sep.powerlineLeft"),
+			powerlineThin: this.symbol("sep.powerlineThin"),
+		};
+	}
+
+	get boxRound(): BoxSymbols {
+		return {
+			topLeft: this.symbol("boxRound.topLeft"),
+			topRight: this.symbol("boxRound.topRight"),
+			bottomLeft: this.symbol("boxRound.bottomLeft"),
+			bottomRight: this.symbol("boxRound.bottomRight"),
+			horizontal: this.symbol("boxRound.horizontal"),
+			vertical: this.symbol("boxRound.vertical"),
+			cross: this.symbol("boxSharp.cross"),
+			teeDown: this.symbol("boxSharp.teeDown"),
+			teeUp: this.symbol("boxSharp.teeUp"),
+			teeRight: this.symbol("boxSharp.teeRight"),
+			teeLeft: this.symbol("boxSharp.teeLeft"),
+		};
+	}
+
+	/** Sharp box glyphs, for square borders and table rules. */
+	get boxSharp(): BoxSymbols {
+		return {
+			topLeft: this.symbol("boxSharp.topLeft"),
+			topRight: this.symbol("boxSharp.topRight"),
+			bottomLeft: this.symbol("boxSharp.bottomLeft"),
+			bottomRight: this.symbol("boxSharp.bottomRight"),
+			horizontal: this.symbol("boxSharp.horizontal"),
+			vertical: this.symbol("boxSharp.vertical"),
+			cross: this.symbol("boxSharp.cross"),
+			teeDown: this.symbol("boxSharp.teeDown"),
+			teeUp: this.symbol("boxSharp.teeUp"),
+			teeRight: this.symbol("boxSharp.teeRight"),
+			teeLeft: this.symbol("boxSharp.teeLeft"),
+		};
+	}
+
+	/**
+	 * Dotted rules for transient selection outlines.
+	 *
+	 * Corners come from the rounded set: Unicode has no rounded dotted corner glyphs.
+	 */
+	get boxDotted(): { readonly horizontal: string; readonly vertical: string } {
+		return {
+			horizontal: this.symbol("boxDotted.horizontal"),
+			vertical: this.symbol("boxDotted.vertical"),
+		};
 	}
 
 	/** The theme's own symbol map: its preset with any per-key overrides applied. */

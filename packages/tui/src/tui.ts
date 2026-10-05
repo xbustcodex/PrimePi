@@ -114,7 +114,21 @@ export interface Component {
 	 * @param width - Current viewport width
 	 * @returns Array of strings, each representing a line
 	 */
-	render(width: number): string[];
+	/**
+	 * Render to lines.
+	 *
+	 * Returns `readonly string[]` because a renderer is free to hand back a cached or frozen
+	 * array, and requiring a fresh mutable copy on every frame would defeat that. The reference
+	 * declares the same, and its chrome layer relies on it.
+	 */
+	/**
+	 * Render to lines.
+	 *
+	 * Returns `readonly string[]` because a renderer is free to hand back a cached or frozen
+	 * array, and requiring a fresh mutable copy every frame would defeat that. The reference
+	 * declares the same, and its chrome layer relies on it.
+	 */
+	render(width: number): readonly string[];
 
 	/** Optional handler for keyboard input when component has focus. */
 	handleInput?(data: string): void;
@@ -133,6 +147,23 @@ export interface Component {
 	 * Called when theme changes or when component needs to re-render from scratch.
 	 */
 	invalidate(): void;
+
+	/**
+	 * Release timers, subscriptions and native handles.
+	 *
+	 * Optional because most components hold nothing to release, but a container that owns
+	 * children needs to be able to call it without a type guard at every site - the reference's
+	 * chrome layer does exactly that.
+	 */
+	dispose?(): void;
+
+	/**
+	 * Stop or resume tight-fitting layout for this component's subtree.
+	 *
+	 * Used by overlay chrome that pads to the widest row. Optional for the same reason as
+	 * {@link dispose}: a leaf simply does not implement it.
+	 */
+	setIgnoreTight?(ignore: boolean): unknown;
 }
 
 export type TuiInputListenerResult = { consume?: boolean; data?: string } | undefined;
@@ -319,6 +350,17 @@ type OverlayFocusRestorePolicy = "clear" | "preserve";
 export class Container implements Component {
 	children: Component[] = [];
 	private mouseLayout?: { width: number; children: Array<{ component: Component; height: number }> };
+
+	/** Stop or resume tight-fitting layout for this component's subtree. */
+	setIgnoreTight(ignore: boolean): this {
+		for (const child of this.children) child.setIgnoreTight?.(ignore);
+		return this;
+	}
+
+	/** Release timers, subscriptions and native handles held by this container's children. */
+	dispose(): void {
+		for (const child of this.children) child.dispose?.();
+	}
 
 	addChild(component: Component): void {
 		this.children.push(component);
@@ -1309,7 +1351,8 @@ export abstract class TuiBase extends Container implements TUI {
 			const { row, col } = this.resolveOverlayLayout(options, overlayLines.length, termWidth, termHeight);
 			entry.bounds = { row, col, width, height: overlayLines.length };
 
-			rendered.push({ entry, overlayLines, row, col, w: width });
+			// Copied: the component's own array is readonly and this one is retained in the frame.
+			rendered.push({ entry, overlayLines: [...overlayLines], row, col, w: width });
 			minLinesNeeded = Math.max(minLinesNeeded, row + overlayLines.length);
 		}
 		this.renderedOverlayLayouts = rendered.map(({ entry, row, col, w, overlayLines }) => ({

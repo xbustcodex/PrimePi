@@ -14,6 +14,7 @@
  */
 
 import { getKeybindings } from "@earendil-works/pi-tui";
+import { APP_NAME } from "../../config.ts";
 import { theme } from "../interactive/theme/theme.ts";
 import {
 	type ComposerShape,
@@ -250,21 +251,26 @@ export const glyphSetupScene: SetupScene = {
 					value: "default",
 					label: "Unicode (default)",
 					detail: "─ │ ╭ ╮  rounded borders and arrows",
-					preview: ["╭──────────╮", "│ Prime Pi │", "╰──────────╯"],
+					preview: ["╭──────────╮", `│ ${APP_NAME} │`, "╰──────────╯"],
 				},
 				{
 					value: "minimal",
 					label: "Minimal",
 					detail: "┌ ┐ square borders",
-					preview: ["┌──────────┐", "│ Prime Pi │", "└──────────┘"],
+					preview: ["┌──────────┐", `│ ${APP_NAME} │`, "└──────────┘"],
 				},
 				{
 					value: "ascii",
 					label: "ASCII only",
 					detail: "- | + for every border",
-					preview: ["+----------+", "| Prime Pi |", "+----------+"],
+					preview: ["+----------+", `| ${APP_NAME} |`, "+----------+"],
 				},
-				{ value: "nerd", label: "Nerd font", detail: "Adds Powerline separators", preview: [" Prime Pi "] },
+				{
+					value: "nerd",
+					label: "Nerd font",
+					detail: "Adds Powerline separators",
+					preview: [`\ue0a0 ${APP_NAME} \ue0a2`],
+				},
 			],
 			initial: host.ctx.symbolPreset,
 			onPreview: (value) => host.ctx.saveSymbolPreset(value),

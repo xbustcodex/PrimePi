@@ -52,7 +52,7 @@ export interface ScrollbarGeometry {
 
 interface LayoutContext {
 	viewport: { width: number; height: number };
-	renderCache: Map<Component, Map<number, string[]>>;
+	renderCache: Map<Component, Map<number, readonly string[]>>;
 	requestRender: () => void;
 	primaryScrollView: ScrollView | undefined;
 }
@@ -69,7 +69,7 @@ function renderCached(context: LayoutContext, component: Component, width: numbe
 	const safeWidth = Math.max(1, Math.floor(width));
 	let widths = context.renderCache.get(component);
 	if (!widths) {
-		widths = new Map<number, string[]>();
+		widths = new Map<number, readonly string[]>();
 		context.renderCache.set(component, widths);
 	}
 	let lines = widths.get(safeWidth);
@@ -77,7 +77,9 @@ function renderCached(context: LayoutContext, component: Component, width: numbe
 		lines = component.render(safeWidth);
 		widths.set(safeWidth, lines);
 	}
-	return lines;
+	// Returned as-is: this is the whole point of the cache. Copying here allocated one array per
+	// component per frame, which is what made the layout suite time out.
+	return lines as string[];
 }
 
 function measureHeight(context: LayoutContext, component: Component, width: number): number {

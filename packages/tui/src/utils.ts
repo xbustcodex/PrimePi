@@ -388,6 +388,21 @@ const TAB_SPACES = "    ";
  * only as part of a broader rewrite (Thai/Lao normalisation, ANSI-aware walking), which is the
  * wrong shape for a span that only needs the substitution.
  */
+/** Preallocated spaces, so small paddings do not allocate. */
+const SPACE_BUFFER = " ".repeat(512);
+
+/**
+ * A run of `n` spaces.
+ *
+ * Ported from the reference: padding is called on every layout row, and `String.repeat` for the
+ * common small cases is pure allocation churn.
+ */
+export function padding(n: number): string {
+	if (n <= 0) return "";
+	if (n <= SPACE_BUFFER.length) return SPACE_BUFFER.slice(0, n);
+	return " ".repeat(n);
+}
+
 export function replaceTabs(text: string): string {
 	return text.replaceAll("\t", TAB_SPACES);
 }
@@ -1158,10 +1173,43 @@ export function applyBackgroundToLine(line: string, width: number, bgFn: (text: 
  * @param pad - If true, pad result with spaces to exactly maxWidth (default: false)
  * @returns Truncated text, optionally padded to exactly maxWidth
  */
+/**
+ * How a truncated line marks the elision.
+ *
+ * The reference takes this from `pi-natives`; Prime Pi has no native addon, so the choices are
+ * expressed here as the strings they produce and `truncateToWidth` accepts either a member or a
+ * literal string.
+ */
+export const Ellipsis = {
+	/** Append "...", clipped to fit if it would overflow. */
+	Append: "...",
+	/** Draw nothing: the text simply stops. */
+	Omit: "",
+	/** A single-cell ellipsis. */
+	Single: "\u2026",
+} as const;
+
+export type EllipsisKind = (typeof Ellipsis)[keyof typeof Ellipsis];
+
+/**
+ * Monotonic epoch for width-affecting runtime configuration.
+ *
+ * Any cache or carried-width sidecar derived from {@link visibleWidth} must be stamped with the
+ * epoch at computation time and discarded on mismatch. Prime Pi's width computation has no
+ * runtime-tunable inputs today, so the epoch never advances - but the contract is part of what a
+ * ported surface depends on, and a consumer that reads it must get a real value rather than a
+ * missing method.
+ */
+const widthConfigEpoch = 0;
+
+export function getWidthConfigEpoch(): number {
+	return widthConfigEpoch;
+}
+
 export function truncateToWidth(
 	text: string,
 	maxWidth: number,
-	ellipsis: string = "...",
+	ellipsis: string | EllipsisKind = Ellipsis.Append,
 	pad: boolean = false,
 ): string {
 	if (maxWidth <= 0) {

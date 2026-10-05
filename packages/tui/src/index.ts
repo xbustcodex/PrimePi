@@ -146,6 +146,7 @@ export {
 export { activeThemeSymbol, setActiveSymbolTheme } from "./theme/active-symbols.ts";
 export {
 	activeTheme,
+	type BoxSymbols,
 	requireActiveTheme,
 	setActiveThemeSource,
 	type ThemeSource,

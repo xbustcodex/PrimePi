@@ -24,8 +24,15 @@ export interface InputOptions {
  */
 export class Input implements Component, Focusable {
 	private value: string = "";
-	private cursor: number = 0; // Cursor position in the value
-	private readonly prompt: string;
+	private cursor: number = 0;
+	/** When set, every visible character is drawn as this instead of its own glyph. */
+	private maskCharacter: string | undefined;
+
+	/** Whether the host terminal should draw the caret. Recorded; Prime Pi draws its own. */
+	// Cursor position in the value
+	// Writable so a form field can set its own prompt after construction; the reference exposes
+	// it as a public property for the same reason.
+	private prompt: string;
 	private readonly placeholder: string;
 	private readonly placeholderStyle: (text: string) => string;
 	private renderedStartColumn = 0;
@@ -58,6 +65,37 @@ export class Input implements Component, Focusable {
 	 * Present in the reference and required by the native picker, which renders the query field
 	 * from the input's own cursor rather than tracking it separately.
 	 */
+	/**
+	 * Replace every visible character with `mask`.
+	 *
+	 * Password entry, and anything else where the value must not be legible on screen. The
+	 * underlying value is untouched, so selection, validation and submit still see the real text.
+	 */
+	/** The leading label drawn inside the field. */
+	setPrompt(prompt: string): void {
+		this.prompt = prompt;
+	}
+
+	/**
+	 * Replace every visible character with `mask`.
+	 *
+	 * Password entry, and anything else where the value must not be legible on screen. The stored
+	 * value is untouched, so cursor movement, validation and submit all still see the real text -
+	 * only the rendered glyphs change.
+	 */
+	setMask(mask: string | undefined): void {
+		this.maskCharacter = mask;
+	}
+
+	/**
+	 * The string as drawn: masked when a mask is set, otherwise unchanged.
+	 *
+	 * Applied here rather than at each draw site so no caller can accidentally leak the value.
+	 */
+	#display(text: string): string {
+		return this.maskCharacter ? this.maskCharacter.repeat([...text].length) : text;
+	}
+
 	getCursor(): number {
 		return this.cursor;
 	}
@@ -427,7 +465,7 @@ export class Input implements Component, Focusable {
 			return [truncateToWidth(this.prompt, width, "")];
 		}
 
-		if (this.value.length === 0 && this.placeholder) {
+		if (this.value.length === 0 && this.placeholder && !this.maskCharacter) {
 			const placeholder = truncateToWidth(this.placeholder, availableWidth, "");
 			const graphemes = [...segmenter.segment(placeholder)];
 			const atCursor = graphemes[0]?.segment ?? " ";
@@ -436,7 +474,7 @@ export class Input implements Component, Focusable {
 			const cursorChar = `\x1b[7m${this.placeholderStyle(atCursor)}\x1b[27m`;
 			const textWithCursor = marker + cursorChar + this.placeholderStyle(afterCursor);
 			const padding = " ".repeat(Math.max(0, availableWidth - visibleWidth(textWithCursor)));
-			return [this.prompt + textWithCursor + padding];
+			return [this.prompt + this.#display(textWithCursor) + padding];
 		}
 
 		let visibleText = "";
@@ -478,23 +516,25 @@ export class Input implements Component, Focusable {
 			}
 		}
 
-		// Build line with fake cursor
-		// Insert cursor character at cursor position
+		// The grapheme at the cursor is what reverse video wraps; it is a space when the cursor
+		// sits at the end, so the caret always occupies one cell.
 		const graphemes = [...segmenter.segment(visibleText.slice(cursorDisplay))];
-		const cursorGrapheme = graphemes[0];
+		const atCursor = graphemes[0]?.segment ?? " ";
 
-		const beforeCursor = visibleText.slice(0, cursorDisplay);
-		const atCursor = cursorGrapheme?.segment ?? " "; // Character at cursor, or space if at end
-		const afterCursor = visibleText.slice(cursorDisplay + atCursor.length);
-
-		// Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)
+		// Hardware cursor marker (zero-width, emitted before the fake cursor for IME positioning).
 		const marker = this.focused ? CURSOR_MARKER : "";
 
-		// Use inverse video to show cursor
-		const cursorChar = `\x1b[7m${atCursor}\x1b[27m`; // ESC[7m = reverse video, ESC[27m = normal
-		const textWithCursor = beforeCursor + marker + cursorChar + afterCursor;
+		// Masking happens on the *value*, not on the already-composed line: composing first and
+		// substituting afterwards would mangle the cursor's escape sequence. Masked length equals
+		// the value's grapheme count, so padding is computed from what is actually drawn.
+		// `cursorDisplay` indexes the *visible window*, which may be a horizontally scrolled slice
+		// rather than the whole value. Slicing at `this.cursor` instead reads past the window and
+		// changes the padding - which is what broke the CJK overflow test.
+		// The mask is built from the visible window, so its width always matches what is drawn.
+		const shown = this.maskCharacter ? this.maskCharacter.repeat([...visibleText].length) : visibleText;
+		const cursorCell = this.maskCharacter ? this.maskCharacter : atCursor;
+		const textWithCursor = `${shown.slice(0, cursorDisplay)}${marker}\x1b[7m${cursorCell}\x1b[27m${shown.slice(cursorDisplay + atCursor.length)}`;
 
-		// Calculate visual width
 		const visualLength = visibleWidth(textWithCursor);
 		const padding = " ".repeat(Math.max(0, availableWidth - visualLength));
 		const line = this.prompt + textWithCursor + padding;

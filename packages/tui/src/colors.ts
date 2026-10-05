@@ -391,3 +391,9 @@ export function styleTextWithAnsi(
 	}
 	return `${prefix}${text}${suffix}`;
 }
+
+/** SGR reset for the foreground colour only, leaving other attributes intact. */
+export const FG_RESET = "\x1b[39m";
+
+/** SGR reset for the background colour only, leaving other attributes intact. */
+export const BG_RESET = "\x1b[49m";

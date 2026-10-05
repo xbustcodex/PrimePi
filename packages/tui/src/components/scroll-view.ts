@@ -36,6 +36,8 @@ export class ScrollView extends Container {
 	private requestRenderCallback: (() => void) | undefined;
 	private transientScrollbarVisible = false;
 	private scrollbarActive = false;
+	/** Absolute viewport offset set by a caller; `undefined` means "follow the end or the user". */
+	private explicitScrollOffset: number | undefined;
 	private scrollbarHideTimer: NodeJS.Timeout | undefined;
 
 	constructor(component: Component, options: ScrollViewOptions = {}) {
@@ -56,7 +58,9 @@ export class ScrollView extends Container {
 	}
 
 	get scrollTop(): number {
-		return this.currentScrollTop;
+		// An explicit offset wins: a caller that positioned the viewport (the selector chrome does,
+		// to centre a window on the selection) must not be overridden by end-following.
+		return this.explicitScrollOffset ?? this.currentScrollTop;
 	}
 
 	get isFollowingEnd(): boolean {
@@ -80,6 +84,16 @@ export class ScrollView extends Container {
 
 	get isScrollbarActive(): boolean {
 		return this.scrollbarActive;
+	}
+
+	/**
+	 * Move the viewport to an absolute row offset.
+	 *
+	 * The reference's chrome layer sets the offset directly; Prime Pi's ScrollView only follows
+	 * the end or the user, so an explicit setter is the missing piece.
+	 */
+	setScrollOffset(offset: number): void {
+		this.explicitScrollOffset = Math.max(0, offset);
 	}
 
 	setScrollbar(scrollbar: ScrollViewScrollbar): void {
@@ -215,7 +229,9 @@ export class ScrollView extends Container {
 	override render(width: number): string[] {
 		const contentWidth = this.getContentWidth(width);
 		const lines = this.child.render(contentWidth);
-		return contentWidth === width ? lines : lines.map((line) => `${line} `);
+		// The identity branch hands back the child's own readonly array; the padded branch must
+		// build a new one, which is why the declared return is readonly.
+		return contentWidth === width ? [...lines] : lines.map((line) => `${line} `);
 	}
 
 	[LAYOUT_NODE](): ScrollLayoutNode {

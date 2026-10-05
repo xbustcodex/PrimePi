@@ -312,7 +312,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 	}
 
 	override render(width: number): string[] {
-		return this.layoutRoot?.render(width) ?? super.render(width);
+		return [...(this.layoutRoot?.render(width) ?? super.render(width))];
 	}
 
 	protected override getMountedRoots(): readonly Component[] {
