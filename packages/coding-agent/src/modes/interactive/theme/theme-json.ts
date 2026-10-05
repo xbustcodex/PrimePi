@@ -21,6 +21,20 @@ const ThemeJsonSchema = Type.Object({
 	// Background the theme is designed for. Detected from the theme colors when omitted.
 	appearance: Type.Optional(Type.Union([Type.Literal("dark"), Type.Literal("light")])),
 	vars: Type.Optional(Type.Record(Type.String(), ColorValueSchema)),
+	/**
+	 * Glyph selection: a preset name plus any per-symbol overrides.
+	 *
+	 * Added because the reference's themes carry this and Prime Pi's could not - which is why
+	 * every glyph in the Prime Pi UI was a literal in a component, and why the `symbolPreset`
+	 * setting was a flag nothing read. The reference resolves glyphs through `theme.symbol(key)`;
+	 * `Theme.symbol` is now that accessor.
+	 */
+	symbols: Type.Optional(
+		Type.Object(
+			{ preset: Type.Optional(Type.Union([Type.Literal("unicode"), Type.Literal("nerd"), Type.Literal("ascii")])) },
+			{ additionalProperties: Type.String() },
+		),
+	),
 	colors: Type.Object({
 		// Core UI (11 colors)
 		accent: ColorValueSchema,

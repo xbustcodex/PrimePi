@@ -17,6 +17,11 @@ import {
 	rgbColor,
 	type SelectListTheme,
 	type SettingsListTheme,
+	SYMBOL_PRESETS,
+	type SymbolKey,
+	type SymbolMap,
+	type SymbolPreset,
+	setActiveSymbolTheme,
 	styleTextWithAnsi,
 	type TerminalColorMode,
 	type TextAttributes,
@@ -223,6 +228,20 @@ function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppe
 // ============================================================================
 
 export class Theme {
+	/**
+	 * Resolved glyph for a dotted symbol name.
+	 *
+	 * The reference reads every glyph through `theme.symbol(key)`, which is why its components
+	 * never contain a literal character. This is the same accessor: a theme selects a preset and
+	 * may override individual keys, and everything drawn resolves through here.
+	 */
+	symbol(key: SymbolKey): string {
+		return this.symbols[key] ?? SYMBOL_PRESETS.ascii[key] ?? "";
+	}
+
+	/** The theme's own symbol map: its preset with any per-key overrides applied. */
+	readonly symbols: Partial<SymbolMap>;
+
 	readonly name?: string;
 	readonly sourcePath?: string;
 	sourceInfo?: SourceInfo;
@@ -243,9 +262,25 @@ export class Theme {
 		bgColors: Record<Exclude<ThemeBg, OptionalThemeBg>, string | number> &
 			Partial<Record<OptionalThemeBg, string | number>>,
 		mode: TerminalColorMode,
-		options: { name?: string; sourcePath?: string; sourceInfo?: SourceInfo; appearance?: ThemeAppearance } = {},
+		options: {
+			name?: string;
+			sourcePath?: string;
+			sourceInfo?: SourceInfo;
+			appearance?: ThemeAppearance;
+			/** Preset plus per-symbol overrides, as declared in the theme's `symbols` block. */
+			symbols?: { preset?: SymbolPreset; [key: string]: unknown };
+		} = {},
 	) {
 		this.name = options.name;
+		// The preset supplies every glyph; the theme's own `symbols` entries override individual
+		// keys. Resolved once here so `symbol()` stays a map lookup on the render path.
+		const preset = SYMBOL_PRESETS[options.symbols?.preset ?? "unicode"] ?? SYMBOL_PRESETS.unicode!;
+		this.symbols = { ...preset };
+		for (const [key, value] of Object.entries(options.symbols ?? {})) {
+			if (key === "preset") continue;
+			if (typeof value === "string") this.symbols[key as SymbolKey] = value;
+		}
+		setActiveSymbolTheme(this);
 		this.sourcePath = options.sourcePath;
 		this.sourceInfo = options.sourceInfo;
 		this.mode = mode;
@@ -601,6 +636,7 @@ function createTheme(themeJson: ThemeJson, mode?: TerminalColorMode, sourcePath?
 		name: themeJson.name,
 		sourcePath,
 		appearance: themeJson.appearance,
+		symbols: (themeJson as { symbols?: { preset?: SymbolPreset } }).symbols,
 	});
 }
 

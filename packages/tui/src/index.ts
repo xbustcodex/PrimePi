@@ -143,20 +143,17 @@ export {
 	setCellDimensions,
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
+export { activeThemeSymbol, setActiveSymbolTheme } from "./theme/active-symbols.ts";
 export {
-	activeSymbolPreset,
-	activeSymbols,
-	detectSymbolPreset,
-	detectTerminalCapabilities,
-	isSymbolPreset,
+	SPINNER_FRAMES,
+	type SpinnerFramesOverride,
+	type SpinnerType,
 	SYMBOL_PRESETS,
-	type SymbolCapabilities,
+	type SymbolKey,
+	type SymbolMap,
 	type SymbolPreset,
-	type SymbolSet,
-	setActiveSymbolPreset,
-	supportsNerdGlyphs,
-	symbolsFor,
 } from "./theme/symbols.ts";
+
 export {
 	type Component,
 	Container,

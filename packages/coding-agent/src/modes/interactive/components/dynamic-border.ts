@@ -1,5 +1,4 @@
 import type { Component } from "@earendil-works/pi-tui";
-import { activeSymbolPreset, symbolsFor } from "@earendil-works/pi-tui";
 import { theme } from "../theme/theme.ts";
 
 /**
@@ -21,10 +20,10 @@ export class DynamicBorder implements Component {
 	}
 
 	render(width: number): string[] {
-		// The glyph comes from the active symbol preset rather than a literal, so a terminal
-		// that cannot draw box-drawing characters (a legacy Windows console with codepage 437)
-		// gets ASCII instead of a row of replacement characters.
-		const glyph = symbolsFor(activeSymbolPreset()).horizontal;
+		// The glyph comes from the active theme rather than a literal, matching the reference:
+		// `theme.symbol(key)` is where every OMP component reads its glyphs, so a theme that
+		// selects the ascii preset - or overrides this one key - changes what is drawn here.
+		const glyph = theme.symbol("boxRound.horizontal") || "─";
 		return [this.color(glyph.repeat(Math.max(1, width)))];
 	}
 }

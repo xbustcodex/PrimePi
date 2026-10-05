@@ -7,7 +7,7 @@
 
 import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@earendil-works/pi-ai";
-import { setActiveSymbolPreset, setCapabilityOverrides } from "@earendil-works/pi-tui";
+import { setCapabilityOverrides } from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
 import {
@@ -913,10 +913,6 @@ export async function main(args: string[], options?: MainOptions) {
 	// pi reads user-authored themes, so it opts into full validation before any theme loads.
 	setThemeJsonValidator(validateThemeJson);
 	initTheme(settingsManager.getTheme(), appMode === "interactive");
-	// Applied here rather than at first render so every glyph drawn during startup - including
-	// the onboarding wizard's own frame - comes from the configured preset. Reading the setting
-	// any later would let the first frame draw with one preset and the rest with another.
-	setActiveSymbolPreset(settingsManager.getSymbolPreset());
 	time("initTheme");
 
 	// Show deprecation warnings in interactive mode

@@ -6,13 +6,11 @@ import {
 	resolveCompactionLimits,
 	type Transport,
 } from "@earendil-works/pi-ai";
-import {
-	detectSymbolPreset,
-	isSymbolPreset,
-	type TuiMode as RendererTuiMode,
-	type ScrollViewScrollbar,
-	type SymbolPreset,
-	type TerminalCapabilities,
+import type {
+	TuiMode as RendererTuiMode,
+	ScrollViewScrollbar,
+	SymbolPreset,
+	TerminalCapabilities,
 } from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -1602,8 +1600,8 @@ export class SettingsManager {
 	 */
 	getSymbolPreset(): SymbolPreset {
 		const configured = this.getSetting<string>("symbolPreset")?.value;
-		if (typeof configured === "string" && isSymbolPreset(configured)) return configured;
-		return detectSymbolPreset();
+		if (configured === "unicode" || configured === "nerd" || configured === "ascii") return configured;
+		return "unicode";
 	}
 
 	/** Persist a symbol-preset choice through the registry. */

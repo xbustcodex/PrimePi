@@ -139,7 +139,8 @@ type SpecialKey =
 	| "f12";
 
 type BaseKey = Letter | Digit | SymbolKey | SpecialKey;
-type ModifierName = "ctrl" | "shift" | "alt" | "super";
+// Exported because OMP's key-hint formatting formats modifier names and imports this.
+export type ModifierName = "ctrl" | "shift" | "alt" | "super";
 
 type ModifiedKeyId<Key extends string, RemainingModifiers extends ModifierName = ModifierName> = {
 	[M in RemainingModifiers]: `${M}+${Key}` | `${M}+${ModifiedKeyId<Key, Exclude<RemainingModifiers, M>>}`;
