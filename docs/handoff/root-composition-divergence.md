@@ -93,6 +93,37 @@ composition too. `docs/handoff/product-parity-gap.md` already concluded this
 ("SOURCE EXISTS != MIGRATED"), and the settings-panel finding is a concrete instance: a real
 file, in the right package, matching the right name, mounted by nothing.
 
+## Settings selector: where the port stops, and why
+
+`overlays/settings-selector.ts` (1975 lines) is ported in a working branch. It does not
+compile yet, and the remaining work is not mechanical - it is three decisions.
+
+**1. The settings-definition table.** OMP derives a row's *control* from a `SettingDef`
+(363 lines, 25 exports): boolean / enum / submenu / text / multiselect, plus `TAB_GROUPS` for
+section order. Prime Pi's `ParityRow` already carries every input that derivation needs -
+`id`, `tab`, `group`, `type`, `default`, `options`, `values`, `condition`, `warning` - so the
+question is not *can* it be expressed but *which* wins: adopt OMP's control vocabulary, or keep
+Prime Pi's parity rows and derive from those. That is a product decision, not a port.
+
+**2. `plugin-settings.ts`** (1036 lines) is the plugins tab. It needs four `SettingsList`
+capabilities Prime Pi does not have - `prefsSections`, `openSubmenu`, `setHoverIndex`,
+`hitTest` - and `SettingsList` itself would have to grow them. Porting it means extending a
+component the settings selector also depends on, in the same change.
+
+**3. `snapcompact-shape-preview`** needs `@oh-my-pi/snapcompact`, **2254 lines**, for the live
+preview of a single optional setting row. Removed from the port: a 2254-line package for one
+preview is not proportionate, and the selector already degrades to no preview for a setting it
+cannot preview.
+
+The port is in a working branch rather than committed, because **a commit that does not
+compile breaks `main` for everyone.** An earlier attempt landed one and was reverted. The rule
+this establishes: ported-but-not-integrated code belongs in a branch, and the standard this work
+has been held to says so:
+
+    SOURCE EXISTS != MIGRATED
+
+    and a non-compiling tree is worse than an absent one
+
 ## Required correction
 
 Replace the mount points, not the surfaces. For each major surface:
