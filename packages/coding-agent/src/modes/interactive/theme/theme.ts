@@ -11,6 +11,7 @@ import {
 	foregroundAnsi,
 	getTerminalColorMode,
 	indexedColor,
+	isValidThemeColor,
 	type MarkdownTheme,
 	parseColor,
 	type RgbColor,
@@ -25,6 +26,9 @@ import {
 	styleTextWithAnsi,
 	type TerminalColorMode,
 	type TextAttributes,
+	type ThemeBg,
+	type ThemeColor,
+	type ThemeToken,
 } from "@earendil-works/pi-tui";
 import chalk from "chalk";
 import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
@@ -55,67 +59,11 @@ export function setThemeJsonValidator(validator: ThemeJsonValidator): void {
 	themeJsonValidator = validator;
 }
 
-export type ThemeColor =
-	| "accent"
-	| "border"
-	| "borderAccent"
-	| "borderMuted"
-	| "success"
-	| "error"
-	| "warning"
-	| "muted"
-	| "dim"
-	| "text"
-	| "thinkingText"
-	| "scrollbarTrack"
-	| "scrollbarThumb"
-	| "searchMatchText"
-	| "userMessageText"
-	| "customMessageText"
-	| "customMessageLabel"
-	| "toolTitle"
-	| "toolOutput"
-	| "mdHeading"
-	| "mdLink"
-	| "mdLinkUrl"
-	| "mdCode"
-	| "mdCodeBlock"
-	| "mdCodeBlockBorder"
-	| "mdQuote"
-	| "mdQuoteBorder"
-	| "mdHr"
-	| "mdListBullet"
-	| "toolDiffAdded"
-	| "toolDiffRemoved"
-	| "toolDiffContext"
-	| "syntaxComment"
-	| "syntaxKeyword"
-	| "syntaxFunction"
-	| "syntaxVariable"
-	| "syntaxString"
-	| "syntaxNumber"
-	| "syntaxType"
-	| "syntaxOperator"
-	| "syntaxPunctuation"
-	| "thinkingOff"
-	| "thinkingMinimal"
-	| "thinkingLow"
-	| "thinkingMedium"
-	| "thinkingHigh"
-	| "thinkingXhigh"
-	| "thinkingMax"
-	| "bashMode";
-
-export type ThemeBg =
-	| "selectedBg"
-	| "searchMatchBg"
-	| "userMessageBg"
-	| "customMessageBg"
-	| "toolPendingBg"
-	| "toolSuccessBg"
-	| "toolErrorBg";
-
-export type ThemeToken = ThemeColor | ThemeBg;
+// The token vocabulary now lives in `@earendil-works/pi-tui` so ported OMP surfaces can resolve
+// semantic spans without depending on the coding-agent package. Re-exported here because this
+// module is where the rest of the theme implementation lives.
+export type { ThemeBg, ThemeColor, ThemeToken } from "@earendil-works/pi-tui";
+export { isValidThemeColor } from "@earendil-works/pi-tui";
 
 /**
  * Tokens are only accepted in their own slot, because "" (terminal default) means the default foreground

@@ -153,7 +153,12 @@ export {
 	type SymbolMap,
 	type SymbolPreset,
 } from "./theme/symbols.ts";
-
+export {
+	isValidThemeColor,
+	type ThemeBg,
+	type ThemeColor,
+	type ThemeToken,
+} from "./theme/tokens.ts";
 export {
 	type Component,
 	Container,
