@@ -71,11 +71,23 @@ export type ThemeBg =
 	| "customMessageBg"
 	| "toolPendingBg"
 	| "toolSuccessBg"
-	| "toolErrorBg";
+	| "toolErrorBg"
+	// Present in Prime Pi's own settings rows and status line, but missing from the union until
+	// the native layer needed it. `tone.ts` resolves it, and without the token the union was
+	// narrower than the themes that ship.
+	| "statusLineBg";
 
 export type ThemeToken = ThemeColor | ThemeBg;
 
-const THEME_COLOR_SET: ReadonlySet<string> = new Set<ThemeColor>([
+/**
+ * Colour tokens in schema order.
+ *
+ * Basic tokens (`accent`, `success`, …) precede derived ones, so reverse-mapping an SGR escape
+ * back to a token resolves ties toward the more specific token. The reference reads this order
+ * from its `dark.json` key order; Prime Pi's theme files live in the coding-agent package, so the
+ * order is declared here alongside the vocabulary and exported for that purpose.
+ */
+export const THEME_COLOR_ORDER: readonly ThemeColor[] = [
 	"accent",
 	"border",
 	"borderAccent",
@@ -125,7 +137,9 @@ const THEME_COLOR_SET: ReadonlySet<string> = new Set<ThemeColor>([
 	"thinkingXhigh",
 	"thinkingMax",
 	"bashMode",
-]);
+];
+
+const THEME_COLOR_SET: ReadonlySet<string> = new Set<ThemeColor>(THEME_COLOR_ORDER);
 
 /** Narrowing guard for a colour name arriving from theme JSON or a semantic span. */
 export function isValidThemeColor(value: string): value is ThemeColor {

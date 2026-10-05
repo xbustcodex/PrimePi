@@ -145,6 +145,12 @@ export {
 } from "./terminal-image.ts";
 export { activeThemeSymbol, setActiveSymbolTheme } from "./theme/active-symbols.ts";
 export {
+	activeTheme,
+	requireActiveTheme,
+	setActiveThemeSource,
+	type ThemeSource,
+} from "./theme/active-theme.ts";
+export {
 	SPINNER_FRAMES,
 	type SpinnerFramesOverride,
 	type SpinnerType,

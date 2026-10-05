@@ -4,7 +4,7 @@
  * token behind the escape, then map the token to a card/text tone.
  */
 
-import { isValidThemeColor, type ThemeBg, type ThemeColor } from "../theme/theme.ts";
+import { isValidThemeColor, type ThemeBg, type ThemeColor } from "../theme/tokens.ts";
 import type { TspTone } from "../tsp.ts";
 import { styledBackground, styledSpans } from "./spans.ts";
 

@@ -9,10 +9,37 @@ const MIN_DESCRIPTION_WIDTH = 10;
 const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/g, " ").trim();
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
+/**
+ * One row in a select list.
+ *
+ * Ported from the reference's interface, which Prime Pi's had truncated to three fields. That
+ * truncation is why `native/picker.ts` could not compile: the native picker is where OMP's
+ * `disabled`, `confirmation`, `pending` and `state` are actually honoured, and there was nowhere
+ * in the Prime Pi list to declare them.
+ *
+ * Every field below is optional except `value` and `label`, so existing three-field construction
+ * sites keep working unchanged.
+ */
 export interface SelectItem {
 	value: string;
 	label: string;
 	description?: string;
+	/** Optional type-indicator glyph rendered in an aligned column before the label. */
+	icon?: string;
+	/** Named icon an OMP terminal draws from its own set, replacing {@link icon} natively. */
+	iconName?: string;
+	/** Native detail text when it differs from the ANSI {@link description}. */
+	nativeDetail?: string;
+	/** Live state drawn right-aligned natively ("demo/demo", "off"). */
+	state?: string;
+	/** Dim hint text shown inline after the cursor when this item is selected. */
+	hint?: string;
+	/** Disabled rows stay visible but are skipped by navigation and cannot activate. */
+	disabled?: boolean;
+	/** When set, activation requires a second confirm, and this text becomes the status line. */
+	confirmation?: string;
+	/** Additional text the default fuzzy filter searches, without rendering it. */
+	searchText?: string;
 }
 
 export interface SelectListTheme {
@@ -41,6 +68,10 @@ export class SelectList implements Component {
 	private items: SelectItem[] = [];
 	private filteredItems: SelectItem[] = [];
 	private selectedIndex: number = 0;
+	/** Set once an item carrying `confirmation` has been activated once. */
+	private pendingConfirmation: boolean = false;
+	/** The filter text, surfaced by {@link pickerView} so the native picker can render it. */
+	private searchQuery: string = "";
 	private mousePressedIndex: number | undefined;
 	private maxVisible: number = 5;
 	private theme: SelectListTheme;
@@ -167,6 +198,45 @@ export class SelectList implements Component {
 				this.onCancel();
 			}
 		}
+	}
+
+	/**
+	 * The list's state as the native picker needs it.
+	 *
+	 * The native picker memoises a rendered row on this object, so returning a fresh literal each
+	 * call is deliberate: identity change is the cache signal. Present in the reference, whose
+	 * picker is the reason this accessor exists.
+	 */
+	pickerView(): {
+		readonly items: readonly SelectItem[];
+		readonly selected: string | null;
+		/** The row awaiting a second confirm, when `confirmation` armed it. */
+		readonly pending: string | null;
+		readonly query: string;
+		readonly cursor: number;
+	} {
+		const selected = this.filteredItems[this.selectedIndex];
+		return {
+			items: this.filteredItems,
+			selected: selected?.value ?? null,
+			pending: this.pendingConfirmation ? (selected?.value ?? null) : null,
+			query: this.searchQuery,
+			cursor: this.selectedIndex,
+		};
+	}
+
+	/**
+	 * Select and activate the item at a visible index, as a click would.
+	 *
+	 * Disabled items are inert, matching a keyboard navigation: a click that moved the selection
+	 * onto a disabled row would make the list respond differently depending on input device.
+	 */
+	clickItem(index: number): void {
+		const item = this.filteredItems[index];
+		if (!item || item.disabled) return;
+		this.selectedIndex = index;
+		this.onSelectionChange?.(item);
+		this.onSelect?.(item);
 	}
 
 	private getVisibleRange(): { startIndex: number; endIndex: number } {

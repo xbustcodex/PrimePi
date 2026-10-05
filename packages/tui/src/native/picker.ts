@@ -17,8 +17,8 @@
  * `scope`/`tab`/`strip`). {@link pickerEvent} folds them into one shape.
  */
 
-import type { Input } from "../components/input";
-import type { SelectItem, SelectList } from "../components/select-list";
+import type { Input } from "../components/input.ts";
+import type { SelectItem, SelectList } from "../components/select-list.ts";
 import type { KeyName } from "../key-hint-format.ts";
 import { getKeybindings, type Keybinding } from "../keybindings.ts";
 import type { TspPickerAction, TspPickerItem, TspPickerProps } from "../tsp.ts";

@@ -3,14 +3,7 @@ import { resetCapabilitiesCache, setCapabilities } from "@earendil-works/pi-tui"
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { ALL_SETUP_SCENES, setThemePreviewHook } from "../src/modes/setup/setup-scene-list.ts";
-import type {
-	ComposerShape,
-	SetupHost,
-	SetupSceneController,
-	SetupSceneHost,
-	SymbolPreset,
-	TerminalTheme,
-} from "../src/modes/setup/setup-scenes.ts";
+import type { ComposerShape, SetupHost, SymbolPreset, TerminalTheme } from "../src/modes/setup/setup-scenes.ts";
 import { CURRENT_SETUP_VERSION } from "../src/modes/setup/setup-scenes.ts";
 import { SetupWizard } from "../src/modes/setup/setup-wizard.ts";
 

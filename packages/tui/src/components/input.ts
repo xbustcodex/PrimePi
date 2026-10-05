@@ -52,6 +52,16 @@ export class Input implements Component, Focusable {
 		this.placeholderStyle = options.placeholderStyle ?? ((text) => text);
 	}
 
+	/**
+	 * Cursor position, in code units from the start of the value.
+	 *
+	 * Present in the reference and required by the native picker, which renders the query field
+	 * from the input's own cursor rather than tracking it separately.
+	 */
+	getCursor(): number {
+		return this.cursor;
+	}
+
 	getValue(): string {
 		return this.value;
 	}

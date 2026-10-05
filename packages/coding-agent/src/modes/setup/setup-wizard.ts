@@ -153,7 +153,6 @@ export class SetupWizard {
 
 	handleInput(keyData: string): void {
 		if (this.done) return;
-		const kb = getKeybindings();
 		// Ctrl+C leaves setup without recording completion, matching the reference's "exit
 		// setup" affordance. Matched on the raw control byte: `ctrl+c` is not a registered
 		// action name (it is bound as `tui.input.copy`, which is wrong to reuse here), and the

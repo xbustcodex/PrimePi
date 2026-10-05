@@ -166,7 +166,13 @@ export function normalizeIconProps(
 							const value = cells[col];
 							if (!isText(value)) continue;
 							const normalized = normalizeIconText(value);
-							if (normalized !== value) (nextCells ??= { ...cells })[col] = normalized;
+							if (normalized !== value) {
+								// Copy-on-first-write rather than mutating `cells`: it belongs to the
+								// memoised row, and the whole point of the cache is that rows are
+								// shared between renders.
+								nextCells ??= { ...cells };
+								nextCells[col] = normalized;
+							}
 						}
 						return nextCells ? { ...row, cells: nextCells } : row;
 					}),

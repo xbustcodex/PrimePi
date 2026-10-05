@@ -6,7 +6,10 @@
  * `b` before the frame that first references it.
  */
 
-import { getImageDimensions } from "../terminal-capabilities";
+import { createHash } from "node:crypto";
+// Prime Pi has no `terminal-capabilities.ts`; the reference's is 1595 lines and pulls in the
+// native addon. Only the dimension probe is needed here, and Prime Pi already exposes it.
+import { getImageDimensions } from "../terminal-image.ts";
 import type { TspProps } from "../tsp.ts";
 import { node } from "./describe.ts";
 import type { NativeNode } from "./node.ts";
@@ -30,7 +33,9 @@ interface BlobTagged {
 export function registerNativeBlob(bytes: Uint8Array, mime: string): string {
 	const known = (bytes as BlobTagged)[kBlobId];
 	if (known !== undefined) return known;
-	const id = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+	// The reference uses `Bun.CryptoHasher`; node's `crypto` gives the same digest and
+	// keeps the blob id stable across runtimes, which matters because ids are content hashes.
+	const id = createHash("sha256").update(bytes).digest("hex");
 	(bytes as BlobTagged)[kBlobId] = id;
 	if (!blobs.has(id)) blobs.set(id, { id, mime, bytes });
 	return id;

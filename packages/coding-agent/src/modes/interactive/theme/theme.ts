@@ -11,7 +11,6 @@ import {
 	foregroundAnsi,
 	getTerminalColorMode,
 	indexedColor,
-	isValidThemeColor,
 	type MarkdownTheme,
 	parseColor,
 	type RgbColor,
@@ -23,6 +22,7 @@ import {
 	type SymbolMap,
 	type SymbolPreset,
 	setActiveSymbolTheme,
+	setActiveThemeSource,
 	styleTextWithAnsi,
 	type TerminalColorMode,
 	type TextAttributes,
@@ -229,6 +229,9 @@ export class Theme {
 			if (typeof value === "string") this.symbols[key as SymbolKey] = value;
 		}
 		setActiveSymbolTheme(this);
+		// Published so ported OMP surfaces inside `tui` can resolve semantic spans without
+		// importing coding-agent, which would invert the package dependency.
+		setActiveThemeSource(this);
 		this.sourcePath = options.sourcePath;
 		this.sourceInfo = options.sourceInfo;
 		this.mode = mode;

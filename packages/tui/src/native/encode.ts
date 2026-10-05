@@ -8,7 +8,17 @@
  * the bodies byte-wise. Chunks split on code-point boundaries, so every chunk
  * is valid UTF-8 on its own and the joined bytes equal the original body.
  */
-import { isRecord } from "@oh-my-pi/pi-utils/type-guards";
+/**
+ * Whether a value is a plain record.
+ *
+ * Inlined from the reference's `pi-utils/type-guards`: Prime Pi has no `pi-utils` package, and
+ * this is the whole of what `encode.ts` needed from it. `null` is excluded because
+ * `typeof null === "object"`.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 import { TSP_APC_ID, TSP_DEFAULT_APC_LIMIT, TSP_VERSION, type TspEvent, type TspReply, type TspVerb } from "../tsp.ts";
 
 const APC = "\x1b_";

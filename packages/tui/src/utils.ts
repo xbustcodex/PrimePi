@@ -378,6 +378,20 @@ function sanitizeWellFormedText(text: string): string {
 	return stripped.replace(CONTROL_CHAR_RE, "");
 }
 
+/** Spaces a tab expands to, matching the reference's render width. */
+const TAB_SPACES = "    ";
+
+/**
+ * Replace tabs with spaces.
+ *
+ * Ported from the reference. {@link normalizeTerminalOutput} also expands tabs, but it does so
+ * only as part of a broader rewrite (Thai/Lao normalisation, ANSI-aware walking), which is the
+ * wrong shape for a span that only needs the substitution.
+ */
+export function replaceTabs(text: string): string {
+	return text.replaceAll("\t", TAB_SPACES);
+}
+
 export function stripTerminalSequences(str: string): string {
 	if (!str.includes("\x1b")) return str;
 	let result = "";

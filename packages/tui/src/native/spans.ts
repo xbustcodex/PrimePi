@@ -13,15 +13,15 @@
  * surrogates removed, tabs expanded.
  */
 
-import darkThemeJson from "../theme/dark.json" with { type: "json" };
-import { isValidThemeColor, type Theme, type ThemeBg, type ThemeColor, theme } from "../theme/theme.ts";
+import { activeTheme, type ThemeSource } from "../theme/active-theme.ts";
+import { THEME_COLOR_ORDER, type ThemeBg, type ThemeColor } from "../theme/tokens.ts";
 import type { TspSpan, TspText } from "../tsp.ts";
 import { replaceTabs, sanitizeText } from "../utils.ts";
 import { span, text } from "./describe.ts";
 import type { NativeNode } from "./node.ts";
 
 /** Theme colour names in schema order; basic tokens (`accent`, `success`, …) precede derived ones, so they win ties. */
-const THEME_COLOR_NAMES: readonly ThemeColor[] = Object.keys(darkThemeJson.colors).filter(isValidThemeColor);
+const THEME_COLOR_NAMES: readonly ThemeColor[] = THEME_COLOR_ORDER;
 
 /** Background tokens in tie-breaking priority. */
 const THEME_BG_NAMES: readonly ThemeBg[] = [
@@ -64,7 +64,7 @@ interface ThemeReverse {
 }
 
 /** Reverse map of the last theme seen; one theme is active at a time. */
-let reverseCache: { theme: Theme; reverse: ThemeReverse } | undefined;
+let reverseCache: { theme: ThemeSource; reverse: ThemeReverse } | undefined;
 
 function parseParams(raw: string): number[] {
 	if (raw === "") return [0];
@@ -82,8 +82,8 @@ function colorKey(params: readonly number[], index: number): { key: string; cons
 }
 
 /** Colour key of a single-colour escape like `\x1b[38;2;1;2;3m`; undefined for default/reset escapes. */
-function escapeColorKey(escape: string): string | undefined {
-	const match = /^\x1b\[([0-9;:]*)m$/.exec(escape);
+function escapeColorKey(sequence: string): string | undefined {
+	const match = /^\x1b\[([0-9;:]*)m$/.exec(sequence);
 	if (!match) return undefined;
 	const params = parseParams(match[1]!);
 	const first = params[0];
@@ -95,27 +95,27 @@ function escapeColorKey(escape: string): string | undefined {
 	return undefined;
 }
 
-function reverseFor(active: Theme): ThemeReverse {
+function reverseFor(active: ThemeSource): ThemeReverse {
 	if (reverseCache?.theme === active) return reverseCache.reverse;
 	const reverse: ThemeReverse = { fg: new Map(), bg: new Map() };
 	for (const name of THEME_COLOR_NAMES) {
-		let escape: string;
+		let sequence: string;
 		try {
-			escape = active.getFgAnsi(name);
+			sequence = active.getFgAnsi(name);
 		} catch {
 			continue;
 		}
-		const key = escapeColorKey(escape);
+		const key = escapeColorKey(sequence);
 		if (key !== undefined && !reverse.fg.has(key)) reverse.fg.set(key, name);
 	}
 	for (const name of THEME_BG_NAMES) {
-		let escape: string;
+		let sequence: string;
 		try {
-			escape = active.getBgAnsi(name);
+			sequence = active.getBgAnsi(name);
 		} catch {
 			continue;
 		}
-		const key = escapeColorKey(escape);
+		const key = escapeColorKey(sequence);
 		if (key !== undefined && !reverse.bg.has(key)) reverse.bg.set(key, name);
 	}
 	reverseCache = { theme: active, reverse };
@@ -125,7 +125,7 @@ function reverseFor(active: Theme): ThemeReverse {
 /** The active theme's reverse map, or undefined before a theme is initialized. */
 function activeReverse(): ThemeReverse | undefined {
 	// `theme` is a live binding that stays undefined until initTheme runs.
-	const active: Theme | undefined = theme;
+	const active: ThemeSource | undefined = activeTheme();
 	return active ? reverseFor(active) : undefined;
 }
 
