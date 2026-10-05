@@ -303,6 +303,81 @@ export function visibleWidth(str: string): number {
 }
 
 /** Remove ANSI, OSC, and APC control sequences while preserving visible text. */
+const ESC_CHAR = "\x1b";
+
+// Well-formed strings only need control/ANSI detection: C0 (excluding \t and \n),
+// CR, DEL, and the C1 range. ESC (0x1B) falls inside \x0B-\x1F.
+const CONTROL_CHAR_RE = /[\x00-\x08\x0B-\x1F\x7F-\x9F]/g;
+const REPLACEMENT_CHAR = "\ufffd";
+
+/**
+ * Strip ANSI escapes, remove control characters and lone surrogates, and normalise
+ * line endings.
+ *
+ * The reference implements this as `Bun.stripANSI`; Prime Pi has no Bun, so it goes
+ * through {@link stripTerminalSequences}, which removes the same sequences by parsing them
+ * rather than by calling into the runtime.
+ *
+ * The fast path matters: this runs over every string the native layer describes, so a well-formed
+ * string with no controls must be returned by identity, not rebuilt.
+ */
+export function sanitizeText(text: string): string {
+	const wellFormed = toWellFormed(text);
+	// This changes the string only on the uncommon malformed path. When it does, the replacement
+	// characters it introduced are dropped rather than rendered as a visible `?`.
+	if (wellFormed !== text) {
+		return sanitizeWellFormedText(wellFormed.replaceAll(REPLACEMENT_CHAR, ""));
+	}
+	return sanitizeWellFormedText(text);
+}
+
+/**
+ * Replace lone surrogates with U+FFFD.
+ *
+ * Equivalent to `String.prototype.toWellFormed`, which the reference calls directly but which
+ * needs an ES2024 lib target. Prime Pi's target is lower, so this walks the string once: a
+ * surrogate is well-formed only when its partner is present and correctly ordered.
+ */
+function toWellFormed(text: string): string {
+	let needsRepair = false;
+	for (let i = 0; i < text.length; i++) {
+		const code = text.charCodeAt(i);
+		if (code < 0xd800 || code > 0xdfff) continue;
+		needsRepair = true;
+		break;
+	}
+	if (!needsRepair) return text;
+
+	let out = "";
+	for (let i = 0; i < text.length; i++) {
+		const code = text.charCodeAt(i);
+		if (code >= 0xd800 && code <= 0xdbff) {
+			const next = i + 1 < text.length ? text.charCodeAt(i + 1) : 0;
+			if (next >= 0xdc00 && next <= 0xdfff) {
+				out += text[i]! + text[i + 1]!;
+				i++;
+				continue;
+			}
+			out += REPLACEMENT_CHAR;
+			continue;
+		}
+		if (code >= 0xdc00 && code <= 0xdfff) {
+			out += REPLACEMENT_CHAR;
+			continue;
+		}
+		out += text[i]!;
+	}
+	return out;
+}
+
+function sanitizeWellFormedText(text: string): string {
+	CONTROL_CHAR_RE.lastIndex = 0;
+	if (CONTROL_CHAR_RE.exec(text) === null) return text;
+	const stripped = text.indexOf(ESC_CHAR) === -1 ? text : stripTerminalSequences(text);
+	CONTROL_CHAR_RE.lastIndex = 0;
+	return stripped.replace(CONTROL_CHAR_RE, "");
+}
+
 export function stripTerminalSequences(str: string): string {
 	if (!str.includes("\x1b")) return str;
 	let result = "";
