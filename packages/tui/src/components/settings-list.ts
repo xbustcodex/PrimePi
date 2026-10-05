@@ -1,6 +1,7 @@
 import { FormField, type FormFieldOptions, type FormFieldTheme } from "../components/form.ts";
 import { fuzzyFilter } from "../fuzzy.ts";
 import { getKeybindings } from "../keybindings.ts";
+import type { MouseRoutable, SgrMouseEvent } from "../mouse.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 import { Input } from "./input.ts";
@@ -31,16 +32,69 @@ export interface SettingItem {
 	) => Component;
 }
 
+/**
+ * The text a settings row is matched against during search.
+ *
+ * Label, id and current value are always searched; the description and the cycleable values are
+ * searched too, because a user looking for "dark" means the theme row and its `light|dark`
+ * options rather than a row whose label happens to contain the word.
+ *
+ * Collapsed to one line: a multi-line description would otherwise let a single row match across a
+ * line break and rank against text the user cannot see in the results.
+ */
+export function getSettingItemFilterText(item: SettingItem): string {
+	let text = `${item.label} ${item.id} ${item.currentValue}`;
+	if (item.description) text += ` ${item.description}`;
+	if (item.values) text += ` ${item.values.join(" ")}`;
+	return text.replace(/[\r\n]+/g, " ");
+}
+
 export interface SettingsListTheme {
 	label: (text: string, selected: boolean) => string;
 	value: (text: string, selected: boolean) => string;
 	description: (text: string) => string;
 	cursor: string;
+	/**
+	 * The row the pointer is over, which is not the one the cursor is on.
+	 *
+	 * Optional, and absent by default: a caller that does not track hover renders the same row
+	 * either way, which is the previous behaviour.
+	 */
+	hovered?: (text: string) => string;
 	hint: (text: string) => string;
 }
 
 export interface SettingsListOptions {
+	/**
+	 * Called when the highlighted row changes.
+	 *
+	 * The settings selector uses it to keep a live preview current while the user arrows through
+	 * a list - without it a preview only updates on confirm, which is what a plain settings panel
+	 * does and is not what this surface is for.
+	 */
+	onSelectionChange?: (item: SettingItem) => void;
 	enableSearch?: boolean;
+	/**
+	 * How rows are laid out.
+	 *
+	 * `flat` puts every row in one column, which is what a *search result* list wants: the results
+	 * are grouped by tab in the nav, so repeating a tab heading per row would be noise. The
+	 * default renders section headings.
+	 */
+	layout?: "flat" | "sections";
+	/** Whether the list's own search field is active. Off when the surface has one already. */
+	typeToSearch?: boolean;
+	/** Shown when the filter matches nothing. */
+	emptyText?: string;
+	/** A hint line under the list. */
+	hint?: string;
+	/**
+	 * Width of the section sidebar, or 0 for no sidebar.
+	 *
+	 * The search results view shows one; the per-tab view does not, because the tab is already
+	 * in the nav and a second grouping column would say the same thing twice.
+	 */
+	sidebarWidth?: number;
 }
 
 export class SettingsList implements Component {
@@ -54,12 +108,17 @@ export class SettingsList implements Component {
 	 * Row id for each content line of the last render, so a pointer position can be resolved
 	 * back to a row. Rebuilt on every render - a stale map would light the wrong row.
 	 */
-	private hitRows: (string | undefined)[] = [];
+	/** Which row each rendered line belongs to. A map, not an array: only rendered
+	 * lines are ever recorded, and it grows with the frame rather than with the terminal height. */
+	private readonly hitRows = new Map<number, string>();
+
 	/** The row the pointer is over, for hover styling. */
 	private hoveredItemId: string | null = null;
 	/** Whether section-heading jump behaviour is engaged. */
 	private sectionFocus = false;
 	private onChange: (id: string, newValue: string) => void;
+	/** Optional; see {@link SettingsListOptions.onSelectionChange}. */
+	private onSelectionChange: ((item: SettingItem) => void) | undefined;
 	private onCancel: () => void;
 	private searchInput?: Input;
 	private searchEnabled: boolean;
@@ -82,6 +141,7 @@ export class SettingsList implements Component {
 		this.maxVisible = maxVisible;
 		this.theme = theme;
 		this.onChange = onChange;
+		this.onSelectionChange = options.onSelectionChange;
 		this.onCancel = onCancel;
 		this.searchEnabled = options.enableSearch ?? false;
 		if (this.searchEnabled) {
@@ -112,6 +172,17 @@ export class SettingsList implements Component {
 	 * The settings selector needs this to apply a change to the row the user is actually on,
 	 * which is not always the row a submenu was opened from.
 	 */
+	/**
+	 * The index of a row within the currently filtered rows, or -1.
+	 *
+	 * Reported rather than taken so a caller addressing a row by id does not have to know
+	 * whether the list is filtered - the two differ once a search is active.
+	 */
+	indexOf(id: string): number {
+		const items = this.searchEnabled ? this.filteredItems : this.items;
+		return items.findIndex((item) => item.id === id);
+	}
+
 	getSelectedItem(): SettingItem | undefined {
 		return this.filteredItems[this.selectedIndex];
 	}
@@ -191,9 +262,9 @@ export class SettingsList implements Component {
 	}
 
 	/** The row the pointer is over, resolved against the last rendered frame. */
-	hoverTest(line: number, col: number): string | undefined {
+	hoverTest(line: number, _col: number): string | undefined {
 		if (this.submenuComponent) return undefined;
-		return this.hitRows[line];
+		return this.hitRows.get(line);
 	}
 
 	/** Record which row the pointer is over, for hover styling. */
@@ -223,8 +294,36 @@ export class SettingsList implements Component {
 	 * Section focusing with nothing to focus would be a mode the user cannot leave by the key
 	 * that entered it, so the mode is refused instead.
 	 */
-	private hasSectionFocusTargets(): boolean {
+	hasSectionFocusTargets(): boolean {
 		return this.items.some((item) => item.heading);
+	}
+
+	/** The row a pointer position resolves to, from the last rendered frame. */
+	hitTest(line: number, _col: number): string | undefined {
+		if (this.submenuComponent) return undefined;
+		return this.hitRows.get(line);
+	}
+
+	/**
+	 * Route a mouse event into an open submenu; false when there is none.
+	 *
+	 * Returns whether the submenu consumed it, so the caller knows not to also act on the row
+	 * underneath.
+	 */
+	routeSubmenuMouse(event: SgrMouseEvent, line: number, col: number): boolean {
+		const submenu = this.submenuComponent as (Component & Partial<MouseRoutable>) | null;
+		if (!submenu) return false;
+		if (submenu.wantsKeyRelease === undefined && !submenu.routeMouse) return false;
+		submenu.routeMouse?.(event as never, line, col);
+		return true;
+	}
+
+	/** Move the selection one step for a wheel notch. */
+	handleWheelAt(delta: -1 | 1): void {
+		const next = Math.max(0, Math.min(this.filteredItems.length - 1, this.selectedIndex + delta));
+		if (next === this.selectedIndex) return;
+		this.selectedIndex = next;
+		this.onSelectionChange?.(this.filteredItems[next]!);
 	}
 
 	invalidate(): void {
@@ -263,6 +362,11 @@ export class SettingsList implements Component {
 			return lines;
 		}
 
+		// Rendered fresh each frame, and reset here rather than where the method starts: the two
+		// early returns above can end the frame before any row is drawn, and a stale map would then
+		// resolve a pointer against a layout that no longer exists.
+		this.hitRows.clear();
+
 		// Calculate visible range with scrolling
 		const { startIndex, endIndex } = this.getVisibleRange(displayItems);
 
@@ -275,6 +379,7 @@ export class SettingsList implements Component {
 			if (!item) continue;
 
 			const isSelected = i === this.selectedIndex;
+			const isHovered = this.hoveredItemId !== null && displayItems[i]?.id === this.hoveredItemId;
 			const prefix = isSelected ? this.theme.cursor : "  ";
 			const prefixWidth = visibleWidth(prefix);
 
@@ -288,8 +393,13 @@ export class SettingsList implements Component {
 			const valueMaxWidth = width - usedWidth - 2;
 
 			const valueText = this.theme.value(truncateToWidth(item.currentValue, valueMaxWidth, ""), isSelected);
+			// Hover is drawn behind the whole row, so it reads as a surface rather than as a
+			// recoloured value. Absent a `hovered` styler the row is simply not marked.
+			const row = prefix + labelText + separator + valueText;
+			const renderedRow = isHovered && this.theme.hovered ? this.theme.hovered(row) : row;
 
-			lines.push(truncateToWidth(prefix + labelText + separator + valueText, width));
+			this.hitRows.set(lines.length, item.id);
+			lines.push(truncateToWidth(renderedRow, width));
 		}
 
 		// Add scroll indicator if needed

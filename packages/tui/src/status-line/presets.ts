@@ -1,12 +1,13 @@
-import { CUSTOM_STATUS_LINE_DEFAULTS } from "./schema.ts";
+import { CUSTOM_STATUS_LINE_DEFAULTS, type StatusLineSegmentId } from "./schema.ts";
 /**
  * One status-line layout: which segments appear, and on which side.
  *
  * Declared here because it is the shape of this table and nothing else in the tree names it.
  */
 export interface PresetDef {
-	readonly leftSegments: readonly string[];
-	readonly rightSegments: readonly string[];
+	readonly leftSegments: readonly StatusLineSegmentId[];
+	readonly rightSegments: readonly StatusLineSegmentId[];
+	readonly separator: StatusLineSeparatorStyle;
 	readonly [key: string]: unknown;
 }
 

@@ -57,8 +57,40 @@ export interface ThemeSource {
 	 * reading `theme.boxRound.topLeft` and friends, and the tees/crosses a rounded box reuses
 	 * come from `boxSharp` so a theme's sharp-junction overrides still apply.
 	 */
-	/** Powerline separator glyphs, grouped as the reference exposes them. */
-	readonly sep: { readonly powerlineRight: string; readonly powerlineLeft: string; readonly powerlineThin: string };
+	/**
+	 * Separator glyphs.
+	 *
+	 * Every spelling the status line and the plugins list can ask for, in the reference's
+	 * grouping: Powerline caps and blocks for a filled bar, and the ascii / dot / slash / pipe
+	 * forms for a terminal that cannot draw them.
+	 */
+	readonly sep: {
+		readonly powerline: string;
+		readonly powerlineThin: string;
+		readonly powerlineLeft: string;
+		readonly powerlineRight: string;
+		readonly powerlineThinLeft: string;
+		readonly powerlineThinRight: string;
+		readonly powerlineCapLeft: string;
+		readonly block: string;
+		readonly space: string;
+		readonly asciiLeft: string;
+		readonly asciiRight: string;
+		readonly dot: string;
+		readonly slash: string;
+		readonly pipe: string;
+	};
+	/** Status glyphs, grouped as the reference exposes them. */
+	readonly status: {
+		readonly success: string;
+		readonly error: string;
+		readonly warning: string;
+		readonly info: string;
+		readonly pending: string;
+		readonly disabled: string;
+		readonly enabled: string;
+		readonly shadowed: string;
+	};
 	/** Tree-drawing glyphs, grouped as the reference exposes them. */
 	readonly tree: {
 		readonly branch: string;

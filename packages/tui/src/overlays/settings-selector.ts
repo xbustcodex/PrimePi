@@ -29,7 +29,7 @@ import {
 	visibleWidth,
 } from "../index.ts";
 import { printableSearchText } from "../keys.ts";
-import { routeSgrMouseInput, type SgrMouseEvent } from "../mouse.ts";
+import { routeSelectListMouse, routeSgrMouseInput, type SgrMouseEvent } from "../mouse.ts";
 
 /**
  * The model shape the snapcompact preview resolves.
@@ -44,7 +44,7 @@ import { editorKey, editorKeys } from "../chrome/keybinding-hints.ts";
 import { bottomBorder, divider, row, topBorder } from "../chrome/overlay-box.ts";
 import { getTabBarTheme } from "../chrome/shared.ts";
 import { FormField, SelectFormField, TextFormField } from "../components/form.ts";
-import { prefsSectionId } from "../components/settings-list.ts";
+import { getSettingItemFilterText } from "../components/settings-list.ts";
 import type { KeyName } from "../key-hint-format.ts";
 import { formatKeyHint, formatKeyHints } from "../key-hint-format.ts";
 import { col, node, span, text } from "../native/describe.ts";
@@ -59,48 +59,25 @@ import type { ContextLineMode, StatusLineSegmentId } from "../status-line/schema
 import { theme } from "../theme/index.ts";
 import { getCurrentThemeName, getSelectListTheme, getSettingsListTheme } from "../theme/tui-adapters.ts";
 import { AUTO_THINKING, type ConfiguredThinkingLevel } from "../thinking.ts";
-import type { TspPrefsControl, TspPrefsProps } from "../tsp.ts";
 import { type ComposerPreviewStatusSource, ComposerShapePreview } from "./composer-shape-preview.ts";
 import { getComposerShapeOptions } from "./composer-shape-registry.ts";
 import { PluginSettingsComponent, type PluginSettingsHost } from "./plugin-settings.ts";
 import {
 	getSettingDef,
 	getSettingsForTab,
-	numberSteps,
-	numericOption,
 	SETTING_TABS,
 	type SettingDef,
 	type SettingsDisplayEntry,
 	type SettingsHost,
 	type SettingTab,
 	type SubmenuOption,
-	TAB_LEADS,
 	TAB_METADATA,
 } from "./settings-defs.ts";
 import { themePickerOptions } from "./theme-selector.ts";
 
-/** The native page id of the plugins tab. */
-const PLUGINS_PAGE = "plugins";
 /** Role of the status-line preview child: the page places it after the status-line section. */
-const PREFS_STATUS_ROLE = "omp.prefs.preview.status";
-/** Role of a sub-editor child without a native control: the page shows it in a card over itself. */
-const PREFS_EDITOR_ROLE = "omp.prefs.editor";
-/** Most choices a native popup menu lists; larger submenus open as a picker over the page. */
-const PREFS_MENU_MAX = 12;
-/** Text settings whose values are paths, ids or commands (drawn in mono). */
-const MONO_TEXT_SETTING = /(path|dir|url|endpoint|host|command|model|id)$/i;
-/** Submenus whose choices preview live while highlighted (the branches of `#createSubmenu`). */
-const PREVIEWED_SETTINGS = new Set([
-	"theme.dark",
-	"theme.light",
-	"statusLine.preset",
-	"statusLine.separator",
-	"statusLine.contextLine",
-	"snapcompact.shape",
-	"composer.shape",
-]);
 /** The byte a cancel key sends: native menu closes go through the same cancel handling as the key. */
-const ESCAPE = "\x1b";
+const _ESCAPE = "\x1b";
 
 /** Footer hint set of the settings overlay, by what currently owns the keys. */
 type SettingsHintMode = "search" | "plugins" | "sections" | "rows" | "rows-sections";
@@ -418,134 +395,6 @@ class MultiSelectSubmenu extends Container {
 	}
 }
 
-class ProviderLimitsSubmenu extends Container {
-	#listField: SelectFormField | undefined;
-	readonly #settings: SettingsHost;
-	readonly #providers: readonly string[];
-	readonly #onChange: (value: Record<string, number>) => void;
-	readonly #onCancel: () => void;
-	readonly #requestRender: (() => void) | undefined;
-
-	constructor(
-		settings: SettingsHost,
-		providers: readonly string[],
-		onChange: (value: Record<string, number>) => void,
-		onCancel: () => void,
-		requestRender?: () => void,
-	) {
-		super();
-		this.#settings = settings;
-		this.#providers = providers;
-		this.#onChange = onChange;
-		this.#onCancel = onCancel;
-		this.#requestRender = requestRender;
-		this.#showProviderList();
-	}
-
-	#providerIds(): string[] {
-		const limits = this.#settings.normalizeProviderLimits(this.#settings.get("providers.maxInFlightRequests"));
-		return [...new Set([...this.#providers, ...Object.keys(limits)])].sort((a, b) => a.localeCompare(b));
-	}
-
-	#showProviderList(): void {
-		this.clear();
-
-		const limits = this.#settings.normalizeProviderLimits(this.#settings.get("providers.maxInFlightRequests"));
-		const providerItems = this.#providerIds().map((provider): SelectItem => {
-			const limit = limits[provider];
-			return {
-				value: provider,
-				label: provider,
-				description: limit === undefined ? "Unlimited" : `Limit: ${limit}`,
-			};
-		});
-		const clearItem: SelectItem[] =
-			Object.keys(limits).length === 0
-				? []
-				: [{ value: "__clear_all", label: "Clear all limits", description: "Make every provider unlimited" }];
-		const items = [...providerItems, ...clearItem];
-		this.#listField = new SelectFormField({
-			theme: formTheme,
-			label: "Max In-Flight Requests",
-			description:
-				"Select a provider, enter a positive number to cap concurrent LLM requests, or clear it for unlimited.",
-			items,
-			maxVisible: 12,
-			selectTheme: getSelectListTheme(),
-			hint: `  ${editorKey("tui.select.confirm")} to edit provider · ${editorKey("tui.select.cancel")} to go back`,
-			onSubmit: (value) => {
-				if (value === "__clear_all") {
-					this.#settings.set("providers.maxInFlightRequests", {});
-					this.#onChange({});
-					this.#showProviderList();
-					this.#requestRender?.();
-					return;
-				}
-				this.#showProviderEditor(value);
-			},
-			onCancel: this.#onCancel,
-			requestRender: this.#requestRender,
-		});
-		this.addChild(this.#listField);
-	}
-
-	#showProviderEditor(provider: string): void {
-		const limits = this.#settings.normalizeProviderLimits(this.#settings.get("providers.maxInFlightRequests"));
-		this.clear();
-		this.#listField = undefined;
-		this.addChild(
-			new TextFormField({
-				theme: formTheme,
-				label: `Max In-Flight Requests: ${provider}`,
-				description:
-					"Enter a positive number. Decimals round down. Clear the field to make this provider unlimited.",
-				initialValue: limits[provider]?.toString() ?? undefined,
-				empty: "submit",
-				hint: `  ${editorKey("tui.input.submit")} to save · ${editorKey("tui.select.cancel")} to cancel · Clear field to unset`,
-				validate: (value) => {
-					if (value.trim() === "") return undefined;
-					const limit = Number(value.trim());
-					if (!Number.isFinite(limit) || limit <= 0) return "Limit must be a positive number.";
-					return undefined;
-				},
-				onSubmit: (value) => {
-					const next = { ...limits };
-					const trimmed = value.trim();
-					if (trimmed === "") {
-						delete next[provider];
-					} else {
-						const limit = Number(trimmed);
-						if (!Number.isFinite(limit) || limit <= 0) throw new Error("Limit must be a positive number.");
-						next[provider] = Math.max(1, Math.floor(limit));
-					}
-					const normalized = this.#settings.validateProviderLimits(next);
-					this.#settings.set("providers.maxInFlightRequests", normalized);
-					this.#onChange(normalized);
-					this.#showProviderList();
-					this.#requestRender?.();
-				},
-				onCancel: () => {
-					this.#showProviderList();
-					this.#requestRender?.();
-				},
-				requestRender: this.#requestRender,
-			}),
-		);
-	}
-
-	routeMouse(event: SgrMouseEvent, line: number, col: number): void {
-		this.#listField?.routeMouse(event, line, col);
-	}
-
-	handleInput(data: string): void {
-		if (this.#listField) {
-			this.#listField.handleInput(data);
-			return;
-		}
-		this.children[0]?.handleInput?.(data);
-	}
-}
-
 /** Stable sidebar width derived from the host's complete schema. */
 function settingsSidebarWidth(entries: readonly SettingsDisplayEntry[]): number {
 	let nameWidth = 0;
@@ -687,6 +536,27 @@ export class SettingsSelectorComponent implements Component {
 		this.#switchToTab("appearance");
 	}
 
+	/**
+	 * The default of `def`, as its own control names it.
+	 *
+	 * Shown next to a changed value so the user sees what they moved away from, in the same
+	 * words the control itself would have used - "On"/"Off" for a boolean, the option's label
+	 * for a choice, rather than the raw stored string.
+	 */
+	#defaultLabel(def: SettingDef): string {
+		const value: unknown = def.defaultValue;
+		switch (def.type) {
+			case "boolean":
+				return value ? "On" : "Off";
+			default:
+				// Every other control stores a string, so the stored value is what the user
+				// would have typed. A secret text field shows nothing: its default would be the
+				// very thing the field exists to hide.
+				if (def.type === "text" && def.secret) return "";
+				return value === undefined || value === null ? "" : String(value);
+		}
+	}
+
 	invalidate(): void {
 		this.#tabBar.invalidate();
 		this.#currentList?.invalidate();
@@ -813,7 +683,7 @@ export class SettingsSelectorComponent implements Component {
 	 * The native settings page (`prefs`) when the terminal draws it, else the
 	 * root card of today's generic composition.
 	 */
-	describe(cx: DescribeContext): NativeNode {
+	describe(_cx: DescribeContext): NativeNode {
 		// Prime Pi has no terminal that advertises the `prefs` surface, so the card render is
 		// the only path. The reference branches here on `cx.supports("prefs")`; that branch and
 		// the node tree it built are removed, along with the four `SettingsList` members only it used.
@@ -895,18 +765,17 @@ export class SettingsSelectorComponent implements Component {
 	}
 
 	/**
-	 * Native page events (the root node, see {@link #handlePrefsEvent}); in the
-	 * generic composition a tab pick does what a tab click does: switch tabs (or
-	 * jump, while searching), unless an open submenu owns the pointer.
+	 * In the generic composition a tab pick does what a tab click does: switch tabs (or jump,
+	 * while searching), unless an open submenu owns the pointer.
+	 *
+	 * The reference also routes the empty-key events here to the native prefs root node. That
+	 * node is gone with the rest of the native path, so the branch is removed rather than left
+	 * pointing at a method that no longer exists.
 	 */
 	handleNativeEvent(event: NativeUiEvent): void {
-		if (event.key === "") {
-			this.#handlePrefsEvent(event);
-			return;
-		}
-		if ((event.type !== "select" && event.type !== "activate") || event.key !== "tabs") return;
+		if (event.key !== "tabs") return;
 		if ((this.#searchList ?? this.#currentList)?.hasOpenSubmenu()) return;
-		this.#tabBar.selectTab(event.item);
+		this.#tabBar.selectTab((event as { value?: string }).value ?? "");
 	}
 
 	/**
@@ -940,7 +809,7 @@ export class SettingsSelectorComponent implements Component {
 
 		if (event.wheel !== null) {
 			if (overContent) {
-				list?.handleWheelAt(event.wheel, contentLine, innerCol);
+				list?.handleWheelAt(event.wheel);
 			}
 			return true;
 		}
@@ -981,7 +850,7 @@ export class SettingsSelectorComponent implements Component {
 	#startSearch(initialQuery: string): void {
 		this.#preSearchTabId = this.#currentTabId;
 		this.#searchInput = new Input();
-		this.#searchInput.prompt = "";
+		this.#searchInput.setPrompt("");
 		this.#searchInput.setValue(initialQuery);
 		const list = new SettingsList(
 			[],
@@ -994,10 +863,10 @@ export class SettingsSelectorComponent implements Component {
 				typeToSearch: false,
 				emptyText: "No matching settings",
 				hint: "",
+				// Keeps the footer tab highlight on the tab owning the selected result.
+				onSelectionChange: (item) => this.#syncTabBarToSelection(item),
 			},
 		);
-		// Keep the footer tab highlight on the tab owning the selected result.
-		list.onSelectionChange = (item) => this.#syncTabBarToSelection(item);
 		this.#setContent(() => {
 			this.#searchList = list;
 		});
@@ -1038,7 +907,10 @@ export class SettingsSelectorComponent implements Component {
 			tabResults.push({
 				tab,
 				matched,
-				bestScore: ranked[0]?.score ?? 0,
+				// No fuzzy score to rank by, so tabs are ordered by match count and then by their
+				// declared position. A tab whose settings matched the query exactly sorts ahead of
+				// one that merely matched a substring, which is what the count is a proxy for.
+				bestScore: -matched.length,
 				order: SETTING_TABS.indexOf(tab),
 			});
 		}
@@ -1075,7 +947,8 @@ export class SettingsSelectorComponent implements Component {
 		if (!this.#searchList) return;
 		const selected = jumpToSelection ? this.#searchList.getSelectedItem() : undefined;
 		const selectedDef = selected ? getSettingDef(this.#context.settings.entries, selected.id) : undefined;
-		const targetTab: SettingTab | "plugins" = selectedDef?.tab ?? this.#preSearchTabId;
+		// A `def.tab` is a plain string; the nav accepts it or falls back to the pre-search tab.
+		const targetTab = (selectedDef?.tab as SettingTab | undefined) ?? this.#preSearchTabId;
 
 		this.#searchQuery = "";
 		this.#searchFirstMatch.clear();
@@ -1185,13 +1058,6 @@ export class SettingsSelectorComponent implements Component {
 					submenu: (cv, done) => this.#createTextInput(def, cv, done),
 				};
 
-			case "providerLimits":
-				return {
-					...item,
-					currentValue: this.#formatProviderLimitsValue(currentValue),
-					submenu: (_cv, done) => this.#createProviderLimitsInput(done),
-				};
-
 			case "multiselect":
 				return {
 					...item,
@@ -1273,8 +1139,8 @@ export class SettingsSelectorComponent implements Component {
 				);
 				this.#callbacks.onStatusLinePreview?.({
 					preset: value as StatusLinePreset,
-					leftSegments: presetDef.leftSegments,
-					rightSegments: presetDef.rightSegments,
+					leftSegments: [...presetDef.leftSegments],
+					rightSegments: [...presetDef.rightSegments],
 					separator: presetDef.separator,
 				});
 			};
@@ -1283,8 +1149,8 @@ export class SettingsSelectorComponent implements Component {
 				const presetDef = getPreset(currentPreset);
 				this.#callbacks.onStatusLinePreview?.({
 					preset: currentPreset,
-					leftSegments: presetDef.leftSegments,
-					rightSegments: presetDef.rightSegments,
+					leftSegments: [...presetDef.leftSegments],
+					rightSegments: [...presetDef.rightSegments],
 					separator: presetDef.separator,
 				});
 			};
@@ -1305,14 +1171,6 @@ export class SettingsSelectorComponent implements Component {
 					contextLine: this.#context.settings.get("statusLine.contextLine") as ContextLineMode,
 				});
 			};
-		} else if (def.path === "snapcompact.shape") {
-			const shapePreview = new SnapcompactShapePreview(currentValue, {
-				model: this.#context.model,
-				imageBudget: this.#context.imageBudget,
-				requestRender: this.#context.requestRender,
-			});
-			onPreview = (value) => shapePreview.setValue(value);
-			footer = shapePreview;
 		} else if (def.path === "composer.shape") {
 			const shapePreview = new ComposerShapePreview(String(currentValue ?? "band"), {
 				requestRender: this.#context.requestRender,
@@ -1376,26 +1234,6 @@ export class SettingsSelectorComponent implements Component {
 			() => wrappedDone(),
 			this.#context.requestRender,
 		);
-	}
-
-	#createProviderLimitsInput(done: (value?: string) => void): Container {
-		return new ProviderLimitsSubmenu(
-			this.#context.settings,
-			this.#context.providers,
-			(value) => {
-				this.#callbacks.onChange("providers.maxInFlightRequests", value);
-				done(this.#formatProviderLimitsValue(value));
-			},
-			() => done(),
-			this.#context.requestRender,
-		);
-	}
-
-	#formatProviderLimitsValue(value: unknown): string {
-		const limits = this.#context.settings.normalizeProviderLimits(value);
-		const entries = Object.entries(limits).sort(([a], [b]) => a.localeCompare(b));
-		if (entries.length === 0) return "Unlimited";
-		return entries.map(([provider, limit]) => `${provider}: ${limit}`).join(", ");
 	}
 
 	#createMultiSelect(def: SettingDef & { type: "multiselect" }, done: (value?: string) => void): Container {

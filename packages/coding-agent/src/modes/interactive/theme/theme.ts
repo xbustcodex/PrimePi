@@ -213,6 +213,29 @@ export class Theme {
 	 * glyphs. Sourcing them from the `boxSharp.*` tokens is what keeps a theme's sharp-junction
 	 * overrides effective for rounded-box dividers.
 	 */
+	/** Status glyphs, for success/failure/pending indicators. */
+	get status(): {
+		readonly success: string;
+		readonly error: string;
+		readonly warning: string;
+		readonly info: string;
+		readonly pending: string;
+		readonly disabled: string;
+		readonly enabled: string;
+		readonly shadowed: string;
+	} {
+		return {
+			success: this.symbol("status.success"),
+			error: this.symbol("status.error"),
+			warning: this.symbol("status.warning"),
+			info: this.symbol("status.info"),
+			pending: this.symbol("status.pending"),
+			disabled: this.symbol("status.disabled"),
+			enabled: this.symbol("status.enabled"),
+			shadowed: this.symbol("status.shadowed"),
+		};
+	}
+
 	/** Tree-drawing glyphs, for the transcript's file-tree rendering. */
 	get tree(): {
 		readonly branch: string;
@@ -230,12 +253,38 @@ export class Theme {
 		};
 	}
 
-	/** Powerline separator glyphs. */
-	get sep(): { readonly powerlineRight: string; readonly powerlineLeft: string; readonly powerlineThin: string } {
+	/** Separator glyphs: Powerline forms, blocks, and the ascii / dot / slash / pipe spellings. */
+	get sep(): {
+		readonly powerline: string;
+		readonly powerlineThin: string;
+		readonly powerlineLeft: string;
+		readonly powerlineRight: string;
+		readonly powerlineThinLeft: string;
+		readonly powerlineThinRight: string;
+		readonly powerlineCapLeft: string;
+		readonly block: string;
+		readonly space: string;
+		readonly asciiLeft: string;
+		readonly asciiRight: string;
+		readonly dot: string;
+		readonly slash: string;
+		readonly pipe: string;
+	} {
 		return {
-			powerlineRight: this.symbol("sep.powerlineRight"),
-			powerlineLeft: this.symbol("sep.powerlineLeft"),
+			powerline: this.symbol("sep.powerline"),
 			powerlineThin: this.symbol("sep.powerlineThin"),
+			powerlineLeft: this.symbol("sep.powerlineLeft"),
+			powerlineRight: this.symbol("sep.powerlineRight"),
+			powerlineThinLeft: this.symbol("sep.powerlineThinLeft"),
+			powerlineThinRight: this.symbol("sep.powerlineThinRight"),
+			powerlineCapLeft: this.symbol("sep.powerlineCapLeft"),
+			block: this.symbol("sep.block"),
+			space: this.symbol("sep.space"),
+			asciiLeft: this.symbol("sep.asciiLeft"),
+			asciiRight: this.symbol("sep.asciiRight"),
+			dot: this.symbol("sep.dot"),
+			slash: this.symbol("sep.slash"),
+			pipe: this.symbol("sep.pipe"),
 		};
 	}
 
