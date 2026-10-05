@@ -6,7 +6,14 @@ import {
 	resolveCompactionLimits,
 	type Transport,
 } from "@earendil-works/pi-ai";
-import type { TuiMode as RendererTuiMode, ScrollViewScrollbar, TerminalCapabilities } from "@earendil-works/pi-tui";
+import {
+	detectSymbolPreset,
+	isSymbolPreset,
+	type TuiMode as RendererTuiMode,
+	type ScrollViewScrollbar,
+	type SymbolPreset,
+	type TerminalCapabilities,
+} from "@earendil-works/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -1265,6 +1272,19 @@ export class SettingsManager {
 		return theme?.includes("/") ? undefined : theme;
 	}
 
+	/**
+	 * Persist a theme into the slot matching a terminal appearance.
+	 *
+	 * Written through the registry into `theme.dark` / `theme.light` - the same slots the
+	 * runtime resolves from - so a theme chosen during onboarding is the theme the next launch
+	 * uses. Writing the flat `theme` key instead would work for one appearance and be ignored
+	 * for the other, which is the bug this slot layout replaced.
+	 */
+	async setThemeSlot(mode: "dark" | "light", theme: string): Promise<void> {
+		this.setSetting(mode === "dark" ? "theme.dark" : "theme.light", theme);
+		await this.flush();
+	}
+
 	setTheme(theme: string): void {
 		this.globalSettings.theme = theme;
 		this.markModified("theme");
@@ -1570,6 +1590,25 @@ export class SettingsManager {
 		// runtime reads it back from, rather than in an override layer that dies with the
 		// process. A wizard that recorded completion in memory would replay on every launch.
 		this.setSetting("setup.version", version);
+		await this.flush();
+	}
+
+	/**
+	 * The symbol preset this session draws with.
+	 *
+	 * Falls back to what the terminal can be trusted to render rather than to the descriptor
+	 * default, so a legacy console is served ASCII without the user having to discover the
+	 * problem and find the setting.
+	 */
+	getSymbolPreset(): SymbolPreset {
+		const configured = this.getSetting<string>("symbolPreset")?.value;
+		if (typeof configured === "string" && isSymbolPreset(configured)) return configured;
+		return detectSymbolPreset();
+	}
+
+	/** Persist a symbol-preset choice through the registry. */
+	async setSymbolPreset(preset: SymbolPreset): Promise<void> {
+		this.setSetting("symbolPreset", preset);
 		await this.flush();
 	}
 

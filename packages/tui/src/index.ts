@@ -144,6 +144,20 @@ export {
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
 export {
+	activeSymbolPreset,
+	activeSymbols,
+	detectSymbolPreset,
+	detectTerminalCapabilities,
+	isSymbolPreset,
+	SYMBOL_PRESETS,
+	type SymbolCapabilities,
+	type SymbolPreset,
+	type SymbolSet,
+	setActiveSymbolPreset,
+	supportsNerdGlyphs,
+	symbolsFor,
+} from "./theme/symbols.ts";
+export {
 	type Component,
 	Container,
 	CURSOR_MARKER,

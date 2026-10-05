@@ -1,4 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
+import { activeSymbolPreset, symbolsFor } from "@earendil-works/pi-tui";
 import { theme } from "../theme/theme.ts";
 
 /**
@@ -20,6 +21,10 @@ export class DynamicBorder implements Component {
 	}
 
 	render(width: number): string[] {
-		return [this.color("─".repeat(Math.max(1, width)))];
+		// The glyph comes from the active symbol preset rather than a literal, so a terminal
+		// that cannot draw box-drawing characters (a legacy Windows console with codepage 437)
+		// gets ASCII instead of a row of replacement characters.
+		const glyph = symbolsFor(activeSymbolPreset()).horizontal;
+		return [this.color(glyph.repeat(Math.max(1, width)))];
 	}
 }
