@@ -105,10 +105,23 @@ section order. Prime Pi's `ParityRow` already carries every input that derivatio
 question is not *can* it be expressed but *which* wins: adopt OMP's control vocabulary, or keep
 Prime Pi's parity rows and derive from those. That is a product decision, not a port.
 
-**2. `plugin-settings.ts`** (1036 lines) is the plugins tab. It needs four `SettingsList`
-capabilities Prime Pi does not have - `prefsSections`, `openSubmenu`, `setHoverIndex`,
-`hitTest` - and `SettingsList` itself would have to grow them. Porting it means extending a
-component the settings selector also depends on, in the same change.
+**2. `plugin-settings.ts`** (1036 lines) is the plugins tab. **This one needs your call.**
+It cannot be deleted the way the native prefs path was, because the selector references it 33
+times - the plugins page is woven through tab state, search grouping, preview and navigation, not
+a removable block.
+
+Two ways forward, and they are not equivalent:
+
+- *Port it.* It needs four `SettingsList` capabilities Prime Pi lacks. Three have since been
+  added as part of this work (`openSubmenu`/`hasOpenSubmenu`/`openSubmenuFor`, `hitTest`/
+  `hoverTest`/`setHoverItem`, `applyValue`/`setMaxVisible`/`setItems`). The fourth is the
+  `prefs*` trio, which is only reachable from the native-terminal path.
+- *Ship without the plugins tab.* Prime Pi's extensions are already listed and managed from the
+  startup header and `/extensions`, so the tab is a second surface for the same job rather than
+  the only one. Removing it means the selector's 33 references, and the tab is gone from Settings.
+
+I have not chosen. The plugins tab is a user-visible surface, and which of the two is correct is
+a product decision rather than a port.
 
 **3. `snapcompact-shape-preview`** needs `@oh-my-pi/snapcompact`, **2254 lines**, for the live
 preview of a single optional setting row. Removed from the port: a 2254-line package for one
