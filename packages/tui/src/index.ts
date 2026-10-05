@@ -36,6 +36,7 @@ export {
 // Components
 export { Box } from "./components/box.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
+export * from "./components/composer/index.ts";
 export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
 export { HStack } from "./components/h-stack.ts";
 export { Image, type ImageOptions, type ImageTheme } from "./components/image.ts";
@@ -167,6 +168,16 @@ export {
 	type ThemeToken,
 } from "./theme/tokens.ts";
 export {
+	type ConfiguredThinkingLevel,
+	clampThinkingLevelForModel,
+	Effort,
+	effortForLevel,
+	getSupportedEfforts,
+	levelForEffort,
+	type ReasoningModelLike,
+	THINKING_EFFORTS,
+} from "./thinking-effort.ts";
+export {
 	type Component,
 	Container,
 	CURSOR_MARKER,
@@ -197,6 +208,7 @@ export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.
 // Utilities
 export {
 	getOsc8LinkAtColumn,
+	padding,
 	sliceByColumn,
 	stripTerminalSequences,
 	truncateToWidth,

@@ -40,6 +40,14 @@ export interface ThemeSource {
 	getFgAnsi(color: ThemeColor): string;
 	/** A foreground escape that contrasts against `fill`, for a fill of unknown luminance. */
 	getContrastFgAnsi(fill: ThemeColor): string;
+	/** A background applied across the text, surviving resets inside it. */
+	bgFill(color: ThemeBg, text: string): string;
+	/** Reverse video, for a caret or a selection highlight. */
+	inverse(text: string): string;
+	/** The token's colour as the terminal actually resolved it, for luminance maths. */
+	fgResolved(color: ThemeColor): string;
+	/** A foreground chosen to stay legible on `background`, applied across the text. */
+	fgOnBg(color: ThemeColor, background: ThemeBg, text: string): string;
 	getBgAnsi(color: ThemeBg): string;
 	symbol(key: string): string;
 	/**

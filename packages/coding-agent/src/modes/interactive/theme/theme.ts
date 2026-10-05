@@ -442,6 +442,41 @@ export class Theme {
 		return chalk.strikethrough(text);
 	}
 
+	/** The token's colour as the terminal actually resolved it, for luminance maths. */
+	fgResolved(color: ThemeColor): string {
+		return this.fg(color, "");
+	}
+
+	/**
+	 * A foreground that stays legible on `background`.
+	 *
+	 * A token that resolves to the terminal default carries no luminance of its own, so the
+	 * contrast helper decides for it. An explicit token is used as asked, because a theme that
+	 * names a colour wants that colour even where the computed alternative would be legible too.
+	 */
+	getFgOnBgAnsi(color: ThemeColor, background: ThemeBg): string {
+		const isDefault = this.getFgAnsi(color) === "\x1b[39m";
+		return isDefault ? this.getContrastFgAnsi(contrastProbe(background)) : this.getFgAnsi(color);
+	}
+
+	/**
+	 * Apply a background across `text`, re-applying it after any reset inside.
+	 *
+	 * Without the re-application, a reset sequence embedded in the text would end the fill and
+	 * leave the rest of the line on the terminal default - which is how a single styled span
+	 * ends up with a differently coloured tail.
+	 */
+	bgFill(color: ThemeBg, text: string): string {
+		const ansi = this.getBgAnsi(color);
+		return `${ansi}${text.replace(/\x1b\[49m/g, `$&${ansi}`)}\x1b[49m`;
+	}
+
+	/** Apply a foreground across `text`, re-applying it after any reset inside. */
+	fgOnBg(color: ThemeColor, background: ThemeBg, text: string): string {
+		const ansi = this.getFgOnBgAnsi(color, background);
+		return `${ansi}${text.replace(/\x1b\[39m/g, `$&${ansi}`)}\x1b[39m`;
+	}
+
 	getFgAnsi(color: ThemeColor): string {
 		return this.tokenAnsi(this.fgAnsi, color);
 	}
@@ -1296,4 +1331,15 @@ export function getSettingsListTheme(): SettingsListTheme {
 		cursor: theme.fg("accent", "→ "),
 		hint: (text: string) => theme.fg("dim", text),
 	};
+}
+
+/**
+ * A foreground token whose luminance approximates `background`'s, for the contrast helper.
+ *
+ * The helper reads a fill's SGR sequence and returns black or white; this gives it something to
+ * read. Using `text` as the probe is deliberate: it is the token whose resolved colour a theme
+ * picks to be legible on its own background, so it is the best available stand-in.
+ */
+function contrastProbe(_background: ThemeBg): ThemeColor {
+	return "text";
 }

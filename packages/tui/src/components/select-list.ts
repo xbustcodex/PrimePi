@@ -239,6 +239,24 @@ export class SelectList implements Component {
 		this.onSelect?.(item);
 	}
 
+	/**
+	 * Route a mouse event to this list, translating the click into a selection.
+	 *
+	 * The reference's select list owns its own routing; Prime Pi's does not, and the ported
+	 * overlays call it. Implemented as a click on the addressed row, which is the only thing
+	 * a list does with a mouse anyway.
+	 */
+	routeMouse(event: { button: number; row: number; col: number; release?: boolean; wheel?: number | null }): boolean {
+		// A release is not a click, and a wheel report is not a click either - the raw button
+		// code carries both as high bits.
+		if (event.release) return false;
+		if (event.button !== 0) return false;
+		const index = event.row;
+		if (index < 0 || index >= this.filteredItems.length) return false;
+		this.clickItem(index);
+		return true;
+	}
+
 	private getVisibleRange(): { startIndex: number; endIndex: number } {
 		const startIndex = Math.max(
 			0,
