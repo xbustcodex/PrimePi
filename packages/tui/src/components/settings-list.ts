@@ -1,3 +1,4 @@
+import { FormField, type FormFieldOptions, type FormFieldTheme } from "../components/form.ts";
 import { fuzzyFilter } from "../fuzzy.ts";
 import { getKeybindings } from "../keybindings.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
@@ -15,6 +16,13 @@ export interface SettingItem {
 	currentValue: string;
 	/** If provided, Enter/Space cycles through these values */
 	values?: string[];
+	/**
+	 * Marks a row as a section heading rather than a setting.
+	 *
+	 * A heading row has a label and nothing else: no value, no values, no submenu. The list
+	 * renders it as a heading and skips it during navigation, and `applyValue` ignores it.
+	 */
+	heading?: boolean;
 	/** If provided, Enter opens this submenu. Receives current value and done callback.
 	 *  done() accepts an optional selectedValue and an optional navigateTo id to move the cursor after close. */
 	submenu?: (
@@ -42,6 +50,15 @@ export class SettingsList implements Component {
 	private selectedIndex = 0;
 	private mousePressedIndex: number | undefined;
 	private maxVisible: number;
+	/**
+	 * Row id for each content line of the last render, so a pointer position can be resolved
+	 * back to a row. Rebuilt on every render - a stale map would light the wrong row.
+	 */
+	private hitRows: (string | undefined)[] = [];
+	/** The row the pointer is over, for hover styling. */
+	private hoveredItemId: string | null = null;
+	/** Whether section-heading jump behaviour is engaged. */
+	private sectionFocus = false;
 	private onChange: (id: string, newValue: string) => void;
 	private onCancel: () => void;
 	private searchInput?: Input;
@@ -87,6 +104,127 @@ export class SettingsList implements Component {
 		if (index !== -1) {
 			this.selectedIndex = index;
 		}
+	}
+
+	/**
+	 * The row the user has highlighted, if any.
+	 *
+	 * The settings selector needs this to apply a change to the row the user is actually on,
+	 * which is not always the row a submenu was opened from.
+	 */
+	getSelectedItem(): SettingItem | undefined {
+		return this.filteredItems[this.selectedIndex];
+	}
+
+	/** Replace the rows, keeping the selection on the same id when it still exists. */
+	setItems(items: readonly SettingItem[]): void {
+		const previousId = this.getSelectedItem()?.id;
+		this.items = [...items];
+		// Re-filter with the current query rather than resetting it: replacing the rows while a
+		// search is active should narrow the new rows, not clear the search.
+		this.applyFilter(this.searchEnabled ? (this.searchInput?.getValue() ?? "") : "");
+		if (previousId !== undefined) {
+			const index = this.filteredItems.findIndex((item) => item.id === previousId);
+			this.selectedIndex = index >= 0 ? index : 0;
+		} else {
+			this.selectedIndex = 0;
+		}
+	}
+
+	/** Whether a submenu is currently open over the list. */
+	hasOpenSubmenu(): boolean {
+		return this.submenuComponent !== null;
+	}
+
+	/** Which row's submenu is open, or `undefined` when none is. */
+	openSubmenuFor(): SettingItem | undefined {
+		return this.submenuItemIndex === null ? undefined : this.filteredItems[this.submenuItemIndex];
+	}
+
+	/**
+	 * Open a row's submenu, focusing it.
+	 *
+	 * `openSubmenu` is the caller-driven path: the reference's selector opens the submenu for a
+	 * row it has just navigated to rather than waiting for Enter, so the two agree on what is open.
+	 */
+	openSubmenu(index: number): boolean {
+		const item = this.filteredItems[index];
+		if (!item?.submenu) return false;
+		const done = (_selectedValue?: string, options?: { navigateTo?: string }) => {
+			this.closeSubmenu();
+			if (options?.navigateTo) this.selectItem(options.navigateTo);
+		};
+		this.submenuComponent = item.submenu(item.currentValue, done);
+		this.submenuItemIndex = index;
+		return true;
+	}
+
+	/**
+	 * Set a row's value as if the user had cycled it, then report the change.
+	 *
+	 * The reference's selector drives the list this way rather than writing the value itself, so
+	 * the row's displayed value and the change callback cannot disagree. A row with a submenu or
+	 * a value outside its permitted set is ignored - the caller is asking for something this row
+	 * does not accept.
+	 */
+	applyValue(id: string, value: string): void {
+		const item = this.items.find((candidate) => !candidate.heading && candidate.id === id);
+		if (!item || item.submenu || !item.values?.includes(value)) return;
+		this.selectItem(id);
+		this.items = this.items.map((candidate) =>
+			candidate.id === id ? { ...candidate, currentValue: value } : candidate,
+		);
+		this.applyFilter(this.searchEnabled ? (this.searchInput?.getValue() ?? "") : "");
+		this.onChange(item.id, value);
+	}
+
+	/**
+	 * How many rows the list shows at once.
+	 *
+	 * The selector sets this from the rows left after its own chrome, so the list fits the
+	 * terminal rather than assuming the default.
+	 */
+	setMaxVisible(rows: number): void {
+		const next = Math.max(3, Math.floor(rows));
+		if (next === this.maxVisible) return;
+		this.maxVisible = next;
+	}
+
+	/** The row the pointer is over, resolved against the last rendered frame. */
+	hoverTest(line: number, col: number): string | undefined {
+		if (this.submenuComponent) return undefined;
+		return this.hitRows[line];
+	}
+
+	/** Record which row the pointer is over, for hover styling. */
+	setHoverItem(id: string | null): void {
+		this.hoveredItemId = id;
+	}
+
+	/** True while a section heading's jump-to-section behaviour is engaged. */
+	get sectionFocused(): boolean {
+		return this.sectionFocus;
+	}
+
+	/**
+	 * Engage or release section focusing.
+	 *
+	 * Only takes effect when there are section headings to jump between; otherwise it reports
+	 * false so the caller knows nothing changed rather than entering a mode with no targets.
+	 */
+	toggleSectionFocus(): boolean {
+		this.sectionFocus = !this.sectionFocus && this.hasSectionFocusTargets();
+		return this.sectionFocus;
+	}
+
+	/**
+	 * Whether there are section headings to jump between.
+	 *
+	 * Section focusing with nothing to focus would be a mode the user cannot leave by the key
+	 * that entered it, so the mode is refused instead.
+	 */
+	private hasSectionFocusTargets(): boolean {
+		return this.items.some((item) => item.heading);
 	}
 
 	invalidate(): void {
@@ -325,4 +463,85 @@ export class SettingsList implements Component {
 			),
 		);
 	}
+}
+
+/**
+ * Which settings row is being edited inline, if any.
+ *
+ * A native settings page reports this rather than a boolean: the editing row has to be identified,
+ * because the surrounding rows are still rendered while one is in edit.
+ */
+export interface PrefsEditing {
+	/** The row being edited. */
+	readonly id: string;
+}
+
+/**
+ * A `FormField` whose control is a `SettingsList`.
+ *
+ * Ported from the reference. It lets the settings overlay use the same label / description /
+ * hint / footer chrome as every other form while the control itself is the canonical list, so
+ * scrolling, filtering and selection behaviour is not reimplemented for the detail view.
+ */
+export class SettingsFormField extends FormField {
+	readonly settingsList: SettingsList;
+
+	constructor(
+		options: {
+			items: SettingItem[];
+			maxVisible: number;
+			settingsTheme: SettingsListTheme;
+			fieldTheme: FormFieldTheme;
+			onChange(id: string, newValue: string): void;
+			onCancel(): void;
+			listOptions?: SettingsListOptions;
+		} & Omit<FormFieldOptions, "theme">,
+	) {
+		const settingsList = new SettingsList(
+			options.items,
+			options.maxVisible,
+			options.settingsTheme,
+			options.onChange,
+			options.onCancel,
+			options.listOptions,
+		);
+		super(settingsList, {
+			theme: options.fieldTheme,
+			label: options.label,
+			description: options.description,
+			details: options.details,
+			previewLabel: options.previewLabel,
+			preview: options.preview,
+			hint: options.hint,
+			summary: options.summary,
+			footer: options.footer,
+			leadingSpace: options.leadingSpace,
+			spaceBeforeControl: options.spaceBeforeControl,
+			spaceAfterControl: options.spaceAfterControl,
+		});
+		this.settingsList = settingsList;
+	}
+}
+
+/**
+ * A stable identifier for a settings section heading.
+ *
+ * Derived from the heading's text, so the same section keeps the same id across launches - which
+ * is what lets a terminal hold view state for it across a re-render.
+ */
+export function prefsSectionId(title: string): string {
+	return title
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+/**
+ * Which settings row is being edited inline, if any.
+ *
+ * A native settings page reports the row rather than a boolean, because the surrounding rows are
+ * still rendered while one is in edit.
+ */
+export interface PrefsEditing {
+	readonly id: string;
 }

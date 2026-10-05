@@ -1397,6 +1397,26 @@ function decodeModifyOtherKeysPrintable(data: string): string | undefined {
 	}
 }
 
+/** Whether `data` contains a C0/C1 control character, i.e. is not literal text. */
+export function hasControlChars(data: string): boolean {
+	// eslint-disable-next-line no-control-regex
+	return /[\x00-\x08\x0B-\x1F\x7F-\x9F]/.test(data);
+}
+
+/**
+ * The literal text a keypress carries, if it carries any.
+ *
+ * A single printable key starts a search; a control sequence, a paste with no control bytes, or
+ * an empty buffer does not. `undefined` rather than an empty string keeps that distinction - an
+ * empty string would read as "search for nothing".
+ */
+export function printableSearchText(data: string): string | undefined {
+	const printable = decodePrintableKey(data);
+	if (printable !== undefined) return printable;
+	if (data.length === 0 || hasControlChars(data)) return undefined;
+	return data;
+}
+
 export function decodePrintableKey(data: string): string | undefined {
 	return decodeKittyPrintable(data) ?? decodeModifyOtherKeysPrintable(data);
 }

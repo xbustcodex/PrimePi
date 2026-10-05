@@ -17,6 +17,7 @@
  */
 
 import type { SelectListTheme } from "../components/select-list.ts";
+import type { SettingsListTheme } from "../components/settings-list.ts";
 import { activeTheme } from "./active-theme.ts";
 
 /**
@@ -44,5 +45,33 @@ export function getSelectListTheme(): SelectListTheme {
 		description: (text: string) => theme.fg("muted", text),
 		scrollInfo: (text: string) => theme.fg("muted", text),
 		noMatch: (text: string) => theme.fg("muted", text),
+	};
+}
+
+/**
+ * The active theme's name, or `undefined` before one is installed.
+ *
+ * The selector reads this to remember which theme a preview started from, so cancelling can put
+ * it back rather than leaving the preview in place.
+ */
+export function getCurrentThemeName(): string | undefined {
+	return activeTheme()?.name;
+}
+
+/** The theme a `SettingsList` renders with. */
+export function getSettingsListTheme(): SettingsListTheme {
+	const theme = activeTheme();
+	const identity = (text: string): string => text;
+	if (!theme) {
+		return { label: identity, value: identity, description: identity, cursor: "> ", hint: identity };
+	}
+	return {
+		label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : theme.fg("text", text)),
+		value: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : theme.fg("muted", text)),
+		description: (text: string) => theme.fg("muted", text),
+		// A literal marker rather than a themed one: the row is already accented when selected,
+		// and colouring the marker too would read as two highlights.
+		cursor: theme.fg("accent", "> "),
+		hint: (text: string) => theme.fg("dim", text),
 	};
 }
