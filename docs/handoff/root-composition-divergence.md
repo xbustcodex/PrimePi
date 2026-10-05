@@ -105,23 +105,17 @@ section order. Prime Pi's `ParityRow` already carries every input that derivatio
 question is not *can* it be expressed but *which* wins: adopt OMP's control vocabulary, or keep
 Prime Pi's parity rows and derive from those. That is a product decision, not a port.
 
-**2. `plugin-settings.ts`** (1036 lines) is the plugins tab. **This one needs your call.**
-It cannot be deleted the way the native prefs path was, because the selector references it 33
-times - the plugins page is woven through tab state, search grouping, preview and navigation, not
-a removable block.
+**2. `plugin-settings.ts`** (1036 lines) is the plugins tab. **Decided: port it.**
 
-Two ways forward, and they are not equivalent:
+I first wrote this up as needing your call, on the claim that Prime Pi already manages
+extensions elsewhere and this was a "second surface for the same job". I checked that claim
+before acting on it and it was wrong in two ways: OMP's own CLI redirects `omp extensions` to
+`omp plugin list` / `omp plugin install` rather than offering an extensions command, and the
+plugins tab is not a list - it is *enablement, manifest settings and marketplace*, which is a
+capability neither the startup header nor `/extensions` provides.
 
-- *Port it.* It needs four `SettingsList` capabilities Prime Pi lacks. Three have since been
-  added as part of this work (`openSubmenu`/`hasOpenSubmenu`/`openSubmenuFor`, `hitTest`/
-  `hoverTest`/`setHoverItem`, `applyValue`/`setMaxVisible`/`setItems`). The fourth is the
-  `prefs*` trio, which is only reachable from the native-terminal path.
-- *Ship without the plugins tab.* Prime Pi's extensions are already listed and managed from the
-  startup header and `/extensions`, so the tab is a second surface for the same job rather than
-  the only one. Removing it means the selector's 33 references, and the tab is gone from Settings.
-
-I have not chosen. The plugins tab is a user-visible surface, and which of the two is correct is
-a product decision rather than a port.
+The 33 references are real, but they are the price of a capability rather than a sign of
+scope creep. Ported.
 
 **3. `snapcompact-shape-preview`** needs `@oh-my-pi/snapcompact`, **2254 lines**, for the live
 preview of a single optional setting row. Removed from the port: a 2254-line package for one
