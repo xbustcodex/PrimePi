@@ -58,6 +58,41 @@ and it stays. It is also the clearest example of the rule for the rest of this w
 replaces a Pi surface, adopt OMP's renderer *behind* Prime Pi's authority rather than adopting it
 wholesale.
 
+## Next, in descending user impact
+
+### 1. Model roles have an authority and no surface
+
+`SettingsManager.getModelRoles` / `setModelRole` were ported in Phase 1 and work: roles persist to
+`modelRoles` in `settings.json` and `AgentSession` reads them at four sites. **Nothing writes
+them.** The mounted model picker has no role surface at all - zero occurrences of `role` in
+`model-selector.ts` - where OMP's `model-browser` takes a `SessionModelScope` carrying
+`roles: RoleAssignments` and renders them.
+
+So a user can configure a role by hand-editing `settings.json`, and the runtime honours it, and
+the application never offers it. That is the "declared but never reachable" shape, and it is the
+single largest user-visible gap found by this audit.
+
+    settings.setModelRole("smol", "openai/gpt-4o-mini")
+    -> { "modelRoles": { "smol": "openai/gpt-4o-mini" } }
+    -> AgentSession honours it
+    -> no UI writes it
+
+### 2. The model picker, once roles are in it
+
+OMP: `model-picker.ts` (477) over `model-browser.ts` (2015) over `model-hub.ts` (3964).
+Prime Pi: `model-selector.ts` (453), session-scoped, no roles. Porting the browser chain is
+roughly 6000 lines and the roles work is what makes it worth doing.
+
+### 3. Session picker and session info
+
+OMP has `session-selector` and `session-info-overlay`; Prime Pi mounts its own
+`SessionSelectorComponent`.
+
+### 4. Smaller, and cheaper
+
+`thinking-selector`, `tree-selector`, `copy-selector`, `hook-editor`, `error-banner`,
+`ask-dialog`, `plan-review-overlay`, `jobs-panel`, `usage-dashboard`.
+
 ## What is not established here
 
 No visual comparison. This is a mount inventory read from the call sites; whether a given
