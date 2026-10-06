@@ -41,6 +41,9 @@ import {
 	Markdown,
 	matchesKey,
 	nextFrame,
+	OMP_PARITY_ROWS,
+	SettingsSelectorComponent as OmpSettingsSelectorComponent,
+	rowsForTab,
 	Spacer,
 	setCapabilityOverrides,
 	setKeybindings,
@@ -94,7 +97,7 @@ import type {
 	WorkingIndicatorOptions,
 } from "../../core/extensions/index.ts";
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
-import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
+import { configureHttpDispatcher } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
 import {
@@ -113,6 +116,7 @@ import {
 	sessionEntryToContextMessages,
 	type UsageEntry,
 } from "../../core/session-manager.ts";
+import { createSettingsHost } from "../../core/settings-host.ts";
 import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
@@ -159,7 +163,6 @@ import {
 } from "./components/oauth-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
-import { SettingsSelectorComponent } from "./components/settings-selector.ts";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.ts";
 import {
 	BranchSummaryStatusIndicator,
@@ -4879,235 +4882,52 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
+	/**
+	 * Open Settings.
+	 *
+	 * Mounts OMP's `SettingsSelectorComponent` - the tabbed, searchable, sectioned surface -
+	 * reading and writing through {@link createSettingsHost}, which forwards to Prime Pi's typed
+	 * settings registry. The stock panel that used to be here took forty-plus per-setting
+	 * callbacks and read a snapshot, so it could not be swapped for the reference's surface
+	 * without rewriting every binding; this mount takes a path and a value and nothing else.
+	 *
+	 * Every value shown or changed goes through the registry, so what Settings displays is what
+	 * the runtime reads on the next line and the next launch. There is no panel-local copy.
+	 */
 	private showSettingsSelector(): void {
 		this.showSelector((done) => {
-			let selector: SettingsSelectorComponent | undefined;
-			const defaultProvider = this.settingsManager.getDefaultProvider();
-			const defaultModelId = this.settingsManager.getDefaultModel();
-			const defaultModel = defaultProvider && defaultModelId ? `${defaultProvider}/${defaultModelId}` : "not set";
-			selector = new SettingsSelectorComponent(
+			const host = createSettingsHost({
+				settings: this.settingsManager,
+				rows: OMP_PARITY_ROWS,
+				rowsForTab,
+			});
+			const models = this.session.modelRuntime.getAvailableSnapshot();
+			const selector = new OmpSettingsSelectorComponent(
 				{
-					autoCompact: this.session.autoCompactionEnabled,
-					defaultModel,
-					currentModel: this.session.model,
-					availableDefaultModels: this.session.modelRuntime.getAvailableSnapshot(),
-					showImages: this.settingsManager.getShowImages(),
-					imageWidthCells: this.settingsManager.getImageWidthCells(),
-					autoResizeImages: this.settingsManager.getImageAutoResize(),
-					blockImages: this.settingsManager.getBlockImages(),
-					enableSkillCommands: this.settingsManager.getEnableSkillCommands(),
-					steeringMode: this.session.steeringMode,
-					followUpMode: this.session.followUpMode,
-					transport: this.settingsManager.getTransport(),
-					httpIdleTimeoutMs: this.settingsManager.getHttpIdleTimeoutMs(),
-					cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
-					thinkingLevel: this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
-					availableThinkingLevels: [...THINKING_LEVEL_OPTIONS],
-					modelThinkingLevels: this.settingsManager.getAllModelThinkingLevels(),
-					currentTheme: this.themeController.getThemeSelection() || "dark",
-					terminalTheme: this.themeController.getTerminalTheme(),
+					settings: host,
+					availableThinkingLevels: THINKING_LEVEL_OPTIONS.map((level) => level as never),
+					thinkingLevel: this.settingsManager.getDefaultThinkingLevel(),
 					availableThemes: getAvailableThemes(),
-					hideThinkingBlock: this.hideThinkingBlock,
-					mermaidRenderingMode: this.settingsManager.getMermaidRenderingMode(),
-					collapseChangelog: this.settingsManager.getCollapseChangelog(),
-					enableInstallTelemetry: this.settingsManager.getEnableInstallTelemetry(),
-					doubleEscapeAction: this.settingsManager.getDoubleEscapeAction(),
-					treeFilterMode: this.settingsManager.getTreeFilterMode(),
-					showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
-					showCacheMissNotices: this.settingsManager.getShowCacheMissNotices(),
-					defaultProjectTrust: this.settingsManager.getDefaultProjectTrust(),
-					editorPaddingX: this.settingsManager.getEditorPaddingX(),
-					outputPad: this.settingsManager.getOutputPad(),
-					autocompleteMaxVisible: this.settingsManager.getAutocompleteMaxVisible(),
-					quietStartup: this.settingsManager.getQuietStartup(),
-					clearOnShrink: this.settingsManager.getClearOnShrink(),
-					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
-					tuiMode: this.ui.mode,
-					fullscreenExitOutput: this.settingsManager.getFullscreenExitOutput(),
-					fullscreenScrollbar: this.settingsManager.getFullscreenScrollbar(),
-					fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
-					warnings: this.settingsManager.getWarnings(),
+					// Sorted so the tab's provider list is in a stable order; the selector does not
+					// sort, and an unsorted list would reorder as models refresh.
+					providers: [...new Set(models.map((model) => model.provider))].sort((a, b) => a.localeCompare(b)),
+					requestRender: () => this.ui.requestRender(),
 				},
 				{
-					onAutoCompactChange: (enabled) => {
-						this.session.setAutoCompactionEnabled(enabled);
-						this.footer.setAutoCompactEnabled(enabled);
+					onChange: (path, value) => {
+						// The host already wrote through the registry; this is for the settings the
+						// registry is not the owner of - a session-level value, or one whose change
+						// has a side effect beyond the value itself.
+						this.onRegistrySettingChanged(path, value);
 					},
-					onShowImagesChange: (enabled) => {
-						this.settingsManager.setShowImages(enabled);
-						for (const child of this.chatContainer.children) {
-							if (child instanceof ToolExecutionComponent) {
-								child.setShowImages(enabled);
-							}
-						}
-					},
-					onImageWidthCellsChange: (width) => {
-						this.settingsManager.setImageWidthCells(width);
-						for (const child of this.chatContainer.children) {
-							if (child instanceof ToolExecutionComponent) {
-								child.setImageWidthCells(width);
-							}
-						}
-					},
-					onAutoResizeImagesChange: (enabled) => {
-						this.settingsManager.setImageAutoResize(enabled);
-					},
-					onBlockImagesChange: (blocked) => {
-						this.settingsManager.setBlockImages(blocked);
-					},
-					onEnableSkillCommandsChange: (enabled) => {
-						this.settingsManager.setEnableSkillCommands(enabled);
-						this.setupAutocompleteProvider();
-					},
-					onSteeringModeChange: (mode) => {
-						this.session.setSteeringMode(mode);
-					},
-					onFollowUpModeChange: (mode) => {
-						this.session.setFollowUpMode(mode);
-					},
-					onTransportChange: (transport) => {
-						this.settingsManager.setTransport(transport);
-						this.session.agent.transport = transport;
-					},
-					onHttpIdleTimeoutMsChange: (timeoutMs) => {
-						this.settingsManager.setHttpIdleTimeoutMs(timeoutMs);
-						configureHttpDispatcher(timeoutMs);
-						this.showStatus(`HTTP idle timeout: ${formatHttpIdleTimeoutMs(timeoutMs)}`);
-					},
-					onCacheWarmingModeChange: (mode) => {
-						this.session.setCacheWarmingMode(mode);
-						this.showStatus(`Cache warming: ${mode}`);
-					},
-					onModelThinkingLevelChange: (provider, modelId, level) => {
-						this.settingsManager.setModelThinkingLevel(provider, modelId, level);
-						// If the override is for the current model, apply it to the session too
-						const current = this.session.model;
-						if (current && current.provider === provider && current.id === modelId) {
-							this.session.setThinkingLevel(level);
-							this.footer.invalidate();
-							this.updateEditorBorderColor();
-						}
-					},
-					onModelThinkingLevelRemove: (provider, modelId) => {
-						this.settingsManager.removeModelThinkingLevel(provider, modelId);
-						// If the override was for the current model, revert to global default
-						const current = this.session.model;
-						if (current && current.provider === provider && current.id === modelId) {
-							const globalDefault = this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
-							this.session.setThinkingLevel(globalDefault);
-							this.footer.invalidate();
-							this.updateEditorBorderColor();
-						}
-					},
-					onThemeChange: (themeSetting) => {
-						this.settingsManager.setTheme(themeSetting);
-						void this.themeController.setThemeSetting(themeSetting);
-					},
-					onThemePreview: (themeName) => this.themeController.preview(themeName),
-					onHideThinkingBlockChange: (hidden) => {
-						this.hideThinkingBlock = hidden;
-						this.settingsManager.setHideThinkingBlock(hidden);
-						this.updateThinkingBlockVisibility();
-					},
-					onMermaidRenderingModeChange: (mode) => {
-						this.settingsManager.setMermaidRenderingMode(mode);
-						this.chatContainer.invalidate();
+					onThemePreview: (themeName) => {
+						// Applied, not persisted: browsing themes repaints the interface, and the
+						// registry write happens only when the user confirms. `setThemeName` is
+						// Prime Pi's theme authority, so the preview goes through it rather than
+						// reaching past it into the theme module.
+						this.themeController.setThemeName(themeName, true);
+						this.ui.invalidate();
 						this.ui.requestRender();
-					},
-					onShowCacheMissNoticesChange: (shown) => {
-						this.settingsManager.setShowCacheMissNotices(shown);
-						this.rebuildChatFromMessages();
-					},
-					onCollapseChangelogChange: (collapsed) => {
-						this.settingsManager.setCollapseChangelog(collapsed);
-					},
-					onEnableInstallTelemetryChange: (enabled) => {
-						this.settingsManager.setEnableInstallTelemetry(enabled);
-					},
-					onQuietStartupChange: (enabled) => {
-						this.settingsManager.setQuietStartup(enabled);
-					},
-					onDefaultProjectTrustChange: (defaultProjectTrust) => {
-						this.settingsManager.setDefaultProjectTrust(defaultProjectTrust);
-					},
-					onDoubleEscapeActionChange: (action) => {
-						this.settingsManager.setDoubleEscapeAction(action);
-					},
-					onTreeFilterModeChange: (mode) => {
-						this.settingsManager.setTreeFilterMode(mode);
-					},
-					onShowHardwareCursorChange: (enabled) => {
-						this.settingsManager.setShowHardwareCursor(enabled);
-						this.ui.setShowHardwareCursor(enabled);
-					},
-					onEditorPaddingXChange: (padding) => {
-						this.settingsManager.setEditorPaddingX(padding);
-						this.defaultEditor.setPaddingX(padding);
-						if (this.editor !== this.defaultEditor && this.editor.setPaddingX !== undefined) {
-							this.editor.setPaddingX(padding);
-						}
-					},
-					onOutputPadChange: (padding) => {
-						this.settingsManager.setOutputPad(padding);
-						this.outputPad = padding;
-						if (this.streamingComponent || this.session.isStreaming) {
-							for (const child of this.chatContainer.children) {
-								if (
-									child instanceof AssistantMessageComponent ||
-									child instanceof CustomMessageComponent ||
-									child instanceof UserMessageComponent
-								) {
-									child.setOutputPad(padding);
-								}
-							}
-							if (this.streamingComponent) {
-								this.streamingComponent.setOutputPad(padding);
-							}
-							this.ui.requestRender();
-							return;
-						}
-						this.rebuildChatFromMessages();
-					},
-					onAutocompleteMaxVisibleChange: (maxVisible) => {
-						this.settingsManager.setAutocompleteMaxVisible(maxVisible);
-						this.defaultEditor.setAutocompleteMaxVisible(maxVisible);
-						if (this.editor !== this.defaultEditor && this.editor.setAutocompleteMaxVisible !== undefined) {
-							this.editor.setAutocompleteMaxVisible(maxVisible);
-						}
-					},
-					onClearOnShrinkChange: (enabled) => {
-						this.settingsManager.setClearOnShrink(enabled);
-						this.ui.setClearOnShrink(enabled);
-						if (!enabled && !this.activeStatusIndicator) {
-							this.statusContainer.clear();
-						}
-					},
-					onShowTerminalProgressChange: (enabled) => {
-						this.settingsManager.setShowTerminalProgress(enabled);
-					},
-					onTuiModeChange: (mode) => {
-						if (!this.switchTuiMode(mode)) {
-							selector?.getSettingsList().updateValue("tui-mode", this.ui.mode);
-							this.showStatus("Close active overlays before changing TUI mode");
-							return;
-						}
-						this.settingsManager.setTuiMode(mode);
-						if (!this.activeStatusIndicator) this.statusContainer.clear();
-						this.showStatus(`TUI mode: ${mode}`);
-					},
-					onFullscreenExitOutputChange: (output) => {
-						this.settingsManager.setFullscreenExitOutput(output);
-					},
-					onFullscreenScrollbarChange: (mode) => {
-						this.settingsManager.setFullscreenScrollbar(mode);
-						this.applyFullscreenScrollbarSetting();
-					},
-					onFullscreenCopyOnSelectChange: (enabled) => {
-						this.settingsManager.setFullscreenCopyOnSelect(enabled);
-						if (this.renderer instanceof TuiAltScreen) this.renderer.setCopyOnSelect(enabled);
-					},
-					onWarningsChange: (warnings) => {
-						this.settingsManager.setWarnings(warnings);
 					},
 					onCancel: () => {
 						done();
@@ -5115,8 +4935,40 @@ export class InteractiveMode {
 					},
 				},
 			);
-			return { component: selector, focus: selector.getSettingsList() };
+			return { component: selector, focus: selector };
 		});
+	}
+
+	/**
+	 * Apply a settings change that the registry owns but the session also caches.
+	 *
+	 * The registry write has already happened by the time this runs. This exists for the settings
+	 * whose value is also mirrored into session state - compaction, the editor's own padding,
+	 * the current theme - so the running session reflects a change made in Settings without
+	 * waiting for a restart. A path with no mirror is simply a registry write, and needs nothing.
+	 */
+	private onRegistrySettingChanged(path: string, value: unknown): void {
+		switch (path) {
+			case "autoCompact":
+				this.session.setAutoCompactionEnabled(value === true);
+				break;
+			case "thinking.default":
+				this.settingsManager.setDefaultThinkingLevel(value as never);
+				break;
+			case "theme.dark":
+			case "theme.light":
+				this.themeController.applyFromSettings();
+				this.ui.invalidate();
+				break;
+			case "tui.mode":
+				// The renderer cannot change without a restart; say so rather than appearing to.
+				this.showStatus("Renderer change takes effect on restart.");
+				break;
+			default:
+				break;
+		}
+		this.settingsManager.flush().catch(() => {});
+		this.ui.requestRender();
 	}
 
 	/**

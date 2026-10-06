@@ -26,9 +26,21 @@ export { isValidThemeColor, THEME_COLOR_ORDER, type ThemeBg, type ThemeColor, ty
 import { requireActiveTheme, type ThemeSource } from "./active-theme.ts";
 import type { ThemeBg, ThemeColor } from "./tokens.ts";
 
-const theme = requireActiveTheme();
-
-export { theme };
+/**
+ * The active theme, resolved on use.
+ *
+ * A `Proxy` rather than a binding: importing this barrel must not require a theme to be
+ * installed. `colors.test.ts`, `latex.test.ts` and `terminal-colors.test.ts` all import from the
+ * package index, and resolving the theme at module load threw "Theme not initialized" before any
+ * of them ran an assertion. The reference's `theme` is itself a proxy with the same property.
+ */
+export const theme: ThemeSource = new Proxy({} as ThemeSource, {
+	get(_target, property) {
+		const active = requireActiveTheme();
+		const value = active[property as keyof ThemeSource];
+		return typeof value === "function" ? value.bind(active) : value;
+	},
+});
 
 /**
  * The active theme, as a type.

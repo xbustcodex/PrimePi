@@ -57,7 +57,15 @@ export {
 	type SelectListTheme,
 	type SelectListTruncatePrimaryContext,
 } from "./components/select-list.ts";
-export { type SettingItem, SettingsList, type SettingsListTheme } from "./components/settings-list.ts";
+export {
+	getSettingItemFilterText,
+	type PrefsEditing,
+	type SettingItem,
+	SettingsFormField,
+	SettingsList,
+	type SettingsListOptions,
+	type SettingsListTheme,
+} from "./components/settings-list.ts";
 export { Spacer } from "./components/spacer.ts";
 export { Text } from "./components/text.ts";
 export { TruncatedText } from "./components/truncated-text.ts";
@@ -102,6 +110,42 @@ export {
 export { type RenderLatexOptions, renderLatex } from "./latex.ts";
 // Native platform integration
 export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
+export {
+	PluginListComponent,
+	type PluginSettingsCallbacks,
+	PluginSettingsComponent,
+	type PluginSettingsHost,
+} from "./overlays/plugin-settings.ts";
+export {
+	type DisplayUiMetadata,
+	getAllSettingDefs,
+	getSettingDef,
+	getSettingsForTab,
+	numberSteps,
+	numericOption,
+	SETTING_TABS,
+	type SettingDef,
+	type SettingsDisplayEntry,
+	type SettingsHost,
+	type SettingTab,
+	type SubmenuOption,
+	TAB_GROUPS,
+	TAB_LEADS,
+	TAB_METADATA,
+} from "./overlays/settings-defs.ts";
+export {
+	OMP_PARITY_ROWS,
+	type ParityOption,
+	type ParityRow,
+	type ParityStatus,
+	rowsForTab,
+} from "./overlays/settings-parity-rows.ts";
+export {
+	type SettingsCallbacks,
+	type SettingsRuntimeContext,
+	SettingsSelectorComponent,
+	type StatusLinePreviewSettings,
+} from "./overlays/settings-selector.ts";
 export * from "./status-line/title.ts";
 // Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";

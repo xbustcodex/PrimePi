@@ -24,6 +24,7 @@ import { type RetryPolicyResolution, resolveRetryPolicy } from "./retry-policy.t
 import type { CACHE_WARMING_MODES } from "./settings-descriptors.ts";
 import {
 	allSettings,
+	deletePath,
 	hasPath,
 	lookupSetting,
 	type ResolvedSetting,
@@ -882,6 +883,25 @@ export class SettingsManager {
 			return;
 		}
 		writePath(this.globalSettings as Record<string, unknown>, key, parsed);
+		this.markModified(key.split(".")[0] as keyof Settings);
+		this.save();
+	}
+
+	/**
+	 * Remove an explicit global value, so a lower layer or the descriptor default applies again.
+	 *
+	 * Needed by any surface that offers "reset to default". There was no way to do this before:
+	 * `setSetting` writes a value, so a surface could only ever *set* a default, never remove one
+	 * the user had chosen - which made the stored file diverge from what the UI claimed.
+	 *
+	 * A path the registry does not know is an error rather than a silent no-op, matching
+	 * {@link setSetting}: a typo in a surface's reset must not look like a successful reset.
+	 */
+	unsetSetting(key: string): void {
+		if (!lookupSetting(key)) {
+			throw new Error(`Unknown setting: ${key}`);
+		}
+		deletePath(this.globalSettings as Record<string, unknown>, key);
 		this.markModified(key.split(".")[0] as keyof Settings);
 		this.save();
 	}

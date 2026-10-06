@@ -406,15 +406,18 @@ function settingsSidebarWidth(entries: readonly SettingsDisplayEntry[]): number 
 	return Math.min(22, nameWidth) + 4;
 }
 
-function getSettingsTabs(): Tab[] {
-	return [
-		...SETTING_TABS.map((id) => {
-			const meta = TAB_METADATA[id];
-			const icon = theme.symbol(meta.icon);
-			return { id, label: `${icon} ${meta.label}`, short: icon };
-		}),
-		{ id: "plugins", label: `${TAB_METADATA.plugins.icon} Plugins`, short: TAB_METADATA.plugins.icon },
-	];
+function getSettingsTabs(plugins: PluginSettingsHost | undefined): Tab[] {
+	const tabs: Tab[] = SETTING_TABS.map((id) => {
+		const meta = TAB_METADATA[id];
+		const icon = theme.symbol(meta.icon);
+		return { id, label: `${icon} ${meta.label}`, short: icon };
+	});
+	// Omitted rather than shown empty when there is no plugin infrastructure behind it.
+	if (plugins) {
+		const icon = theme.symbol(TAB_METADATA.plugins.icon);
+		tabs.push({ id: "plugins", label: `${icon} Plugins`, short: icon });
+	}
+	return tabs;
 }
 
 /**
@@ -423,7 +426,15 @@ function getSettingsTabs(): Tab[] {
  */
 export interface SettingsRuntimeContext {
 	settings: SettingsHost;
-	plugins: PluginSettingsHost;
+	/**
+	 * Plugin and marketplace management.
+	 *
+	 * Optional. Prime Pi has no plugin or marketplace infrastructure - it has extensions, loaded
+	 * from disk, with no install or publish surface - so the host cannot be built here. When it
+	 * is absent the plugins tab is omitted entirely rather than shown empty, because a tab that
+	 * lists nothing is worse than no tab.
+	 */
+	plugins?: PluginSettingsHost;
 	/** Available thinking levels (from session) */
 	availableThinkingLevels: Effort[];
 	/** Current thinking level (from session) */
@@ -517,7 +528,7 @@ export class SettingsSelectorComponent implements Component {
 		this.#sidebarWidth = settingsSidebarWidth(context.settings.entries);
 		// No label prefix (the frame title already says Settings) and no
 		// "(tab to cycle)" hint (folded into the footer hint line).
-		const tabs = getSettingsTabs();
+		const tabs = getSettingsTabs(this.#context.plugins);
 		this.#tabs = tabs;
 		this.#tabBar = new TabBar("", tabs, getTabBarTheme());
 		this.#tabBar.showHint = false;
@@ -953,7 +964,7 @@ export class SettingsSelectorComponent implements Component {
 		this.#searchQuery = "";
 		this.#searchFirstMatch.clear();
 		this.#searchMatchCount = 0;
-		this.#tabs = getSettingsTabs();
+		this.#tabs = getSettingsTabs(this.#context.plugins);
 		this.#tabBar.setTabs(this.#tabs, targetTab);
 		this.#switchToTab(targetTab);
 		if (selectedDef) {
@@ -1415,7 +1426,9 @@ export class SettingsSelectorComponent implements Component {
 	}
 
 	#showPluginsTab(): void {
-		this.#pluginComponent = new PluginSettingsComponent(this.#context.plugins, {
+		const plugins = this.#context.plugins;
+		if (!plugins) return;
+		this.#pluginComponent = new PluginSettingsComponent(plugins, {
 			onClose: () => this.#callbacks.onCancel(),
 			onPluginChanged: () => this.#callbacks.onPluginsChanged?.(),
 			requestRender: this.#context.requestRender,
