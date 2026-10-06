@@ -139,6 +139,34 @@ OMP has `session-selector` and `session-info-overlay`; Prime Pi mounts its own
 | Tool cards | plain text, no state | render layer ported (~1300 lines); **mount still owed** |
 | Status line | presets ported, footer ignores them | **still owed** |
 
+## Resume point
+
+Stopped for a host restart at `9ade64a5d`. All source committed; local matches `primepi/main`.
+
+Gates at that commit:
+
+    tsgo --noEmit   0 errors     biome   0 warnings
+    npm run check   exit 0       npm run build   exit 0
+    npm test --workspace=pi-tui   exit 0
+
+### First thing to run after the restart
+
+**The tool-card check, which was never done.** The mount is proven by compilation and by
+`mouse-components`/`input` tests passing; it has not been *looked at*. Open the shipped binary,
+run a command that fails, and confirm the transcript shows a bordered card whose border tone
+distinguishes error from success. A mount verified only by the type checker is the same class
+of claim as "SOURCE EXISTS != MIGRATED" one level further down.
+
+### Then, in order
+
+1. **Status line.** `presets.ts` and `schema.ts` exist; `footer.ts` and `footer-data-provider.ts`
+   have zero references to `getPreset` or `STATUS_LINE_PRESETS`. The preset Settings exposes, and
+   the status-line preview it draws, have no effect on what is rendered.
+2. **OMP model-browser chain** (`model-picker` 477 / `model-browser` 2015 / `model-hub` 3964), so
+   the model picker gains the role-aware, scoped browser OMP has. Roles are already wired; this is
+   the surface that would use them properly.
+3. **Session picker and session info**, then the cheaper overlays.
+
 ## What is not established here
 
 No visual comparison. This is a mount inventory read from the call sites; whether a given
