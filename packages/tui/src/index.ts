@@ -146,6 +146,21 @@ export {
 	SettingsSelectorComponent,
 	type StatusLinePreviewSettings,
 } from "./overlays/settings-selector.ts";
+export {
+	formatStatusIcon,
+	type ToolUIStatus,
+} from "./render/render-utils.ts";
+export {
+	ToolCard,
+	type ToolCardBuildContext,
+	type ToolCardContent,
+	type ToolCardOptions,
+	type ToolCardPhase,
+	type ToolCardSection,
+	type ToolCardSnapshot,
+	type ToolCardVariant,
+	toolCardState,
+} from "./render/tool-card.ts";
 export * from "./status-line/title.ts";
 // Input buffering for batch splitting
 export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";

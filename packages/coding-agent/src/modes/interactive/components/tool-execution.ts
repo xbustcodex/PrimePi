@@ -8,6 +8,10 @@ import {
 	MouseRegion,
 	Spacer,
 	Text,
+	ToolCard,
+	type ToolCardContent,
+	type ToolCardPhase,
+	type ToolUIStatus,
 	type TUI,
 	type TuiMouseEvent,
 } from "@earendil-works/pi-tui";
@@ -58,6 +62,8 @@ export class ToolExecutionComponent extends Container {
 	private toolName: string;
 	private toolCallId: string;
 	private args: any;
+	/** The framed, state-toned card wrapping this tool's output. */
+	private cardComponent?: ToolCard;
 	private expanded = false;
 	private showImages: boolean;
 	private imageWidthCells: number;
@@ -116,6 +122,55 @@ export class ToolExecutionComponent extends Container {
 		this.updateDisplay();
 	}
 
+	/**
+	 * The lifecycle phase the card's border colour is derived from.
+	 *
+	 * Mapped from this component's own state rather than passed in: the card is the thing that
+	 * makes state visible, so it has to read the same state the renderer does, not a copy.
+	 */
+	private toolCardState(): ToolUIStatus {
+		if (this.isPartial) return this.executionStarted ? "running" : "pending";
+		return this.result?.isError ? "error" : "success";
+	}
+
+	private toolCardPhase(): ToolCardPhase {
+		if (this.isPartial) return this.executionStarted ? "running" : "pending";
+		if (this.result?.isError) return "error";
+		return "success";
+	}
+
+	/** The dimmed summary beside the tool name: its arguments, compacted. */
+	private getCardMeta(): string[] | undefined {
+		if (this.args === undefined) return undefined;
+		try {
+			const text = JSON.stringify(this.args);
+			if (!text || text === "{}") return undefined;
+			return [text.length > 80 ? `${text.slice(0, 77)}...` : text];
+		} catch {
+			// Arguments that cannot be serialised are not worth failing a render over; the card
+			// still names the tool, which is what identifies the call.
+			return undefined;
+		}
+	}
+
+	/** The card body: the tool's own renderer when it has one, else its text output. */
+	private getCardBody(): ToolCardContent | undefined {
+		// The renderer component is the tool's own view of its result; the text output is the
+		// fallback for a tool with no renderer. Either way the card carries the content, so a tool
+		// cannot end up rendered twice.
+		if (this.callRendererComponent) return this.callRendererComponent;
+		const output = this.getTextOutput();
+		if (!output) return undefined;
+		const lines = output.split("\n");
+		const shown = this.expanded ? lines : lines.slice(0, FALLBACK_PREVIEW_LINES);
+		const remaining = lines.length - shown.length;
+		let text = shown.map((line) => line).join("\n");
+		if (remaining > 0) {
+			text += `${theme.fg("muted", `\n... (${remaining} more lines,`)} ${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
+		}
+		return text.split("\n");
+	}
+
 	private getCallRenderer(): ToolDefinition<any, any>["renderCall"] | undefined {
 		return this.toolDefinition?.renderCall;
 	}
@@ -137,6 +192,9 @@ export class ToolExecutionComponent extends Container {
 			args: this.args,
 			toolCallId: this.toolCallId,
 			invalidate: () => {
+				// The card's border colour encodes the phase, so a phase change has to drop its
+				// cached frame or it keeps the border it was built with.
+				this.cardComponent?.invalidate();
 				this.invalidate();
 				this.ui.requestRender();
 			},
@@ -338,6 +396,30 @@ export class ToolExecutionComponent extends Container {
 			}
 
 			if (this.result) {
+				// Framed, state-toned card: the border colour is what tells a user at a glance whether
+				// a tool succeeded, failed or is still running. Without it the transcript is a
+				// column of undifferentiated text and a failure looks like any other row.
+				//
+				// The card is built lazily per width, so a resize re-frames at the new width rather
+				// than stretching a frame computed for the old one.
+				const card = new ToolCard(theme, { variant: "framed" }, () => ({
+					status: {
+						title: this.toolName,
+						meta: this.getCardMeta(),
+						icon: this.toolCardState(),
+					},
+					body: this.getCardBody(),
+					phase: this.toolCardPhase(),
+					applyBg: true,
+				}));
+				this.cardComponent = card;
+				// The card wraps the result rather than replacing it: the tool's own renderer decides
+				// what its output looks like, and the card decides what the *call* looks like. Both
+				// are wanted - a framed tool result with the tool's own content inside it.
+				// The card frames the call; the tool's own renderer keeps mounting below it, so the
+				// tool decides what its output looks like and the card decides what the call looks
+				// like. Both are wanted, and nesting them is how the reference composes them.
+				renderContainer.addChild(this.createResultRegion(card));
 				const resultRenderer = this.getResultRenderer();
 				if (!resultRenderer) {
 					const component = this.createResultFallback();
