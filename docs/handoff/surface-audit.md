@@ -58,6 +58,42 @@ and it stays. It is also the clearest example of the rule for the rest of this w
 replaces a Pi surface, adopt OMP's renderer *behind* Prime Pi's authority rather than adopting it
 wholesale.
 
+## Found by using OMP, not by reading it
+
+The composition work was being done *inside* OMP, which made three more instances of the same
+defect directly observable: every tool call I made renders OMP's tool card, and the composer and
+status line are on screen at all times. Comparing what I could see against PrimePi's equivalents
+found these faster than any amount of source reading.
+
+### Tool cards: OMP has a bordered, state-toned card; Prime Pi has plain text
+
+OMP (`render/tool-card.ts`, 409 lines) describes every tool call as `role: "omp.tool"` with a
+tone derived from `borderColor`, a title span, a `meta` line, `sections`, and an `inset` for the
+plain variant. The card's border colour *is* the state indicator.
+
+PrimePi's `tool-execution.ts` (433 lines) builds `new Text(theme.fg("toolTitle", ...))` and
+`new Text(theme.fg("toolOutput", ...))`. No card, no border, no tone, no state encoding.
+`grep` for `DynamicBorder`, `borderColor` and `card(` in it returns nothing.
+
+**User-visible:** running a command in PrimePi and in OMP produces visibly different transcript
+rows - OMP frames each tool result and marks running/succeeded/failed by border colour, PrimePi
+prints unframed lines with no state distinction.
+
+### The composer: 11 files ported, referenced by nothing
+
+`components/composer/` (band, borderless, box, claude, field, pi, rail, rule, registry, types)
+is reachable only from `packages/tui/src/index.ts`. `editor.ts` has **zero** references to
+`getComposerStyle` or the registry. So `composer.shape` selects a shape that nothing applies -
+the same "declared but never read" shape as the model roles, one level deeper and more visible,
+because the composer is the surface in front of the user at all times.
+
+### The status line: presets ported, footer does not read them
+
+`status-line/presets.ts` and `schema.ts` exist; `footer.ts` and `footer-data-provider.ts` have
+**zero** references to `getPreset` or `STATUS_LINE_PRESETS`. The footer takes its data from
+`footer-data-provider` and renders Pi's own arrangement, so the preset Settings exposes and the
+status-line preview in Settings previews have no effect on what is drawn.
+
 ## Next, in descending user impact
 
 ### 1. Model roles have an authority and no surface
