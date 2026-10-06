@@ -129,6 +129,16 @@ OMP has `session-selector` and `session-info-overlay`; Prime Pi mounts its own
 `thinking-selector`, `tree-selector`, `copy-selector`, `hook-editor`, `error-banner`,
 `ask-dialog`, `plan-review-overlay`, `jobs-panel`, `usage-dashboard`.
 
+## Progress since the audit
+
+| Surface | Then | Now |
+|---|---|---|
+| Settings | mounted | mounted, verified in the shipped binary |
+| Model roles | authority with no surface | reachable from the picker, persisted (`modelRoles`) |
+| Composer shape | 11 files, referenced by nothing | wired through a new `Editor.borderStyle` seam, verified changing the frame |
+| Tool cards | plain text, no state | render layer ported (~1300 lines); **mount still owed** |
+| Status line | presets ported, footer ignores them | **still owed** |
+
 ## What is not established here
 
 No visual comparison. This is a mount inventory read from the call sites; whether a given
