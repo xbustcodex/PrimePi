@@ -604,7 +604,8 @@ export class Editor implements Component, Focusable {
 	 * not ship should render the default rather than throw.
 	 */
 	private composerChrome(width: number): ComposerChromeContext {
-		const style = getComposerStyle(this.borderStyle) ?? getComposerStyle("box");
+		// The style itself is resolved by each caller; this only assembles the inputs, so the
+		// lookup does not happen twice per row.
 		return {
 			width,
 			paddingX: this.paddingX,

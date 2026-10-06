@@ -254,6 +254,41 @@ export class Theme {
 	}
 
 	/** Separator glyphs: Powerline forms, blocks, and the ascii / dot / slash / pipe spellings. */
+	/**
+	 * Punctuation the render layer uses for bullets, dashes and bracketed labels.
+	 *
+	 * Named for the reference's `theme.format`, which the ported render modules read. Without it
+	 * `Theme` cannot satisfy `ThemeSource`, so the ported surfaces could not resolve a theme at all.
+	 */
+	get format(): {
+		readonly bullet: string;
+		readonly dash: string;
+		readonly bracketLeft: string;
+		readonly bracketRight: string;
+	} {
+		return {
+			bullet: this.symbol("format.bullet"),
+			dash: this.symbol("format.dash"),
+			bracketLeft: this.symbol("format.bracketLeft"),
+			bracketRight: this.symbol("format.bracketRight"),
+		};
+	}
+
+	/** Markdown glyphs: quote bar, horizontal rule, list bullet, colour swatch. */
+	get md(): {
+		readonly quoteBorder: string;
+		readonly hrChar: string;
+		readonly bullet: string;
+		readonly colorSwatch: string;
+	} {
+		return {
+			quoteBorder: this.symbol("md.quoteBorder"),
+			hrChar: this.symbol("md.hrChar"),
+			bullet: this.symbol("md.bullet"),
+			colorSwatch: this.symbol("md.colorSwatch"),
+		};
+	}
+
 	get sep(): {
 		readonly powerline: string;
 		readonly powerlineThin: string;
@@ -377,9 +412,11 @@ export class Theme {
 		setActiveSymbolTheme(this);
 		// Published so ported OMP surfaces inside `tui` can resolve semantic spans without
 		// importing coding-agent, which would invert the package dependency.
-		setActiveThemeSource(this);
 		this.sourcePath = options.sourcePath;
 		this.sourceInfo = options.sourceInfo;
+		// Published after the fields are assigned: `ThemeSource` is read through the mirror, so
+		// publishing earlier would expose a half-built theme.
+		setActiveThemeSource(this);
 		this.mode = mode;
 		const foregrounds = {
 			...fgColors,

@@ -14,7 +14,13 @@ import { SYMBOL_PRESETS, type SymbolKey } from "./symbols.ts";
  * `symbol(key)` is ever called through this mirror, so that is the whole contract.
  */
 interface SymbolSource {
-	symbol(key: SymbolKey): string;
+	/**
+	 * A dotted symbol name.
+	 *
+	 * Any string, not only a declared key: the theme accepts whatever a component asks for and
+	 * falls back, so narrowing this to `SymbolKey` would force every caller to cast.
+	 */
+	symbol(key: string): string;
 }
 
 let active: SymbolSource | undefined;

@@ -13,14 +13,12 @@ const hashBytes4 = new Uint8Array(hashBuf, 0, 4);
 const hashBytes8 = new Uint8Array(hashBuf, 0, 8);
 
 /**
- * Incremental key builder for memoisation keys.
+ * Incremental xxHash64 key builder.
  *
- * The reference chains `Bun.hash.xxHash64` calls by seeding. Prime Pi has no Bun, and xxHash64
- * has no node equivalent, so this is FNV-1a over a 64-bit accumulator.
- *
- * That substitution is safe here *because of what this is for*: these values become cache keys,
- * so they need to be stable within a process and cheap to mix, not identical to the reference's.
- * Anything that persisted the value would need the real algorithm.
+ * Chains `Bun.hash.xxHash64` calls via seeding — each fed value
+ * mixes into the running hash without intermediate string allocations.
+ * Accepts strings, numbers (u32), booleans, bigints, and `undefined`/`null`
+ * (hashed as a sentinel byte) natively.
  */
 export class Hasher {
 	#h = 0n;
@@ -113,9 +111,9 @@ export function getStateBgColor(state: State): ThemeBg {
 /**
  * Fold one value into a 64-bit FNV-1a accumulator.
  *
- * Strings and byte views are mixed byte-wise; numbers and booleans are folded through their
- * 64-bit representation. `undefined`/`null` mix a sentinel so that a missing value and an empty
- * one do not collide.
+ * The reference chains `Bun.hash.xxHash64` by seeding. Prime Pi has no Bun, and xxHash64 has no
+ * node equivalent. This is safe here because the result only ever becomes a cache key: it must
+ * be stable within a process and cheap to mix, not identical to another runtime's.
  */
 function fnv1a64(value: unknown, seed: bigint): bigint {
 	const PRIME = 0x100000001b3n;
@@ -148,8 +146,7 @@ function fnv1a64(value: unknown, seed: bigint): bigint {
 	}
 	if (ArrayBuffer.isView(value)) {
 		const view = value as ArrayBufferView;
-		const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-		for (const byte of bytes) mix(byte);
+		for (const byte of new Uint8Array(view.buffer, view.byteOffset, view.byteLength)) mix(byte);
 		return h;
 	}
 	mix(0xfd);

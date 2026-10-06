@@ -99,6 +99,20 @@ export interface ThemeSource {
 		readonly horizontal: string;
 		readonly hook: string;
 	};
+	/** Punctuation the render layer uses for bullets, dashes and bracketed labels. */
+	readonly format: {
+		readonly bullet: string;
+		readonly dash: string;
+		readonly bracketLeft: string;
+		readonly bracketRight: string;
+	};
+	/** Markdown glyphs. */
+	readonly md: {
+		readonly quoteBorder: string;
+		readonly hrChar: string;
+		readonly bullet: string;
+		readonly colorSwatch: string;
+	};
 	readonly boxRound: BoxSymbols;
 	readonly boxSharp: BoxSymbols;
 	readonly boxDotted: { readonly horizontal: string; readonly vertical: string };
