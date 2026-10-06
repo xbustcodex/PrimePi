@@ -1480,3 +1480,21 @@ export function extractSegments(
 
 	return { before, beforeWidth, after, afterWidth };
 }
+
+/**
+ * A file path with the home directory collapsed to `~`.
+ *
+ * Ported from the reference's `render/render-utils.ts`, which the settings overlay used for
+ * plugin file paths. Separators are normalised to `/` so a Windows path reads the same as a
+ * POSIX one in a column.
+ */
+export function shortenPath(filePath: unknown, homeDir?: string): string {
+	if (typeof filePath !== "string") return "";
+	const home = homeDir ?? process.env.HOME ?? process.env.USERPROFILE ?? "";
+	if (!home) return filePath;
+	const normalized = home.replace(/\\/g, "/");
+	if (normalized.startsWith("~")) return filePath;
+	if (filePath === normalized) return "~";
+	if (filePath.startsWith(`${normalized}/`)) return `~${filePath.slice(normalized.length)}`;
+	return filePath;
+}

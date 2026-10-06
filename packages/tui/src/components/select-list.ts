@@ -45,6 +45,8 @@ export interface SelectItem {
 export interface SelectListTheme {
 	selectedPrefix: (text: string) => string;
 	selectedText: (text: string) => string;
+	/** The row the pointer is over, which is not the one the cursor is on. Optional. */
+	hovered?: (text: string) => string;
 	description: (text: string) => string;
 	scrollInfo: (text: string) => string;
 	noMatch: (text: string) => string;
@@ -67,6 +69,13 @@ export interface SelectListLayoutOptions {
 export class SelectList implements Component {
 	private items: SelectItem[] = [];
 	private filteredItems: SelectItem[] = [];
+	/** Row index for each content line of the last render, so a pointer position resolves to a row. */
+	/** Which row each rendered line belongs to. A map, not an array: only rendered
+	 * lines are ever recorded, and it grows with the frame rather than with the terminal height. */
+	private readonly hitRows = new Map<number, number>();
+
+	/** The row the pointer is over, for hover styling. */
+	private hoverIndex: number | null = null;
 	private selectedIndex: number = 0;
 	/** Set once an item carrying `confirmation` has been activated once. */
 	private pendingConfirmation: boolean = false;
@@ -117,14 +126,25 @@ export class SelectList implements Component {
 		// Calculate visible range with scrolling
 		const { startIndex, endIndex } = this.getVisibleRange();
 
+		// Rendered fresh each frame: a stale map would resolve a pointer to the wrong row after a
+		// scroll or a filter change, and would light the wrong row on hover.
+		this.hitRows.clear();
+
 		// Render visible items
 		for (let i = startIndex; i < endIndex; i++) {
 			const item = this.filteredItems[i];
 			if (!item) continue;
 
 			const isSelected = i === this.selectedIndex;
+			const isHovered = this.hoverIndex === i;
 			const descriptionSingleLine = item.description ? normalizeToSingleLine(item.description) : undefined;
-			lines.push(this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth));
+			// One line per row here: a row's description is normalised to a single line above,
+			// so the rendered row occupies exactly one terminal line.
+			this.hitRows.set(lines.length, i);
+			const rendered = this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth);
+			// Hover marks a surface behind the row, so it reads as a highlight rather than as a
+			// recoloured label. Absent a `hovered` styler the row is simply not marked.
+			lines.push(isHovered && this.theme.hovered ? this.theme.hovered(rendered) : rendered);
 		}
 
 		// Add scroll indicators if needed
@@ -255,6 +275,32 @@ export class SelectList implements Component {
 		if (index < 0 || index >= this.filteredItems.length) return false;
 		this.clickItem(index);
 		return true;
+	}
+
+	/**
+	 * The index of the row a pointer line resolves to, or `undefined`.
+	 *
+	 * An index rather than a value because the caller then indexes its own option array, which
+	 * is the same array the index was computed against. Rebuilt on every render: a stale map
+	 * would light the wrong row after a scroll.
+	 */
+	hitTest(line: number, _col = 0): number | undefined {
+		return this.hitRows.get(line);
+	}
+
+	/**
+	 * Move the selection one step for a wheel notch.
+	 *
+	 * Separate from the pointer-path routing because a wheel notch is a scroll, not a click: it
+	 * must not select the row it lands on, only move the cursor there.
+	 */
+	handleWheel(delta: -1 | 1): void {
+		this.setHoverIndex(this.selectedIndex + delta);
+	}
+
+	/** Record which row the pointer is over, for hover styling. */
+	setHoverIndex(index: number | null): void {
+		this.hoverIndex = index;
 	}
 
 	private getVisibleRange(): { startIndex: number; endIndex: number } {

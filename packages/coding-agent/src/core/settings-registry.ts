@@ -322,6 +322,41 @@ export function hasPath(root: unknown, key: string): boolean {
 }
 
 /** Writes a dotted path into a nested settings object, creating intermediate objects. */
+/**
+ * Remove a value at a dotted path, pruning any object it leaves empty.
+ *
+ * Pruning matters: a reset that left `{ theme: {} }` behind would still shadow nothing, but it
+ * would make the stored file claim a theme section the user had removed.
+ */
+export function deletePath(root: Record<string, unknown>, key: string): boolean {
+	const segments = key.split(".");
+	let node: Record<string, unknown> = root;
+	// Walk to the parent, holding the chain so emptied ancestors can be pruned on the way out.
+	const chain: Record<string, unknown>[] = [];
+	for (const segment of segments.slice(0, -1)) {
+		const next = node[segment];
+		if (typeof next !== "object" || next === null || Array.isArray(next)) return false;
+		chain.push(node);
+		node = next as Record<string, unknown>;
+	}
+	const leaf = segments[segments.length - 1]!;
+	if (!(leaf in node)) return false;
+	delete node[leaf];
+
+	// Walk back up, removing any parent left with no keys of its own.
+	for (let i = chain.length - 1; i >= 0; i--) {
+		const parent = chain[i]!;
+		const childKey = segments[i]!;
+		const child = parent[childKey] as Record<string, unknown>;
+		if (child && typeof child === "object" && !Array.isArray(child) && Object.keys(child).length === 0) {
+			delete parent[childKey];
+		} else {
+			break;
+		}
+	}
+	return true;
+}
+
 export function writePath(root: Record<string, unknown>, key: string, value: SettingValue): void {
 	const segments = key.split(".");
 	let current = root;
