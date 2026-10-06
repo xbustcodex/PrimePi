@@ -59,6 +59,13 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private modelRuntime: ModelRuntime;
 	private onSelectCallback: (model: Model<any>) => void;
 	private onSelectAsDefaultCallback?: (model: Model<any>) => void;
+	/** Roles the user may assign a model to, in display order. */
+	private readonly roles: readonly string[] = [];
+	/** Assigns the selected model to a role and persists it. */
+	private onAssignRoleCallback?: (model: Model<any>, role: string) => void;
+	/** Which role the next assignment targets; cycled by the user. */
+	private roleIndex = 0;
+	private roleText?: Text;
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
 	private refreshStatusMessage = "Refreshing model catalogs…";
@@ -85,6 +92,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		initialSearchInput?: string,
 		onSelectAsDefault?: (model: Model<any>) => void,
 		defaultModel?: DefaultModelReference,
+		roles: readonly string[] = [],
+		onAssignRole?: (model: Model<any>, role: string) => void,
 	) {
 		super();
 
@@ -96,6 +105,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.scope = scopedModels.length > 0 ? "scoped" : "all";
 		this.onSelectCallback = onSelect;
 		this.onSelectAsDefaultCallback = onSelectAsDefault;
+		this.roles = roles;
+		this.onAssignRoleCallback = onAssignRole;
 		this.onCancelCallback = onCancel;
 
 		// Add top border
@@ -112,6 +123,11 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const hintText = "Only showing models from configured providers. Use /login to add providers.";
 			this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
 		}
+		// Role assignment state. Renders nothing when there are no assignable roles, so a build
+		// with none enabled shows exactly the picker it always did.
+		this.roleText = new Text("", 0, 0);
+		this.addChild(this.roleText);
+		if (this.roles.length > 0) this.roleText.setText(this.getRoleText());
 		// Free-only filter state; renders nothing until free models are known.
 		this.freeFilterText = new Text("", 0, 0);
 		this.addChild(this.freeFilterText);
@@ -249,6 +265,19 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			return a.provider.localeCompare(b.provider);
 		});
 		return sorted;
+	}
+
+	/**
+	 * The role-assignment line.
+	 *
+	 * Names the role the next assignment targets, so the key is never a mystery: without it a
+	 * user who presses the assign key has no way to know which role just changed until they look
+	 * at the settings file.
+	 */
+	private getRoleText(): string {
+		const role = this.roles[this.roleIndex];
+		if (role === undefined) return "";
+		return `${theme.fg("muted", "Role: ")}${theme.fg("accent", role)}  ${keyHint("app.models.setRole", "assign")}`;
 	}
 
 	private getScopeText(): string {
@@ -424,6 +453,20 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		else if (kb.matches(keyData, "tui.select.cancel")) {
 			this.dispose();
 			this.onCancelCallback();
+		}
+		// Cycle which role the next assignment targets, then assign. Two keys rather than a mode,
+		// so there is no state to leave behind if the user cancels the picker instead.
+		else if (kb.matches(keyData, "app.models.setRole") && this.roles.length > 0) {
+			const selectedModel = this.filteredModels[this.selectedIndex];
+			if (!selectedModel) return;
+			if (!this.onAssignRoleCallback) return;
+			this.roleIndex = (this.roleIndex + 1) % this.roles.length;
+			if (kb.matches(keyData, "app.models.save")) {
+				// Reached only when the user asks for both at once; treat as a plain cycle.
+				this.roleText?.setText(this.getRoleText());
+				return;
+			}
+			this.onAssignRoleCallback(selectedModel.model, this.roles[this.roleIndex]!);
 		}
 		// Select and save as default
 		else if (kb.matches(keyData, "app.models.save") && this.onSelectAsDefaultCallback) {

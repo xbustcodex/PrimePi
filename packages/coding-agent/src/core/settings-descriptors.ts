@@ -3425,7 +3425,9 @@ export const symbolPreset = registerSetting({
 export const composerShape = registerSetting({
 	key: "composer.shape",
 	type: "string",
-	default: "rounded",
+	// `box`, not `rounded`: the composer registry's ids are box / band / claude / pi /
+	// borderless / rule / field / rail. A default outside that set resolved to nothing.
+	default: "box",
 	ui: {
 		label: "Composer Shape",
 		description: "Border shape drawn around the composer",

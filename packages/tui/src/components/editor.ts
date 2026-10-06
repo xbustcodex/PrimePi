@@ -3,6 +3,8 @@ import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
 import { type ComposerContents, DraftHistory } from "../prompt/draft-history.ts";
+import type { SymbolTheme } from "../symbols.ts";
+import { getSymbolTheme } from "../theme/tui-adapters.ts";
 import {
 	type Component,
 	CURSOR_MARKER,
@@ -23,6 +25,8 @@ import {
 	visibleWidth,
 } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";
+import { getComposerStyle } from "./composer/registry.ts";
+import type { ComposerChromeContext } from "./composer/types.ts";
 import { SelectList, type SelectListLayoutOptions, type SelectListTheme } from "./select-list.ts";
 
 const graphemeSegmenter = getGraphemeSegmenter();
@@ -237,6 +241,14 @@ interface LayoutLine {
 
 export interface EditorTheme {
 	borderColor: (str: string) => string;
+	/**
+	 * How the input frame is drawn: top and bottom chrome, per-row side chrome, and the
+	 * padding between them.
+	 *
+	 * Prime Pi previously drew a hardcoded `─` line here, which is why `composer.shape` in
+	 * Settings changed nothing - the setting existed, and the editor had no seam for it. The
+	 * eight shapes live in `components/composer/registry.ts`; this is the seam that reaches them.
+	 */
 	selectList: SelectListTheme;
 }
 
@@ -318,6 +330,25 @@ export class Editor implements Component, Focusable {
 
 	// Border color (can be changed dynamically)
 	public borderColor: (str: string) => string;
+	/** Accent used by composer chrome that defines the shape, such as field caps and rails. */
+	public accentColor: (str: string) => string = (str) => str;
+	/**
+	 * Glyph set the composer chrome draws with.
+	 *
+	 * Read through the active theme rather than hardcoded, so a theme that overrides
+	 * `boxRound` changes the composer's frame along with everything else it themes. Falls back to
+	 * the ascii preset before a theme is installed, which is what the reference's mirror does.
+	 */
+	get symbolTheme(): SymbolTheme {
+		return getSymbolTheme();
+	}
+	/**
+	 * The composer shape, applied live.
+	 *
+	 * Set from settings at startup and on change, so picking a shape in Settings repaints the
+	 * composer immediately rather than at the next launch.
+	 */
+	borderStyle: string = "box";
 
 	// Autocomplete support
 	private autocompleteProvider?: AutocompleteProvider;
@@ -564,14 +595,38 @@ export class Editor implements Component, Focusable {
 		// No cached state to invalidate currently
 	}
 
+	/**
+	 * The chrome the configured composer shape draws, with no scrolling decoration.
+	 *
+	 * Resolved through the composer registry rather than written here, so all eight shapes share
+	 * one implementation and `composer.shape` in Settings is what selects between them. A shape
+	 * that is not registered falls back to `box`: a settings file naming a shape this build does
+	 * not ship should render the default rather than throw.
+	 */
+	private composerChrome(width: number): ComposerChromeContext {
+		const style = getComposerStyle(this.borderStyle) ?? getComposerStyle("box");
+		return {
+			width,
+			paddingX: this.paddingX,
+			borderColor: this.borderColor,
+			accentColor: this.accentColor,
+			surfaceColor: (text: string) => text,
+			box: this.symbolTheme.boxRound,
+		};
+	}
+
 	protected renderTopBorder(width: number, hiddenLineCount: number): string {
-		const border = hiddenLineCount > 0 ? createScrollBorder("↑", hiddenLineCount, width) : "─".repeat(width);
-		return this.borderColor(border);
+		// A scroll indicator replaces the chrome row entirely: the user needs to know there is
+		// more text, which matters more than the frame on this row.
+		if (hiddenLineCount > 0) return this.borderColor(createScrollBorder("↑", hiddenLineCount, width));
+		const style = getComposerStyle(this.borderStyle) ?? getComposerStyle("box");
+		return style.renderTop(this.composerChrome(width)) ?? this.borderColor("─".repeat(width));
 	}
 
 	protected renderBottomBorder(width: number, hiddenLineCount: number): string {
-		const border = hiddenLineCount > 0 ? createScrollBorder("↓", hiddenLineCount, width) : "─".repeat(width);
-		return this.borderColor(border);
+		if (hiddenLineCount > 0) return this.borderColor(createScrollBorder("↓", hiddenLineCount, width));
+		const style = getComposerStyle(this.borderStyle) ?? getComposerStyle("box");
+		return style.renderBottom(this.composerChrome(width)) ?? this.borderColor("─".repeat(width));
 	}
 
 	render(width: number): string[] {

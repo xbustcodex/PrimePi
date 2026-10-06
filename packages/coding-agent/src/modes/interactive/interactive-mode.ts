@@ -9,6 +9,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import type { AuthEvent, AuthPrompt } from "@earendil-works/pi-ai";
+import { MODEL_ROLES } from "@earendil-works/pi-ai";
 import {
 	type AssistantMessage,
 	type ImageContent,
@@ -419,6 +420,18 @@ export interface InteractiveModeOptions {
 	/** Terminal implementation. Defaults to the current process terminal. */
 	terminal?: Terminal;
 }
+
+/**
+ * The roles a user may assign a model to from the picker.
+ *
+ * Derived from the role registry's own `activeInPi` flag rather than a list written here, so a
+ * role the runtime can resolve never appears without a way to set it, and one that cannot never
+ * appears at all. `plan` is included because it is active and resolvable - assigning it is not
+ * the same as entering plan mode.
+ */
+const ASSIGNABLE_MODEL_ROLES: readonly string[] = (Object.keys(MODEL_ROLES) as Array<keyof typeof MODEL_ROLES>).filter(
+	(role) => MODEL_ROLES[role].activeInPi,
+);
 
 export class InteractiveMode {
 	private runtimeHost: AgentSessionRuntime;
@@ -2862,6 +2875,7 @@ export class InteractiveMode {
 			// Copy appearance settings if supported
 			if (newEditor.borderColor !== undefined) {
 				newEditor.borderColor = this.defaultEditor.borderColor;
+				newEditor.borderStyle = this.defaultEditor.borderStyle;
 			}
 			if (newEditor.setPaddingX !== undefined) {
 				newEditor.setPaddingX(this.defaultEditor.getPaddingX());
@@ -4474,6 +4488,11 @@ export class InteractiveMode {
 	}
 
 	private updateEditorBorderColor(): void {
+		// The composer shape, from `composer.shape` in Settings. Applied here rather than at
+		// construction because this is the one method already re-run on every theme and mode
+		// change - so the shape now repaints with the border colour instead of needing its own
+		// invalidation path, and picking a shape in Settings takes effect immediately.
+		this.editor.borderStyle = this.settingsManager.getSetting<string>("composer.shape")?.value ?? "box";
 		if (this.isBashMode) {
 			this.editor.borderColor = theme.getBashModeBorderColor();
 		} else {
@@ -4894,6 +4913,22 @@ export class InteractiveMode {
 	 * Every value shown or changed goes through the registry, so what Settings displays is what
 	 * the runtime reads on the next line and the next launch. There is no panel-local copy.
 	 */
+	/**
+	 * Assign a model to a role and persist it.
+	 *
+	 * Written through `setModelRole`, which is the same authority the session reads, so the value
+	 * the user just chose is the one a subsequent resolution uses. The session's *current* model
+	 * is deliberately not changed: assigning the `plan` role is not asking to be planning now.
+	 */
+	private assignModelRole(model: Model<any>, role: string): void {
+		this.settingsManager.setModelRole(role, `${model.provider}/${model.id}`);
+		this.settingsManager.flush().catch((error: unknown) => {
+			this.showError(`Could not save the ${role} role: ${error instanceof Error ? error.message : String(error)}`);
+		});
+		this.showStatus(`Assigned ${model.id} to ${role}.`);
+		this.ui.requestRender();
+	}
+
 	private showSettingsSelector(): void {
 		this.showSelector((done) => {
 			const host = createSettingsHost({
@@ -5324,6 +5359,11 @@ export class InteractiveMode {
 				initialSearchInput,
 				(model) => selectModel(model, true),
 				defaultProvider && defaultModel ? { provider: defaultProvider, id: defaultModel } : undefined,
+				// Only the roles this build actually offers, read from the registry rather than
+				// hardcoded: a role the runtime cannot resolve would accept a selection that then
+				// went nowhere.
+				ASSIGNABLE_MODEL_ROLES,
+				(model, role) => this.assignModelRole(model, role),
 			);
 			return { component: selector, focus: selector, dispose: () => selector.dispose() };
 		});

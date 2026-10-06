@@ -76,6 +76,18 @@ export interface EditorComponent extends Component {
 	/** Border color function */
 	borderColor?: (str: string) => string;
 
+	/**
+	 * Composer shape, applied live.
+	 *
+	 * One of the ids in `components/composer/registry.ts` - box, band, claude, pi, borderless,
+	 * rule, field, rail. Optional because a host that does not offer shape choice simply leaves
+	 * it unset and the editor uses its own frame.
+	 *
+	 * This is the seam that `composer.shape` in Settings needed: the setting existed and the
+	 * editor had no way to be told about it, so choosing a shape changed nothing.
+	 */
+	borderStyle?: string;
+
 	/** Set horizontal padding */
 	setPaddingX?(padding: number): void;
 

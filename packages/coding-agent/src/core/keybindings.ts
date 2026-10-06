@@ -43,6 +43,7 @@ export interface AppKeybindings {
 	"app.session.delete": true;
 	"app.session.deleteNoninvasive": true;
 	"app.models.save": true;
+	"app.models.setRole": true;
 	"app.models.enableAll": true;
 	"app.models.clearAll": true;
 	"app.models.toggleProvider": true;
@@ -187,6 +188,10 @@ export const KEYBINDINGS = {
 	"app.models.save": {
 		defaultKeys: "ctrl+s",
 		description: "Save model selection",
+	},
+	"app.models.setRole": {
+		defaultKeys: "ctrl+r",
+		description: "Assign the selected model to a role",
 	},
 	"app.models.enableAll": {
 		defaultKeys: "ctrl+a",
